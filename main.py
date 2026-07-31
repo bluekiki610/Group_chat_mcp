@@ -144,4 +144,43 @@ def mcp():
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": f"✅ 已发送到群聊：{sender}：{content[:3
+                "result": {"content": [{"type": "text", "text": f"✅ 已发送到群聊：{sender}：{content[:30]}"}]},
+            })
+
+        elif tool_name == "group_get_messages":
+            count = tool_args.get("count", 20)
+            recent = messages[-count:] if count < len(messages) else messages
+            if not recent:
+                return jsonify({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"content": [{"type": "text", "text": "📭 群里暂时还没有消息"}]},
+                })
+            result = "📋 群聊消息记录\n" + "─" * 30 + "\n"
+            for msg in recent:
+                emoji = "🤖" if msg["role"] == "assistant" else "👤"
+                result += f"{emoji} {msg['sender']} ({msg['time']}):\n  {msg['content']}\n\n"
+            return jsonify({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"content": [{"type": "text", "text": result}]},
+            })
+
+        elif tool_name == "group_get_members":
+            return jsonify({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"content": [{"type": "text", "text": "👥 群成员：张三、张三的助手、李四、李四的助手"}]},
+            })
+
+    return jsonify({
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "error": {"code": -32601, "message": "Method not found"},
+    })
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
