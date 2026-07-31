@@ -23,6 +23,26 @@ def mcp():
     params = data.get("params", {})
     request_id = data.get("id", 1)
     
+    # ===== 初始化握手（RikkaHub 连接时的第一步）=====
+    if method == "initialize":
+        return jsonify({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "result": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {"tools": {"listChanged": False}},
+                "serverInfo": {"name": "GroupChat", "version": "1.0.0"}
+            }
+        })
+    
+    # ===== 通知类消息（如 notifications/initialized，不需要回复）=====
+    if method.startswith("notifications/"):
+        return ("", 202)
+    
+    # ===== Ping 心跳检测 =====
+    if method == "ping":
+        return jsonify({"jsonrpc": "2.0", "id": request_id, "result": {}})
+    
     if method == "tools/list":
         return jsonify({
             "jsonrpc": "2.0",
@@ -92,7 +112,7 @@ def mcp():
         elif tool_name == "group_get_members":
             return jsonify({
                 "jsonrpc": "2.0", "id": request_id,
-                "result": {"content": [{"type": "text", "text": "👥 群聊成员\n─" * 20 + "\n发过消息的人都会显示在这里"}]}
+                "result": {"content": [{"type": "text", "text": "👥 群聊成员\n" + "─" * 20 + "\n发过消息的人都会显示在这里"}]}
             })
     
     return jsonify({"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": "Method not found"}})
