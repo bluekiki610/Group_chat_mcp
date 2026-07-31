@@ -147,6 +147,8 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage()
 
 loadMessages();
 setInterval(loadMessages, 2000);
+   // 防休眠：每10分钟自动访问一次服务器，避免休眠清空消息
+setInterval(() => { fetch('/').catch(() => {}); }, 600000);
 </script>
 </body>
 </html>
