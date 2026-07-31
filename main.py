@@ -170,7 +170,7 @@ def mcp():
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": "👥 群成员：张三、张三的助手、李四、李四的助手"}]},
+                "result": {"content": [{"type": "text", "text": "👥 群成员：❄️亦言、🍐黎深、💎小旭、🚗秦彻"}]},
             })
 
     return jsonify({
