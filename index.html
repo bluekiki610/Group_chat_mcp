@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>四人小群</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  
+  .header { background: #ededed; padding: 14px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; }
+  .header h1 { font-size: 17px; font-weight: 600; }
+  .header p { font-size: 12px; color: #888; margin-top: 3px; cursor: pointer; }
+  .header p:hover { color: #07c160; }
+  
+  #chat { flex: 1; overflow-y: auto; padding: 16px 12px; }
+  
+  .msg { display: flex; margin-bottom: 16px; }
+  .msg.right { justify-content: flex-end; }
+  
+  .avatar { width: 38px; height: 38px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  
+  .bubble { max-width: 66%; margin: 0 10px; }
+  .bubble .name { font-size: 11px; color: #999; margin-bottom: 3px; }
+  .bubble .content { padding: 9px 12px; border-radius: 8px; font-size: 15px; line-height: 1.5; word-break: break-word; background: #fff; white-space: pre-wrap; }
+  .msg.right .bubble .content { background: #95ec69; }
+  .bubble .time { font-size: 10px; color: #bbb; margin-top: 3px; }
+  
+  .input-bar { background: #f7f7f7; padding: 10px 12px; display: flex; align-items: center; border-top: 1px solid #ddd; gap: 8px; }
+  .input-bar select { height: 38px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 14px; padding: 0 6px; max-width: 110px; }
+  .input-bar input { flex: 1; height: 38px; border: none; border-radius: 6px; padding: 0 12px; font-size: 15px; outline: none; background: #fff; min-width: 0; }
+  .input-bar button { height: 38px; padding: 0 18px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; cursor: pointer; flex-shrink: 0; }
+  .input-bar button:active { background: #06ad56; }
+  
+  .tip { text-align: center; color: #bbb; font-size: 12px; padding: 4px 0 10px; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>👥 四人小群</h1>
+    <p id="members">👆 点这里设置"我"的名字（我的消息显示在右侧）</p>
+  </div>
+  <div class="tip">张三 · 张三的助手 · 李四 · 李四的助手</div>
+  <div id="chat"></div>
+  <div class="input-bar">
+    <select id="senderSelect"></select>
+    <input id="msgInput" placeholder="说点什么..." />
+    <button id="sendBtn">发送</button>
+  </div>
+
+<script>
+const chat = document.getElementById('chat');
+const msgInput = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const senderSelect = document.getElementById('senderSelect');
+const membersP = document.getElementById('members');
+
+const MEMBERS = ['张三', '张三的助手', '李四', '李四的助手'];
+const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
+
+let myName = localStorage.getItem('myName') || '张三';
+
+function colorFor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + hash;
+  return COLORS[hash % COLORS.length];
+}
+
+MEMBERS.forEach(m => {
+  const opt = document.createElement('option');
+  opt.value = m;
+  opt.textContent = m;
+  senderSelect.appendChild(opt);
+});
+const customOpt = document.createElement('option');
+customOpt.value = '__custom__';
+customOpt.textContent = '➕ 自定义...';
+senderSelect.appendChild(customOpt);
+
+if (MEMBERS.includes(myName)) senderSelect.value = myName;
+
+senderSelect.addEventListener('change', () => {
+  if (senderSelect.value === '__custom__') {
+    const name = prompt('输入你想使用的名字：');
+    if (name) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      senderSelect.insertBefore(opt, customOpt);
+      senderSelect.value = name;
+    } else {
+      senderSelect.value = MEMBERS[0];
+    }
+  }
+});
+
+membersP.addEventListener('click', () => {
+  const name = prompt('设置"我"的名字（我的消息会显示在右侧绿色气泡）：', myName);
+  if (name && name.trim()) {
+    myName = name.trim();
+    localStorage.setItem('myName', myName);
+    membersP.textContent = '✅ 我的身份：' + myName + '（点我修改）';
+    if (MEMBERS.includes(myName)) senderSelect.value = myName;
+  }
+});
+
+async function loadMessages() {
+  try {
+    const res = await fetch('/api/messages?count=50');
+    const data = await res.json();
+    render(data.messages || []);
+  } catch (e) {
+    console.log('加载失败', e);
+  }
+}
+
+function render(msgs) {
+  chat.innerHTML = '';
+  msgs.forEach(m => {
+    const isMe = m.sender === myName;
+    const row = document.createElement('div');
+    row.className = 'msg' + (isMe ? ' right' : '');
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.style.background = colorFor(m.sender);
+    avatar.textContent = m.sender.charAt(0);
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'name';
+    nameDiv.textContent = m.sender + (m.role === 'assistant' ? ' 🤖' : '');
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'content';
+    contentDiv.textContent = m.content;
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'time';
+    timeDiv.textContent = m.time;
+
+    bubble.appendChild(nameDiv);
+    bubble.appendChild(contentDiv);
+    bubble.appendChild(timeDiv);
+
+    if (isMe) {
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    } else {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    }
+    chat.appendChild(row);
+  });
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendMessage() {
+  const content = msgInput.value.trim();
+  if (!content) return;
+  const sender = senderSelect.value === '__custom__' ? myName : senderSelect.value;
+  const role = sender.includes('助手') ? 'assistant' : 'user';
+  try {
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender, content, role })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('发送失败: ' + (data.error || '')); return; }
+    msgInput.value = '';
+    loadMessages();
+  } catch (e) {
+    alert('发送失败: ' + e);
+  }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+loadMessages();
+setInterval(loadMessages, 2000);
+</script>
+</body>
+</html>
