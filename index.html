@@ -27,7 +27,6 @@
   .bubble .time { font-size: 10px; color: #bbb; margin-top: 3px; }
   
   .input-bar { background: #f7f7f7; padding: 10px 12px; display: flex; align-items: center; border-top: 1px solid #ddd; gap: 8px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; }
-  .input-bar select { height: 38px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 14px; padding: 0 6px; max-width: 110px; }
   .input-bar input { flex: 1; height: 38px; border: none; border-radius: 6px; padding: 0 12px; font-size: 15px; outline: none; background: #fff; min-width: 0; }
   .input-bar button { height: 38px; padding: 0 18px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; cursor: pointer; flex-shrink: 0; }
   .input-bar button:active { background: #06ad56; }
@@ -38,26 +37,22 @@
 <body>
   <div class="header">
     <h1>👥 彻梨の秦深深欲猛猛</h1>
-    <p id="members">👆 点这里设置"我"的名字（我的消息显示在右侧）</p>
+    <p id="members">👆 点这里设置"我"的名字（发送时会用这个名字）</p>
   </div>
-  <div class="tip">用户 · 用户的助手 · 友友 · 友友的助手</div>
-  <div id="chat"></div><div class="input-bar">
-    <select id="senderSelect"></select>
+  <div class="tip">亦言❄️ · 黎深🍐 · 小旭🐱 · 秦彻🚗</div>
+  <div id="chat"></div>
+  <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
     <button id="sendBtn">发送</button>
-  </div>
-
-<script>
+  </div><script>
 const chat = document.getElementById('chat');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
-const senderSelect = document.getElementById('senderSelect');
 const membersP = document.getElementById('members');
 
-const MEMBERS = ['用户', '用户的助手', '友友', '友友的助手'];
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
-let myName = localStorage.getItem('myName') || '用户';
+let myName = localStorage.getItem('myName') || '亦言❄️';
 
 function colorFor(name) {
   let hash = 0;
@@ -65,41 +60,12 @@ function colorFor(name) {
   return COLORS[hash % COLORS.length];
 }
 
-MEMBERS.forEach(m => {
-  const opt = document.createElement('option');
-  opt.value = m;
-  opt.textContent = m;
-  senderSelect.appendChild(opt);
-});
-const customOpt = document.createElement('option');
-customOpt.value = '__custom__';
-customOpt.textContent = '➕ 自定义...';
-senderSelect.appendChild(customOpt);
-
-if (MEMBERS.includes(myName)) senderSelect.value = myName;
-
-senderSelect.addEventListener('change', () => {
-  if (senderSelect.value === '__custom__') {
-    const name = prompt('输入你想使用的名字：');
-    if (name) {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      senderSelect.insertBefore(opt, customOpt);
-      senderSelect.value = name;
-    } else {
-      senderSelect.value = MEMBERS[0];
-    }
-  }
-});
-
 membersP.addEventListener('click', () => {
-  const name = prompt('设置"我"的名字（我的消息会显示在右侧绿色气泡）：', myName);
+  const name = prompt('设置"我"的名字（发送消息会以这个名字发出）：', myName);
   if (name && name.trim()) {
     myName = name.trim();
     localStorage.setItem('myName', myName);
     membersP.textContent = '✅ 我的身份：' + myName + '（点我修改）';
-    if (MEMBERS.includes(myName)) senderSelect.value = myName;
   }
 });
 
@@ -159,7 +125,7 @@ function render(msgs) {
 async function sendMessage() {
   const content = msgInput.value.trim();
   if (!content) return;
-  const sender = senderSelect.value === '__custom__' ? myName : senderSelect.value;
+  const sender = myName;
   const role = sender.includes('助手') ? 'assistant' : 'user';
   try {
     const res = await fetch('/api/messages', {
