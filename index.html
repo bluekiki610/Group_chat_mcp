@@ -80,6 +80,7 @@ async function loadMessages() {
 }
 
 function render(msgs) {
+  const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
   chat.innerHTML = '';
   msgs.forEach(m => {
     const isMe = m.sender === myName;
@@ -117,9 +118,11 @@ function render(msgs) {
       row.appendChild(avatar);
       row.appendChild(bubble);
     }
-    chat.appendChild(row);
+        chat.appendChild(row);
   });
-  chat.scrollTop = chat.scrollHeight;
+  if (wasNearBottom) {
+    chat.scrollTop = chat.scrollHeight;
+  }
 }
 
 async function sendMessage() {
