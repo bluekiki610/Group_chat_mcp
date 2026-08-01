@@ -47,7 +47,7 @@
       <span id="ttsBtn">🔇 朗读</span>
     </div>
   </div>
-  <div class="tip">亦言❄️ · 黎深🍐 · 小旭🐱 · 秦彻🚗</div>
+  <div class="tip" id="memberList">👥 群里还没有成员，快来发言吧</div>
   <div id="chat"></div>
   <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
@@ -250,7 +250,17 @@ async function loadMessages() {
 }
 
 // ===== 渲染消息 =====
+function updateMemberList(msgs) {
+  const seen = [];
+  for (const m of msgs) {
+    if (!seen.includes(m.sender)) seen.push(m.sender);
+  }
+  const el = document.getElementById('memberList');
+  if (el) el.textContent = seen.length ? '👥 ' + seen.join(' · ') : '👥 群里还没有成员，快来发言吧';
+}
+
 function render(msgs) {
+  updateMemberList(msgs);
   const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
   chat.innerHTML = '';
   msgs.forEach(m => {
