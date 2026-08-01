@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>彻梨の秦深深欲猛猛</title>
+<title>人❤️机小窝</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -40,7 +40,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>彻梨の秦深深欲猛猛</h1>
+    <h1>人❤️机小窝</h1>
     <div class="toolbar">
       <span id="members">👤 亦言</span>
       <span id="avatarBtn">🖼️ 头像</span>
@@ -90,9 +90,12 @@ ttsBtn.addEventListener('click', () => {
   if (input === null) return;
   const v = input.trim();
   ttsTargetName = (v === '关' || v === '') ? '' : v;
-  localStorage.setItem('ttsTargetName', ttsTargetName);
-  if (ttsTargetName) lastSpokenTime = '';
-  updateTtsBtn();
+localStorage.setItem('ttsTargetName', ttsTargetName);
+if (ttsTargetName) lastSpokenTime = '';
+updateTtsBtn();
+if (ttsTargetName) {
+  speakText('语音朗读已开启，这是一条测试语音，能听到吗？');
+}
 });
 
 function speakText(text) {
