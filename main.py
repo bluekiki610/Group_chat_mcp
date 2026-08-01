@@ -7,6 +7,7 @@ app = Flask(__name__)
 # ============ 群聊消息存储（内存，重启清空）============
 messages = []
 avatars = {}
+online = {}  # 在线成员: name -> 最后心跳时间
 
 
 def save_message(sender, content, role):
@@ -66,6 +67,24 @@ def api_avatar():
     return jsonify({"ok": True, "name": name})
 
 
+@app.route("/api/heartbeat", methods=["POST"])
+def api_heartbeat():
+    """网页在线心跳（谁打开网页谁在线）"""
+    data = request.get_json(force=True)
+    name = data.get("name", "")
+    if name:
+        online[name] = datetime.datetime.now()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/online", methods=["GET"])
+def api_online():
+    """获取在线成员（30秒内有心跳）"""
+    now = datetime.datetime.now()
+    active = [n for n, t in online.items() if (now - t).total_seconds() < 30]
+    return jsonify({"online": active})
+
+
 @app.route("/api/restore", methods=["POST"])
 def api_restore():
     """恢复历史消息（本地缓存回填，不触发AI）"""
@@ -93,6 +112,8 @@ def api_remove_member():
     removed = before - len(messages)
     if name in avatars:
         del avatars[name]
+    if name in online:
+        del online[name]
     return jsonify({"ok": True, "removed": removed})
 
 
