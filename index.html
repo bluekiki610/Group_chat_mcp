@@ -3,22 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>彻梨の秦深深欲猛猛</title>
+<title>两人两机小窝</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   
-  .header { background: #ededed; padding: 14px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; }
-  .header h1 { font-size: 17px; font-weight: 600; }
+  .header { background: #ededed; padding: 10px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; }
+  .header h1 { font-size: 16px; font-weight: 600; }
   .header p { font-size: 12px; color: #888; margin-top: 3px; cursor: pointer; }
   .header p:hover { color: #07c160; }
+  .toolbar { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .toolbar span { font-size: 12px; color: #555; background: #fff; border-radius: 14px; padding: 3px 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+  .toolbar span:hover { color: #07c160; }
   
   #chat { flex: 1; overflow-y: auto; padding: 16px 12px 76px; }
   
   .msg { display: flex; margin-bottom: 16px; }
   .msg.right { justify-content: flex-end; }
   
-  .avatar { width: 38px; height: 38px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 600; flex-shrink: 0; }
+  .avatar { width: 38px; height: 38px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 600; flex-shrink: 0; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
   
   .bubble { max-width: 66%; margin: 0 10px; }
   .bubble .name { font-size: 11px; color: #999; margin-bottom: 3px; }
@@ -36,23 +40,80 @@
 </head>
 <body>
   <div class="header">
-    <h1>👥 彻梨の秦深深欲猛猛</h1>
-    <p id="members">👆 点这里设置"我"的名字（发送时会用这个名字）</p>
+    <h1>彻梨の秦深深欲猛猛</h1>
+    <div class="toolbar">
+      <span id="members">👤 亦言</span>
+      <span id="avatarBtn">🖼️ 头像</span>
+      <span id="ttsBtn">🔇 朗读</span>
+    </div>
   </div>
   <div class="tip">亦言❄️ · 黎深🍐 · 小旭🐱 · 秦彻🚗</div>
   <div id="chat"></div>
   <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
     <button id="sendBtn">发送</button>
-  </div><script>
+  </div>
+  <input type="file" id="avatarInput" accept="image/*" style="display:none;"><script>
 const chat = document.getElementById('chat');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
 const membersP = document.getElementById('members');
+const avatarBtn = document.getElementById('avatarBtn');
+const avatarInput = document.getElementById('avatarInput');
+const ttsBtn = document.getElementById('ttsBtn');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
-let myName = localStorage.getItem('myName') || '亦言❄️';
+let myName = localStorage.getItem('myName') || '亦言';
+membersP.textContent = '👤 ' + myName;
+
+// ===== 头像映射（本地 + 服务器同步）=====
+let avatarMap = {};
+try { avatarMap = JSON.parse(localStorage.getItem('avatarMap') || '{}'); } catch(e) { avatarMap = {}; }
+function saveAvatarMap() {
+  try { localStorage.setItem('avatarMap', JSON.stringify(avatarMap)); } catch(e) {}
+}
+
+// ===== TTS 语音朗读设置 =====
+let ttsTargetName = localStorage.getItem('ttsTargetName') || '';
+let lastSpokenTime = localStorage.getItem('lastSpokenTime') || '';
+
+function updateTtsBtn() {
+  ttsBtn.textContent = ttsTargetName ? '🔊 ' + ttsTargetName : '🔇 朗读';
+}
+updateTtsBtn();
+
+ttsBtn.addEventListener('click', () => {
+  const input = prompt('自动朗读谁的发言？输入成员名字（如：黎深）。\n输入"关"或留空 = 关闭朗读：', ttsTargetName);
+  if (input === null) return;
+  const v = input.trim();
+  ttsTargetName = (v === '关' || v === '') ? '' : v;
+  localStorage.setItem('ttsTargetName', ttsTargetName);
+  if (ttsTargetName) lastSpokenTime = '';
+  updateTtsBtn();
+});
+
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-CN';
+  utter.rate = 1.0;
+  window.speechSynthesis.speak(utter);
+}
+
+function speakNewMessages(msgs) {
+  if (!ttsTargetName || !window.speechSynthesis) return;
+  const newOnes = msgs.filter(m => m.sender === ttsTargetName && m.time > lastSpokenTime);
+  newOnes.forEach(m => speakText(m.content));
+  if (msgs.length > 0) {
+    const last = msgs[msgs.length - 1];
+    if (last.time > lastSpokenTime) {
+      lastSpokenTime = last.time;
+      localStorage.setItem('lastSpokenTime', lastSpokenTime);
+    }
+  }
+}
 
 function colorFor(name) {
   let hash = 0;
@@ -60,16 +121,81 @@ function colorFor(name) {
   return COLORS[hash % COLORS.length];
 }
 
+// ===== 设置我的名字 =====
 membersP.addEventListener('click', () => {
   const name = prompt('设置"我"的名字（发送消息会以这个名字发出）：', myName);
   if (name && name.trim()) {
     myName = name.trim();
     localStorage.setItem('myName', myName);
-    membersP.textContent = '✅ 我的身份：' + myName + '（点我修改）';
+    membersP.textContent = '👤 ' + myName;
   }
 });
 
-// ===== 本地消息缓存（消息保存在手机，服务器清空也不怕）=====
+// ===== 头像：上传到服务器（双方可见）=====
+function uploadAvatar(name, dataUrl) {
+  fetch('/api/avatar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, image: dataUrl })
+  }).catch(() => {});
+}
+
+async function loadAvatars() {
+  try {
+    const res = await fetch('/api/avatar');
+    const data = await res.json();
+    const serverAvatars = data.avatars || {};
+    for (const k in serverAvatars) {
+      avatarMap[k] = serverAvatars[k];
+    }
+    saveAvatarMap();
+    loadMessages();
+  } catch(e) {}
+}
+
+// ===== 设置头像 =====
+let avatarTargetName = '';
+avatarBtn.addEventListener('click', () => {
+  const name = prompt('要为谁设置头像？输入成员名字（如：亦言 / 黎深 / 小旭 / 秦彻）：');
+  if (!name || !name.trim()) return;
+  avatarTargetName = name.trim();
+  avatarInput.click();
+});
+avatarInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  compressImage(file, (dataUrl) => {
+    avatarMap[avatarTargetName] = dataUrl;
+    saveAvatarMap();
+    uploadAvatar(avatarTargetName, dataUrl);
+    avatarInput.value = '';
+    loadMessages();
+    alert('✅ ' + avatarTargetName + ' 的头像已设置，已同步给所有人！');
+  });
+});
+
+function compressImage(file, cb) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const size = 96;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+      cb(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ===== 本地消息缓存 =====
 function saveLocal(msgs) {
   try { localStorage.setItem('chatHistory', JSON.stringify(msgs)); } catch(e) {}
 }
@@ -87,110 +213,4 @@ function mergeMsgs(localMsgs, serverMsgs) {
       merged.push(m);
     }
   }
-  merged.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
-  return merged.slice(-500);
-}
-
-async function loadMessages() {
-  // 先显示本地缓存的历史（服务器清空也能看到）
-  render(loadLocal());
-  try {
-    const res = await fetch('/api/messages?count=200');
-    const data = await res.json();
-    const serverMsgs = data.messages || [];
-    if (serverMsgs.length === 0 && loadLocal().length > 0) {
-      // 服务器消息清空了，把本地历史回填到服务器
-      await fetch('/api/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: loadLocal() })
-      });
-      loadMessages(); // 回填后重新加载
-      return;
-    }
-    if (serverMsgs.length > 0) {
-      const merged = mergeMsgs(loadLocal(), serverMsgs);
-      saveLocal(merged);
-      render(merged);
-    }
-  } catch (e) {
-    console.log('服务器连接失败，显示本地缓存', e);
-  }
-}
-
-function render(msgs) {
-  const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
-  chat.innerHTML = '';
-  msgs.forEach(m => {
-    const isMe = m.sender === myName;
-    const row = document.createElement('div');
-    row.className = 'msg' + (isMe ? ' right' : '');
-
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    avatar.style.background = colorFor(m.sender);
-    avatar.textContent = m.sender.charAt(0);
-
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'name';
-    nameDiv.textContent = m.sender + (m.role === 'assistant' ? ' 🤖' : '');
-
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'content';
-    contentDiv.textContent = m.content;
-
-    const timeDiv = document.createElement('div');
-    timeDiv.className = 'time';
-    timeDiv.textContent = m.time;
-
-    bubble.appendChild(nameDiv);
-    bubble.appendChild(contentDiv);
-    bubble.appendChild(timeDiv);
-
-    if (isMe) {
-      row.appendChild(bubble);
-      row.appendChild(avatar);
-    } else {
-      row.appendChild(avatar);
-      row.appendChild(bubble);
-    }
-        chat.appendChild(row);
-  });
-  if (wasNearBottom) {
-    chat.scrollTop = chat.scrollHeight;
-  }
-}
-
-async function sendMessage() {
-  const content = msgInput.value.trim();
-  if (!content) return;
-  const sender = myName;
-  const role = sender.includes('助手') ? 'assistant' : 'user';
-  try {
-    const res = await fetch('/api/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sender, content, role })
-    });
-    const data = await res.json();
-    if (!data.ok) { alert('发送失败: ' + (data.error || '')); return; }
-    msgInput.value = '';
-    loadMessages();
-  } catch (e) {
-    alert('发送失败: ' + e);
-  }
-}
-
-sendBtn.addEventListener('click', sendMessage);
-msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
-
-loadMessages();
-setInterval(loadMessages, 2000);
-   // 防休眠：每10分钟自动访问一次服务器，避免休眠清空消息
-setInterval(() => { fetch('/').catch(() => {}); }, 600000);
-</script>
-</body>
-</html>
+  merged.sort((a, b) => (a.time < b.time 
