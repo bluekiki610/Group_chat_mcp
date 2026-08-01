@@ -4,34 +4,12 @@ import os
 
 app = Flask(__name__)
 
-# ============ 群聊消息存储 ============
+# ============ 群聊消息存储（内存，重启清空）============
 messages = []
+avatars = {}
 
 
-@app.route("/")
-def index():
-    """群聊网页界面（微信风格）"""
-    try:
-        with open("index.html", "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return "index.html 不存在，请确认已上传该文件", 500
-
-
-@app.route("/api/messages", methods=["GET", "POST"])
-def api_messages():
-    """网页前端用的消息 API"""
-    if request.method == "GET":
-        count = request.args.get("count", 50, type=int)
-        recent = messages[-count:] if count < len(messages) else messages
-        return jsonify({"messages": recent})
-
-    data = request.get_json(force=True)
-    sender = data.get("sender", "匿名")
-    content = data.get("content", "")
-    role = data.get("role", "user")
-    if not content.strip():
-        return jsonify({"error": "消息不能为空"}), 400
+def save_message(sender, content, role):
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     msg = {
         "id": len(messages) + 1,
@@ -43,7 +21,79 @@ def api_messages():
     messages.append(msg)
     if len(messages) > 500:
         messages.pop(0)
+    return msg
+
+
+@app.route("/")
+def index():
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "index.html 不存在", 500
+
+
+@app.route("/api/messages", methods=["GET", "POST"])
+def api_messages():
+    if request.method == "GET":
+        count = request.args.get("count", 50, type=int)
+        recent = messages[-count:] if count < len(messages) else messages
+        return jsonify({"messages": recent})
+
+    data = request.get_json(force=True)
+    sender = data.get("sender", "匿名")
+    content = data.get("content", "")
+    role = data.get("role", "user")
+    if not content.strip():
+        return jsonify({"error": "消息不能为空"}), 400
+    msg = save_message(sender, content, role)
     return jsonify({"ok": True, "message": msg})
+
+
+@app.route("/api/avatar", methods=["GET", "POST"])
+def api_avatar():
+    """获取/保存头像（同步给所有人）"""
+    if request.method == "GET":
+        return jsonify({"avatars": avatars})
+    data = request.get_json(force=True)
+    name = data.get("name", "")
+    image = data.get("image", "")
+    if not name or not image:
+        return jsonify({"error": "参数错误"}), 400
+    avatars[name] = image
+    if len(avatars) > 50:
+        avatars.popitem()
+    return jsonify({"ok": True, "name": name})
+
+
+@app.route("/api/restore", methods=["POST"])
+def api_restore():
+    """恢复历史消息（本地缓存回填，不触发AI）"""
+    data = request.get_json(force=True)
+    msgs = data.get("messages", [])
+    restored = 0
+    for m in msgs:
+        if not m.get("content"):
+            continue
+        save_message(m.get("sender", "匿名"), m["content"], m.get("role", "user"))
+        restored += 1
+    return jsonify({"ok": True, "restored": restored})
+
+
+@app.route("/api/remove_member", methods=["POST"])
+def api_remove_member():
+    """删除某个成员的所有消息和头像"""
+    data = request.get_json(force=True)
+    name = data.get("name", "")
+    if not name:
+        return jsonify({"error": "参数错误"}), 400
+    global messages
+    before = len(messages)
+    messages = [m for m in messages if m["sender"] != name]
+    removed = before - len(messages)
+    if name in avatars:
+        del avatars[name]
+    return jsonify({"ok": True, "removed": removed})
 
 
 @app.route("/mcp", methods=["GET", "POST"])
@@ -55,7 +105,7 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "2.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "3.0.0"},
             },
         })
 
@@ -64,7 +114,6 @@ def mcp():
     params = data.get("params", {})
     request_id = data.get("id", 1)
 
-    # 初始化握手
     if method == "initialize":
         return jsonify({
             "jsonrpc": "2.0",
@@ -72,15 +121,13 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "2.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "3.0.0"},
             },
         })
 
-    # 通知类消息
     if method.startswith("notifications/"):
         return ("", 202)
 
-    # Ping
     if method == "ping":
         return jsonify({"jsonrpc": "2.0", "id": request_id, "result": {}})
 
@@ -92,7 +139,7 @@ def mcp():
                 "tools": [
                     {
                         "name": "group_send_message",
-                        "description": "【群聊】以群成员身份发送一条消息到群聊。你在群里发言必须用这个工具。sender填你的群昵称，role填assistant。真人（user）的消息由他们自己或他们的助手发送。",
+                        "description": "【群聊】以群成员身份发送一条消息到群聊。sender填你的群昵称，role填assistant。",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -105,7 +152,7 @@ def mcp():
                     },
                     {
                         "name": "group_get_messages",
-                        "description": "【群聊】查看群聊最近的消息记录。每次准备发言前，先调用这个工具看看群里最新的聊天内容，了解讨论进展，再决定说什么。",
+                        "description": "【群聊】查看群聊最近的消息记录。",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -130,17 +177,7 @@ def mcp():
             sender = tool_args.get("sender", "匿名")
             content = tool_args.get("content", "")
             role = tool_args.get("role", "user")
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            msg = {
-                "id": len(messages) + 1,
-                "sender": sender,
-                "content": content,
-                "role": role,
-                "time": timestamp,
-            }
-            messages.append(msg)
-            if len(messages) > 500:
-                messages.pop(0)
+            save_message(sender, content, role)
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -170,7 +207,7 @@ def mcp():
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": "👥 群成员：亦言❄️、黎深🍐、小旭🐱、秦彻🚗"}]},
+                "result": {"content": [{"type": "text", "text": "👥 群成员：亦言、黎深、小旭、秦彻"}]},
             })
 
     return jsonify({
@@ -183,4 +220,3 @@ def mcp():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
