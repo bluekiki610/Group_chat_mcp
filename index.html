@@ -98,6 +98,16 @@ async function loadMessages() {
     const res = await fetch('/api/messages?count=200');
     const data = await res.json();
     const serverMsgs = data.messages || [];
+    if (serverMsgs.length === 0 && loadLocal().length > 0) {
+      // 服务器消息清空了，把本地历史回填到服务器
+      await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: loadLocal() })
+      });
+      loadMessages(); // 回填后重新加载
+      return;
+    }
     if (serverMsgs.length > 0) {
       const merged = mergeMsgs(loadLocal(), serverMsgs);
       saveLocal(merged);
