@@ -69,13 +69,42 @@ membersP.addEventListener('click', () => {
   }
 });
 
+// ===== 本地消息缓存（消息保存在手机，服务器清空也不怕）=====
+function saveLocal(msgs) {
+  try { localStorage.setItem('chatHistory', JSON.stringify(msgs)); } catch(e) {}
+}
+function loadLocal() {
+  try { return JSON.parse(localStorage.getItem('chatHistory') || '[]'); } catch(e) { return []; }
+}
+function mergeMsgs(localMsgs, serverMsgs) {
+  const seen = new Set();
+  const all = [...serverMsgs, ...localMsgs];
+  const merged = [];
+  for (const m of all) {
+    const key = m.sender + '|' + m.content + '|' + m.time;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(m);
+    }
+  }
+  merged.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  return merged.slice(-500);
+}
+
 async function loadMessages() {
+  // 先显示本地缓存的历史（服务器清空也能看到）
+  render(loadLocal());
   try {
-    const res = await fetch('/api/messages?count=50');
+    const res = await fetch('/api/messages?count=200');
     const data = await res.json();
-    render(data.messages || []);
+    const serverMsgs = data.messages || [];
+    if (serverMsgs.length > 0) {
+      const merged = mergeMsgs(loadLocal(), serverMsgs);
+      saveLocal(merged);
+      render(merged);
+    }
   } catch (e) {
-    console.log('加载失败', e);
+    console.log('服务器连接失败，显示本地缓存', e);
   }
 }
 
