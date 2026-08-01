@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>人❤️机小窝</title>
+<title>彻梨の秦深深欲猛猛</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -35,19 +35,19 @@
   .input-bar button { height: 38px; padding: 0 18px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; cursor: pointer; flex-shrink: 0; }
   .input-bar button:active { background: #06ad56; }
   
-  .tip { text-align: center; color: #bbb; font-size: 12px; padding: 4px 0 10px; }
+  .tip { text-align: center; color: #bbb; font-size: 12px; padding: 4px 0 10px; cursor: pointer; }
 </style>
 </head>
 <body>
   <div class="header">
-    <h1>人❤️机小窝</h1>
+    <h1>彻梨の秦深深欲猛猛</h1>
     <div class="toolbar">
-      <span id="members">👤 名字</span>
+      <span id="members">👤 亦言</span>
       <span id="avatarBtn">🖼️ 头像</span>
       <span id="ttsBtn">🔇 朗读</span>
     </div>
   </div>
-  <div class="tip" id="memberList">👥 群里还没有成员，快来发言吧</div>
+  <div class="tip" id="memberList">👥 群里还没有成员，快来发言吧（点我管理）</div>
   <div id="chat"></div>
   <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
@@ -63,6 +63,7 @@ const membersP = document.getElementById('members');
 const avatarBtn = document.getElementById('avatarBtn');
 const avatarInput = document.getElementById('avatarInput');
 const ttsBtn = document.getElementById('ttsBtn');
+const memberListEl = document.getElementById('memberList');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
@@ -90,12 +91,12 @@ ttsBtn.addEventListener('click', () => {
   if (input === null) return;
   const v = input.trim();
   ttsTargetName = (v === '关' || v === '') ? '' : v;
-localStorage.setItem('ttsTargetName', ttsTargetName);
-if (ttsTargetName) lastSpokenTime = '';
-updateTtsBtn();
-if (ttsTargetName) {
-  speakText('语音朗读已开启，这是一条测试语音，能听到吗？');
-}
+  localStorage.setItem('ttsTargetName', ttsTargetName);
+  if (ttsTargetName) lastSpokenTime = '';
+  updateTtsBtn();
+  if (ttsTargetName) {
+    speakText('语音朗读已开启，这是一条测试语音，能听到吗？');
+  }
 });
 
 function speakText(text) {
@@ -165,7 +166,6 @@ async function loadAvatars() {
 }
 
 // ===== 设置头像 =====
-let avatarTargetName = '';
 avatarBtn.addEventListener('click', () => {
   avatarInput.click();
 });
@@ -264,16 +264,15 @@ function updateMemberList(msgs) {
   for (const m of msgs) {
     if (!seen.includes(m.sender)) seen.push(m.sender);
   }
-  const el = document.getElementById('memberList');
-  if (!el) return;
-  el.style.cursor = 'pointer';
-  el.title = '点我可以删除某个成员的所有消息';
+  if (!memberListEl) return;
+  memberListEl.style.cursor = 'pointer';
+  memberListEl.title = '点我可以删除某个成员的所有消息';
   if (!seen.length) {
-    el.textContent = '👥 群里还没有成员，快来发言吧（点我管理）';
+    memberListEl.textContent = '👥 群里还没有成员，快来发言吧（点我管理）';
     return;
   }
-  el.textContent = '👥 ' + seen.join(' · ') + '（点我管理）';
-  el.onclick = () => {
+  memberListEl.textContent = '👥 ' + seen.join(' · ') + '（点我管理）';
+  memberListEl.onclick = () => {
     const name = prompt('输入要删除的成员名字（将删除ta的所有消息，如：匿名 / 大旭）：');
     if (!name || !name.trim()) return;
     removeMember(name.trim());
