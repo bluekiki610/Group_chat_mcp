@@ -158,21 +158,24 @@ async function loadAvatars() {
 // ===== 设置头像 =====
 let avatarTargetName = '';
 avatarBtn.addEventListener('click', () => {
-  const name = prompt('要为谁设置头像？输入成员名字（如：亦言 / 黎深 / 小旭 / 秦彻）：');
-  if (!name || !name.trim()) return;
-  avatarTargetName = name.trim();
   avatarInput.click();
 });
 avatarInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
+  const name = prompt('这张头像给谁？输入成员名字（如：亦言 / 黎深 / 小旭 / 秦彻）：');
+  if (!name || !name.trim()) {
+    avatarInput.value = '';
+    return;
+  }
+  const target = name.trim();
   compressImage(file, (dataUrl) => {
-    avatarMap[avatarTargetName] = dataUrl;
+    avatarMap[target] = dataUrl;
     saveAvatarMap();
-    uploadAvatar(avatarTargetName, dataUrl);
+    uploadAvatar(target, dataUrl);
     avatarInput.value = '';
     loadMessages();
-    alert('✅ ' + avatarTargetName + ' 的头像已设置，已同步给所有人！');
+    alert('✅ ' + target + ' 的头像已设置，已同步给所有人！');
   });
 });
 
