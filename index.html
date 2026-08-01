@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>两人两机小窝</title>
+<title>彻梨の秦深深欲猛猛</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -53,7 +53,9 @@
     <input id="msgInput" placeholder="说点什么..." />
     <button id="sendBtn">发送</button>
   </div>
-  <input type="file" id="avatarInput" accept="image/*" style="display:none;"><script>
+  <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+
+<script>
 const chat = document.getElementById('chat');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -213,4 +215,123 @@ function mergeMsgs(localMsgs, serverMsgs) {
       merged.push(m);
     }
   }
-  merged.sort((a, b) => (a.time < b.time 
+  merged.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  return merged.slice(-500);
+}
+
+// ===== 加载消息（含服务器回填 + 语音朗读）=====
+async function loadMessages() {
+  render(loadLocal());
+  try {
+    const res = await fetch('/api/messages?count=200');
+    const data = await res.json();
+    const serverMsgs = data.messages || [];
+    speakNewMessages(serverMsgs);
+    if (serverMsgs.length === 0 && loadLocal().length > 0) {
+      await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: loadLocal() })
+      });
+      loadMessages();
+      return;
+    }
+    if (serverMsgs.length > 0) {
+      const merged = mergeMsgs(loadLocal(), serverMsgs);
+      saveLocal(merged);
+      render(merged);
+    }
+  } catch (e) {
+    console.log('服务器连接失败，显示本地缓存', e);
+  }
+}
+
+// ===== 渲染消息 =====
+function render(msgs) {
+  const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
+  chat.innerHTML = '';
+  msgs.forEach(m => {
+    const isMe = m.sender === myName;
+    const row = document.createElement('div');
+    row.className = 'msg' + (isMe ? ' right' : '');
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if (avatarMap[m.sender]) {
+      const img = document.createElement('img');
+      img.src = avatarMap[m.sender];
+      avatar.appendChild(img);
+    } else {
+      avatar.style.background = colorFor(m.sender);
+      avatar.textContent = m.sender.charAt(0);
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'name';
+    nameDiv.textContent = m.sender + (m.role === 'assistant' ? ' 🤖' : '');
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'content';
+    contentDiv.textContent = m.content;
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'time';
+    timeDiv.textContent = m.time;
+
+    bubble.appendChild(nameDiv);
+    bubble.appendChild(contentDiv);
+    bubble.appendChild(timeDiv);
+
+    if (isMe) {
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    } else {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    }
+    chat.appendChild(row);
+  });
+  if (wasNearBottom) {
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+// ===== 发送消息 =====
+async function sendMessage() {
+  const content = msgInput.value.trim();
+  if (!content) return;
+  const sender = myName;
+  const role = sender.includes('助手') ? 'assistant' : 'user';
+  try {
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender, content, role })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('发送失败: ' + (data.error || '')); return; }
+    msgInput.value = '';
+    loadMessages();
+  } catch (e) {
+    alert('发送失败: ' + e);
+  }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+// 防休眠：每10分钟访问一次服务器
+setInterval(() => { fetch('/').catch(() => {}); }, 600000);
+
+// 加载头像（30秒同步一次）
+loadAvatars();
+setInterval(loadAvatars, 30000);
+
+loadMessages();
+setInterval(loadMessages, 2000);
+</script>
+</body>
+</html>
