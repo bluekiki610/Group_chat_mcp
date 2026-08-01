@@ -42,7 +42,7 @@
   <div class="header">
     <h1>人❤️机小窝</h1>
     <div class="toolbar">
-      <span id="members">👤 亦言</span>
+      <span id="members">👤 名字</span>
       <span id="avatarBtn">🖼️ 头像</span>
       <span id="ttsBtn">🔇 朗读</span>
     </div>
@@ -150,6 +150,12 @@ async function loadAvatars() {
     const res = await fetch('/api/avatar');
     const data = await res.json();
     const serverAvatars = data.avatars || {};
+    // 本地有但服务器没有的头像 → 自动回填，保证双方都能看到
+    for (const k in avatarMap) {
+      if (!serverAvatars[k]) {
+        uploadAvatar(k, avatarMap[k]);
+      }
+    }
     for (const k in serverAvatars) {
       avatarMap[k] = serverAvatars[k];
     }
@@ -259,7 +265,40 @@ function updateMemberList(msgs) {
     if (!seen.includes(m.sender)) seen.push(m.sender);
   }
   const el = document.getElementById('memberList');
-  if (el) el.textContent = seen.length ? '👥 ' + seen.join(' · ') : '👥 群里还没有成员，快来发言吧';
+  if (!el) return;
+  el.style.cursor = 'pointer';
+  el.title = '点我可以删除某个成员的所有消息';
+  if (!seen.length) {
+    el.textContent = '👥 群里还没有成员，快来发言吧（点我管理）';
+    return;
+  }
+  el.textContent = '👥 ' + seen.join(' · ') + '（点我管理）';
+  el.onclick = () => {
+    const name = prompt('输入要删除的成员名字（将删除ta的所有消息，如：匿名 / 大旭）：');
+    if (!name || !name.trim()) return;
+    removeMember(name.trim());
+  };
+}
+
+async function removeMember(name) {
+  // 删本地消息
+  const local = loadLocal().filter(m => m.sender !== name);
+  saveLocal(local);
+  // 删服务器消息
+  try {
+    await fetch('/api/remove_member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    });
+  } catch(e) {}
+  // 删头像
+  if (avatarMap[name]) {
+    delete avatarMap[name];
+    saveAvatarMap();
+  }
+  loadMessages();
+  alert('✅ 已删除「' + name + '」的所有消息');
 }
 
 function render(msgs) {
