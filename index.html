@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>彻梨の秦深深欲猛猛</title>
+<title>人❤️机の小窝</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -62,9 +62,9 @@
 </head>
 <body>
   <div class="header">
-    <h1>彻梨の秦深深欲猛猛</h1>
+    <h1>人❤️机の小窝</h1>
     <div class="toolbar">
-      <span id="members">👤 亦言</span>
+      <span id="members">👤 名字</span>
       <span id="avatarBtn">🖼️ 头像</span>
       <span id="ttsBtn">🔇 朗读</span>
     </div>
@@ -91,8 +91,9 @@ const tipToast = document.getElementById('tipToast');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
-let myName = localStorage.getItem('myName') || '亦言';
-membersP.textContent = '👤 ' + myName;
+// 我的名字（默认空，没设置时按钮显示"名字"提示）
+let myName = localStorage.getItem('myName') || '';
+membersP.textContent = '👤 ' + (myName || '名字');
 
 // ===== 头像映射（本地 + 服务器同步）=====
 let avatarMap = {};
@@ -153,7 +154,7 @@ function colorFor(name) {
 
 // ===== 设置我的名字 =====
 membersP.addEventListener('click', () => {
-  const name = prompt('设置"我"的名字（发送消息会以这个名字发出）：', myName);
+  const name = prompt('设置"我"的名字（发送消息会以这个名字发出）：', myName || '名字');
   if (name && name.trim()) {
     myName = name.trim();
     localStorage.setItem('myName', myName);
@@ -334,8 +335,9 @@ async function loadOnline() {
   } catch(e) {}
 }
 
-// 心跳：告诉服务器我在线
+// 心跳：告诉服务器我在线（没设置名字就不发）
 function heartbeat() {
+  if (!myName) return;
   fetch('/api/heartbeat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -418,6 +420,7 @@ function render(msgs) {
 async function sendMessage() {
   const content = msgInput.value.trim();
   if (!content) return;
+  if (!myName) { alert('请先点左上角「👤 名字」设置你的名字！'); return; }
   const sender = myName;
   const role = sender.includes('助手') ? 'assistant' : 'user';
   try {
