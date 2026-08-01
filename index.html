@@ -36,6 +36,28 @@
   .input-bar button:active { background: #06ad56; }
   
   .tip { text-align: center; color: #bbb; font-size: 12px; padding: 4px 0 10px; cursor: pointer; }
+  
+  #tipToast {
+    position: fixed;
+    top: 15%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    padding: 7px 18px;
+    border-radius: 18px;
+    font-size: 13px;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    display: none;
+    max-width: 80%;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>
 </head>
 <body>
@@ -47,13 +69,14 @@
       <span id="ttsBtn">🔇 朗读</span>
     </div>
   </div>
-  <div class="tip" id="memberList">👥 群里还没有成员，快来发言吧（点我管理）</div>
+  <div class="tip" id="memberList">🟢 在线：无（点我管理）</div>
   <div id="chat"></div>
   <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
     <button id="sendBtn">发送</button>
   </div>
   <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+  <div id="tipToast"></div>
 
 <script>
 const chat = document.getElementById('chat');
@@ -64,6 +87,7 @@ const avatarBtn = document.getElementById('avatarBtn');
 const avatarInput = document.getElementById('avatarInput');
 const ttsBtn = document.getElementById('ttsBtn');
 const memberListEl = document.getElementById('memberList');
+const tipToast = document.getElementById('tipToast');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
@@ -151,7 +175,6 @@ async function loadAvatars() {
     const res = await fetch('/api/avatar');
     const data = await res.json();
     const serverAvatars = data.avatars || {};
-    // 本地有但服务器没有的头像 → 自动回填，保证双方都能看到
     for (const k in avatarMap) {
       if (!serverAvatars[k]) {
         uploadAvatar(k, avatarMap[k]);
@@ -258,32 +281,71 @@ async function loadMessages() {
   }
 }
 
-// ===== 渲染消息 =====
-function updateMemberList(msgs) {
-  const seen = [];
-  for (const m of msgs) {
-    if (!seen.includes(m.sender)) seen.push(m.sender);
-  }
-  if (!memberListEl) return;
-  memberListEl.style.cursor = 'pointer';
-  memberListEl.title = '点我可以删除某个成员的所有消息';
-  if (!seen.length) {
-    memberListEl.textContent = '👥 群里还没有成员，快来发言吧（点我管理）';
-    return;
-  }
-  memberListEl.textContent = '👥 ' + seen.join(' · ') + '（点我管理）';
-  memberListEl.onclick = () => {
-    const name = prompt('输入要删除的成员名字（将删除ta的所有消息，如：匿名 / 大旭）：');
-    if (!name || !name.trim()) return;
-    removeMember(name.trim());
-  };
+// ===== 进出聊天室提示 =====
+function showSystemTip(text) {
+  if (!tipToast) return;
+  tipToast.textContent = text;
+  tipToast.style.display = 'block';
+  tipToast.style.opacity = '1';
+  clearTimeout(tipToast._timer);
+  tipToast._timer = setTimeout(() => {
+    tipToast.style.opacity = '0';
+    setTimeout(() => { tipToast.style.display = 'none'; }, 300);
+  }, 4000);
+}
+
+// ===== 在线成员（谁打开网页谁显示）+ 进出提示 =====
+let lastOnline = null; // null = 首次加载，不提示
+
+async function loadOnline() {
+  try {
+    const res = await fetch('/api/online');
+    const data = await res.json();
+    const online = data.online || [];
+
+    // 进出检测（首次不提示，避免刚打开刷屏）
+    if (lastOnline !== null) {
+      for (const name of online) {
+        if (!lastOnline.includes(name)) {
+          showSystemTip('🟢 ' + name + ' 进入了聊天室');
+        }
+      }
+      for (const name of lastOnline) {
+        if (!online.includes(name)) {
+          showSystemTip('⚪ ' + name + ' 离开了聊天室');
+        }
+      }
+    }
+    lastOnline = online;
+
+    if (!memberListEl) return;
+    memberListEl.style.cursor = 'pointer';
+    memberListEl.title = '点我可以删除某个成员的所有消息';
+    if (online.length) {
+      memberListEl.textContent = '🟢 在线：' + online.join(' · ') + '（点我管理）';
+    } else {
+      memberListEl.textContent = '👥 当前无人在线（点我管理）';
+    }
+    memberListEl.onclick = () => {
+      const name = prompt('输入要删除的成员名字（将删除ta的所有消息）：');
+      if (!name || !name.trim()) return;
+      removeMember(name.trim());
+    };
+  } catch(e) {}
+}
+
+// 心跳：告诉服务器我在线
+function heartbeat() {
+  fetch('/api/heartbeat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: myName })
+  }).catch(() => {});
 }
 
 async function removeMember(name) {
-  // 删本地消息
   const local = loadLocal().filter(m => m.sender !== name);
   saveLocal(local);
-  // 删服务器消息
   try {
     await fetch('/api/remove_member', {
       method: 'POST',
@@ -291,17 +353,16 @@ async function removeMember(name) {
       body: JSON.stringify({ name: name })
     });
   } catch(e) {}
-  // 删头像
   if (avatarMap[name]) {
     delete avatarMap[name];
     saveAvatarMap();
   }
   loadMessages();
+  loadOnline();
   alert('✅ 已删除「' + name + '」的所有消息');
 }
 
 function render(msgs) {
-  updateMemberList(msgs);
   const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
   chat.innerHTML = '';
   msgs.forEach(m => {
@@ -383,6 +444,12 @@ setInterval(() => { fetch('/').catch(() => {}); }, 600000);
 // 加载头像（30秒同步一次）
 loadAvatars();
 setInterval(loadAvatars, 30000);
+
+// 在线心跳（15秒一次）+ 在线列表（10秒刷新）
+heartbeat();
+setInterval(heartbeat, 15000);
+loadOnline();
+setInterval(loadOnline, 10000);
 
 loadMessages();
 setInterval(loadMessages, 2000);
