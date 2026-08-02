@@ -12,8 +12,8 @@
   .header h1 { font-size: 16px; font-weight: 600; }
   .header p { font-size: 12px; color: #888; margin-top: 3px; cursor: pointer; }
   .header p:hover { color: #07c160; }
-  .toolbar { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-  .toolbar span { font-size: 12px; color: #555; background: #fff; border-radius: 14px; padding: 3px 12px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+  .toolbar { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+  .toolbar span { font-size: 13px; color: #555; background: #fff; border-radius: 14px; padding: 3px 10px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
   .toolbar span:hover { color: #07c160; }
   
   #chat { flex: 1; overflow-y: auto; padding: 16px 12px 76px; }
@@ -64,14 +64,14 @@
   <div class="header">
     <h1>人❤️机の小窝</h1>
     <div class="toolbar">
-      <span id="members">👤 名字</span>
-      <span id="roomBtn">🚪 客厅</span>
-      <span id="avatarBtn">🖼️ 头像</span>
-      <span id="ttsBtn">🔇 朗读</span>
-      <span id="timeBtn">⏰ 时间</span>
+      <span id="members" title="点这里修改你的名字">👤 名字</span>
+      <span id="roomBtn" title="房间管理">🚪</span>
+      <span id="avatarBtn" title="设置头像">🖼️</span>
+      <span id="ttsBtn" title="语音朗读">🔇</span>
+      <span id="timeBtn" title="时间设置">⏰</span>
     </div>
   </div>
-  <div class="tip" id="memberList">🟢 在线：无（点我管理）</div>
+  <div class="tip" id="memberList">🏠 客厅 · 🟢 在线：无 · ⏰ 现实时间（点我管理）</div>
   <div id="chat"></div>
   <div class="input-bar">
     <input id="msgInput" placeholder="说点什么..." />
@@ -103,11 +103,6 @@ membersP.textContent = '👤 ' + (myName || '名字');
 let currentRoom = localStorage.getItem('currentRoom') || 'main';
 let roomPassword = localStorage.getItem('roomPass_' + currentRoom) || '';
 
-function updateRoomBtn() {
-  if (!roomBtn) return;
-  roomBtn.textContent = '🚪 ' + (currentRoom === 'main' ? '客厅' : currentRoom);
-}
-
 function saveRoomState() {
   localStorage.setItem('currentRoom', currentRoom);
   localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
@@ -117,7 +112,8 @@ async function switchRoom(room, password) {
   currentRoom = room;
   roomPassword = password || '';
   saveRoomState();
-  updateRoomBtn();
+  loadTimeSettings();
+  loadOnline();
   loadMessages();
   alert('✅ 已进入房间：' + (room === 'main' ? '客厅' : room));
 }
@@ -194,20 +190,16 @@ roomBtn.addEventListener('click', async () => {
   }
 });
 
-// ===== 聊天室时间设置（管理员）=====
+// ===== 聊天室时间设置（按房间独立）=====
 let timeSettings = { mode: 'real', fixed_time: '19:00' };
-
-function updateTimeBtn() {
-  if (!timeBtn) return;
-  timeBtn.textContent = timeSettings.mode === 'fixed' ? '⏰ 剧情 ' + timeSettings.fixed_time : '⏰ 现实时间';
-}
 
 async function loadTimeSettings() {
   try {
-    const res = await fetch('/api/time_settings');
+    const res = await fetch('/api/time_settings?room=' + encodeURIComponent(currentRoom));
     const data = await res.json();
     timeSettings = data.settings || timeSettings;
-    updateTimeBtn();
+    timeBtn.title = timeSettings.mode === 'fixed' ? '时间设置：剧情 ' + timeSettings.fixed_time : '时间设置：现实时间';
+    updateStatusLine(lastOnline || []);
   } catch(e) {}
 }
 
@@ -216,18 +208,20 @@ async function saveTimeSettings(mode, fixed_time) {
     const res = await fetch('/api/time_settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: mode, fixed_time: fixed_time })
+      body: JSON.stringify({ mode: mode, fixed_time: fixed_time, room: currentRoom })
     });
     const data = await res.json();
     if (data.settings) timeSettings = data.settings;
-    updateTimeBtn();
+    timeBtn.title = timeSettings.mode === 'fixed' ? '时间设置：剧情 ' + timeSettings.fixed_time : '时间设置：现实时间';
+    updateStatusLine(lastOnline || []);
   } catch(e) { alert('设置失败，请检查网络'); }
 }
 
 timeBtn.addEventListener('click', () => {
+  const roomLabel = currentRoom === 'main' ? '客厅' : currentRoom;
   const current = timeSettings.mode === 'fixed' ? '固定剧情时间 ' + timeSettings.fixed_time : '跟随现实时间（北京时间）';
   const input = prompt(
-    '【管理员】聊天室时间设置\n\n当前：' + current + '\n\n' +
+    '【管理员】房间「' + roomLabel + '」时间设置\n\n当前：' + current + '\n\n' +
     '输入 1 = 跟随现实时间（北京时间）\n' +
     '输入 2 = 固定剧情时间（然后输入时间，如 19:00）',
     '1'
@@ -244,7 +238,7 @@ timeBtn.addEventListener('click', () => {
     const ftv = ft.trim();
     if (!ftv) return;
     saveTimeSettings('fixed', ftv).then(() => {
-      alert('✅ 已切换为固定剧情时间：' + ftv + '\n（之后所有消息都显示这个时间）');
+      alert('✅ 已切换为固定剧情时间：' + ftv + '\n（之后本房间所有消息都显示这个时间）');
     });
   }
 });
@@ -261,7 +255,8 @@ let ttsTargetName = localStorage.getItem('ttsTargetName') || '';
 let lastSpokenTime = localStorage.getItem('lastSpokenTime') || '';
 
 function updateTtsBtn() {
-  ttsBtn.textContent = ttsTargetName ? '🔊 ' + ttsTargetName : '🔇 朗读';
+  ttsBtn.textContent = ttsTargetName ? '🔊' : '🔇';
+  ttsBtn.title = ttsTargetName ? '朗读：' + ttsTargetName : '语音朗读';
 }
 updateTtsBtn();
 
@@ -450,8 +445,23 @@ function showSystemTip(text) {
   }, 4000);
 }
 
-// ===== 在线成员（谁打开网页谁显示）+ 进出提示 =====
+// ===== 状态行：房间 + 在线 + 时间（点我管理）=====
 let lastOnline = null; // null = 首次加载，不提示
+
+function updateStatusLine(online) {
+  if (!memberListEl) return;
+  memberListEl.style.cursor = 'pointer';
+  memberListEl.title = '点我可以删除某个成员的所有消息';
+  const roomLabel = currentRoom === 'main' ? '客厅' : currentRoom;
+  const timeLabel = timeSettings.mode === 'fixed' ? '剧情 ' + timeSettings.fixed_time : '现实时间';
+  const onlineText = online && online.length ? online.join(' · ') : '无';
+  memberListEl.textContent = '🏠 ' + roomLabel + ' · 🟢 在线：' + onlineText + ' · ⏰ ' + timeLabel + '（点我管理）';
+  memberListEl.onclick = () => {
+    const name = prompt('输入要删除的成员名字（将删除ta在本房间的所有消息）：');
+    if (!name || !name.trim()) return;
+    removeMember(name.trim());
+  };
+}
 
 async function loadOnline() {
   try {
@@ -472,20 +482,7 @@ async function loadOnline() {
       }
     }
     lastOnline = online;
-
-    if (!memberListEl) return;
-    memberListEl.style.cursor = 'pointer';
-    memberListEl.title = '点我可以删除某个成员的所有消息';
-    if (online.length) {
-      memberListEl.textContent = '🟢 在线：' + online.join(' · ') + '（点我管理）';
-    } else {
-      memberListEl.textContent = '👥 当前无人在线（点我管理）';
-    }
-    memberListEl.onclick = () => {
-      const name = prompt('输入要删除的成员名字（将删除ta在本房间的所有消息）：');
-      if (!name || !name.trim()) return;
-      removeMember(name.trim());
-    };
+    updateStatusLine(online);
   } catch(e) {}
 }
 
@@ -599,7 +596,6 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage()
 setInterval(() => { fetch('/').catch(() => {}); }, 600000);
 
 // 初始化
-updateRoomBtn();
 loadAvatars();
 setInterval(loadAvatars, 30000);
 

@@ -9,27 +9,29 @@ messages = []
 avatars = {}
 online = {}  # 在线成员: name -> 最后心跳时间
 
-# ============ 时间设置（管理员控制）============
-time_settings = {
-    "mode": "real",
-    "fixed_time": "19:00",
-}
+# ============ 时间设置（按房间独立）============
+# room -> {"mode": "real"|"fixed", "fixed_time": "19:00"}
+time_settings = {}
 
 BEIJING_OFFSET = datetime.timedelta(hours=8)
 
 
-def now_str():
-    """生成消息时间（默认北京时间；可切换为固定剧情时间）"""
+def get_time_setting(room="main"):
+    return time_settings.get(room, {"mode": "real", "fixed_time": "19:00"})
+
+
+def now_str(room="main"):
+    """生成消息时间（默认北京时间；每个房间可独立固定剧情时间）"""
     now = datetime.datetime.now(datetime.timezone.utc) + BEIJING_OFFSET
-    if time_settings.get("mode") == "fixed":
-        return now.strftime("%Y-%m-%d") + " " + time_settings.get("fixed_time", "19:00")
+    s = get_time_setting(room)
+    if s.get("mode") == "fixed":
+        return now.strftime("%Y-%m-%d") + " " + s.get("fixed_time", "19:00")
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
 # ============ 房间系统（客厅 + 小房间）============
-# room_name -> {"password": str|None, "creator": str, "created": str}
 rooms = {}
-rooms["main"] = {"password": None, "creator": "系统", "created": now_str()}
+rooms["main"] = {"password": None, "creator": "系统", "created": now_str("main")}
 
 
 def check_room_access(room, password):
@@ -45,7 +47,7 @@ def check_room_access(room, password):
 
 
 def save_message(sender, content, role, room="main"):
-    timestamp = now_str()
+    timestamp = now_str(room)
     msg = {
         "id": len(messages) + 1,
         "sender": sender,
@@ -123,7 +125,7 @@ def api_rooms():
         return jsonify({"error": "不能使用该房间名"}), 400
     if name in rooms:
         return jsonify({"error": "房间已存在"}), 400
-    rooms[name] = {"password": password, "creator": creator, "created": now_str()}
+    rooms[name] = {"password": password, "creator": creator, "created": now_str(name)}
     return jsonify({"ok": True, "room": {"name": name, "has_password": bool(password)}})
 
 
@@ -145,18 +147,21 @@ def api_rooms_join():
 
 @app.route("/api/time_settings", methods=["GET", "POST"])
 def api_time_settings():
-    """获取/设置聊天室时间模式（管理员用）"""
+    """获取/设置某个房间的时间模式（管理员用，按房间独立）"""
     if request.method == "GET":
-        return jsonify({"settings": time_settings})
+        room = request.args.get("room", "main")
+        return jsonify({"settings": get_time_setting(room), "room": room})
     data = request.get_json(force=True)
+    room = data.get("room", "main")
     mode = data.get("mode", "real")
     if mode not in ("real", "fixed"):
         return jsonify({"error": "mode 参数错误"}), 400
-    time_settings["mode"] = mode
+    s = time_settings.setdefault(room, {"mode": "real", "fixed_time": "19:00"})
+    s["mode"] = mode
     ft = data.get("fixed_time", "")
     if ft:
-        time_settings["fixed_time"] = ft
-    return jsonify({"ok": True, "settings": time_settings})
+        s["fixed_time"] = ft
+    return jsonify({"ok": True, "settings": s, "room": room})
 
 
 @app.route("/api/avatar", methods=["GET", "POST"])
