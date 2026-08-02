@@ -108,10 +108,20 @@ function saveRoomState() {
   localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
 }
 
+// 上报当前房间给服务器（AI 自动跟随）
+function reportRoom() {
+  fetch('/api/current_room', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room: currentRoom, password: roomPassword })
+  }).catch(() => {});
+}
+
 async function switchRoom(room, password) {
   currentRoom = room;
   roomPassword = password || '';
   saveRoomState();
+  reportRoom();
   loadTimeSettings();
   loadOnline();
   loadMessages();
@@ -404,26 +414,31 @@ function mergeMsgs(localMsgs, serverMsgs) {
   return merged.slice(-500);
 }
 
-// ===== 加载消息（含服务器回填 + 语音朗读）=====
+// ===== 加载消息（含服务器回填 + 语音朗读 + 房间双保险过滤）=====
+function filterRoom(msgs) {
+  return (msgs || []).filter(m => (m.room || 'main') === currentRoom);
+}
+
 async function loadMessages() {
-  render(loadLocal());
+  render(filterRoom(loadLocal()));
   try {
     const res = await fetch('/api/messages?count=200&room=' + encodeURIComponent(currentRoom) + '&password=' + encodeURIComponent(roomPassword));
     const data = await res.json();
     if (data.error) { console.log(data.error); return; }
-    const serverMsgs = data.messages || [];
+    const serverMsgs = filterRoom(data.messages || []);
     speakNewMessages(serverMsgs);
-    if (serverMsgs.length === 0 && loadLocal().length > 0) {
+    const localRoom = filterRoom(loadLocal());
+    if (serverMsgs.length === 0 && localRoom.length > 0) {
       await fetch('/api/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: loadLocal(), room: currentRoom, password: roomPassword })
+        body: JSON.stringify({ messages: localRoom, room: currentRoom, password: roomPassword })
       });
       loadMessages();
       return;
     }
     if (serverMsgs.length > 0) {
-      const merged = mergeMsgs(loadLocal(), serverMsgs);
+      const merged = filterRoom(mergeMsgs(loadLocal(), serverMsgs));
       saveLocal(merged);
       render(merged);
     }
@@ -596,6 +611,7 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage()
 setInterval(() => { fetch('/').catch(() => {}); }, 600000);
 
 // 初始化
+reportRoom();
 loadAvatars();
 setInterval(loadAvatars, 30000);
 
