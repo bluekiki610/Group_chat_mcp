@@ -108,7 +108,7 @@ function saveRoomState() {
   localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
 }
 
-// 上报当前房间给服务器（AI 自动跟随）
+// 上报当前房间给服务器（AI 可查询）
 function reportRoom() {
   fetch('/api/current_room', {
     method: 'POST',
@@ -154,49 +154,67 @@ async function createRoom(name, password) {
   } catch(e) { alert('❌ 网络错误'); }
 }
 
-async function listRooms() {
+async function deleteRoom(name, password) {
   try {
-    const res = await fetch('/api/rooms');
-    const data = await res.json();
-    const rooms = data.rooms || [];
-    let text = '🏠 所有房间：\n';
-    rooms.forEach(r => {
-      const label = r.name === 'main' ? '🏠 客厅（公共）' : (r.has_password ? '🔒 ' + r.name + '（有密码）' : '🔓 ' + r.name + '（公开）');
-      text += label + '  创建者：' + (r.creator || '?') + '\n';
+    const res = await fetch('/api/rooms/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password })
     });
-    text += '\n想加入某个房间，请选择菜单里的"加入其他房间"';
-    alert(text);
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 删除失败：' + (data.error || '')); return; }
+    if (currentRoom === name) {
+      currentRoom = 'main';
+      roomPassword = '';
+      saveRoomState();
+      reportRoom();
+    }
+    try { localStorage.removeItem('chatHistory_' + name); } catch(e) {}
+    alert('✅ 房间「' + name + '」已删除');
+    loadMessages();
   } catch(e) { alert('❌ 网络错误'); }
 }
 
 roomBtn.addEventListener('click', async () => {
+  // 先获取房间列表
+  let roomsList = [];
+  try {
+    const res = await fetch('/api/rooms');
+    const data = await res.json();
+    roomsList = data.rooms || [];
+  } catch(e) {}
+
   const cur = currentRoom === 'main' ? '客厅' : currentRoom;
-  const menu = prompt(
-    '🚪 房间管理\n\n当前房间：' + cur + '\n\n' +
-    '1 = 回到客厅（公共大厅）\n' +
-    '2 = 加入其他房间（输入房间名+密码）\n' +
-    '3 = 创建新房间（可设密码）\n' +
-    '4 = 查看所有房间',
-    '1'
-  );
-  if (menu === null) return;
-  const m = menu.trim();
-  if (m === '1') {
-    switchRoom('main', '');
-  } else if (m === '2') {
-    const name = prompt('输入要加入的房间名：');
+  let listText = '🚪 房间管理\n当前：' + cur + '\n\n📋 房间列表：\n';
+  roomsList.forEach(r => {
+    const label = r.name === 'main' ? '🏠 客厅（公共）' : (r.has_password ? '🔒 ' + r.name + '（有密码）' : '🔓 ' + r.name);
+    listText += '  ' + label + '\n';
+  });
+  listText += '\n👉 直接输入房间名就能进入；\n或输入：\n1 = 创建新房间\n2 = 删除房间\n3 = 回到客厅';
+
+  const input = prompt(listText);
+  if (input === null) return;
+  const v = input.trim();
+  if (v === '1') {
+    const name = prompt('新房间名字（如：火锅小分队）：');
+    if (!name || !name.trim()) return;
+    const pass = prompt('设置密码（可留空=公开房间）：');
+    if (pass === null) return;
+    await createRoom(name.trim(), pass.trim());
+  } else if (v === '2') {
+    const name = prompt('输入要删除的房间名：');
     if (!name || !name.trim()) return;
     const pass = prompt('该房间密码（没有密码直接确定）：');
     if (pass === null) return;
-    await joinRoom(name.trim(), pass.trim());
-  } else if (m === '3') {
-    const name = prompt('新房间名字（如：火锅小分队）：');
-    if (!name || !name.trim()) return;
-    const pass = prompt('设置密码（可留空=公开房间，其他朋友也能进）：');
+    const ok = confirm('确定要删除房间「' + name.trim() + '」吗？\n该房间所有消息都会被删除！');
+    if (ok) await deleteRoom(name.trim(), pass.trim());
+  } else if (v === '3') {
+    switchRoom('main', '');
+  } else if (v) {
+    // 直接输入房间名进入
+    const pass = prompt('房间「' + v + '」密码（没有密码直接确定）：');
     if (pass === null) return;
-    await createRoom(name.trim(), pass.trim());
-  } else if (m === '4') {
-    await listRooms();
+    await joinRoom(v, pass.trim());
   }
 });
 
