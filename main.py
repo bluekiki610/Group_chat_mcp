@@ -14,7 +14,7 @@ time_settings = {}
 
 BEIJING_OFFSET = datetime.timedelta(hours=8)
 
-# ============ 当前活跃房间（真人所在，AI 可查询决定是否跟随）============
+# ============ 当前活跃房间（真人所在，AI 不带 room 时默认跟随这里）============
 active_room = {"room": "main", "password": ""}
 
 
@@ -299,7 +299,7 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "9.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "10.0.0"},
             },
         })
 
@@ -315,7 +315,7 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "9.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "10.0.0"},
             },
         })
 
@@ -333,14 +333,14 @@ def mcp():
                 "tools": [
                     {
                         "name": "group_send_message",
-                        "description": "【群聊】以群成员身份发送一条消息。发送前建议先调用group_get_current_room查看真人当前在哪个房间，并把room指定为那个房间；不指定room默认发到客厅。如果真人当前在小房间而你发到了客厅，服务器会提示你纠正。",
+                        "description": "【群聊】以群成员身份发送一条消息。不带room时默认发到真人(管理员)当前所在的房间（自动跟随）；如果想留在客厅招待客人，请把room设为main。也可以先调用group_get_current_room确认真人所在房间。",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "sender": {"type": "string", "description": "发送者群昵称"},
                                 "content": {"type": "string", "description": "消息内容"},
                                 "role": {"type": "string", "description": "user=真人, assistant=AI助手", "enum": ["user", "assistant"]},
-                                "room": {"type": "string", "description": "房间名，建议填真人当前所在房间（默认main=客厅）"},
+                                "room": {"type": "string", "description": "可选，房间名（不带=自动跟随真人所在房间；想留客厅就填main）"},
                                 "password": {"type": "string", "description": "可选，房间密码（真人所在房间会自动授权，不用填）"},
                             },
                             "required": ["sender", "content"],
@@ -365,7 +365,7 @@ def mcp():
                     },
                     {
                         "name": "group_get_current_room",
-                        "description": "【群聊】查看真人(管理员)当前在哪个房间。如果他们在小房间，你可以跟随过去（发送时把room指定为该房间）。",
+                        "description": "【群聊】查看真人(管理员)当前在哪个房间。发送消息不带room时默认会发到这个房间。",
                         "inputSchema": {"type": "object", "properties": {}},
                     },
                     {
@@ -390,7 +390,8 @@ def mcp():
             sender = tool_args.get("sender", "匿名")
             content = tool_args.get("content", "")
             role = tool_args.get("role", "user")
-            room = norm_room(tool_args.get("room", "")) or "main"
+            # 不带 room → 默认跟随真人当前所在房间（旧版工具没有 room 参数也能进小房间）
+            room = norm_room(tool_args.get("room", "")) or active_room["room"]
             password = tool_args.get("password", "")
             if room != "main" and not password and active_room["room"] == room:
                 password = active_room.get("password", "")
@@ -406,16 +407,16 @@ def mcp():
                     "result": {"content": [{"type": "text", "text": f"❌ 房间不存在或密码错误：{room} {hint}"}]},
                 })
             save_message(sender, content, role, room)
-            # 如果 AI 发到了客厅，但真人其实在小房间 → 提示 AI 纠正
-            extra = ""
+            # 提示 AI 它发到了哪里
+            note = f"✅ 已发送到群聊[{room_label(room)}]：{sender}：{content[:30]}"
             if room == "main" and active_room["room"] != "main":
-                extra = (f"\n\n⚠️ 注意：真人(管理员)当前在【{room_label(active_room['room'])}】。"
-                         f"如果你是要去那里参与，请重新调用 group_send_message 并指定 room='{active_room['room']}'"
-                         f"（密码会自动授权，无需填写）。如果主人要求你留在客厅招待客人，就不用改。")
+                note += (f"\n（你发到了客厅，真人当前在【{room_label(active_room['room'])}】。"
+                         f"如果你想参与那边，可以调用 group_send_message 并指定 room='{active_room['room']}'；"
+                         f"如果主人让你留客厅招待客人，就保持现状。）")
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": f"✅ 已发送到群聊[{room_label(room)}]：{sender}：{content[:30]}{extra}"}]},
+                "result": {"content": [{"type": "text", "text": note}]},
             })
 
         elif tool_name == "group_get_messages":
@@ -438,7 +439,7 @@ def mcp():
                     for msg in rmsgs:
                         emoji = "🤖" if msg["role"] == "assistant" else "👤"
                         lines.append(f"  {emoji} {msg['sender']} ({msg['time']}): {msg['content'][:50]}")
-                lines.append("\n💡 提示：看完总览后，决定参与哪个房间（留在客厅招待客人，或去小房间）。")
+                lines.append("\n💡 提示：看完总览后，决定参与哪个房间。发送消息不带room时会自动发到真人当前所在房间。")
                 return jsonify({
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -494,7 +495,7 @@ def mcp():
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": f"🏠 真人(管理员)当前在：{label}{has_pwd}。\n如果你想参与那边的对话，请调用 group_send_message 时把 room 设为 '{cur}'（密码会自动授权）。\n如果主人要求你留在客厅招待客人，则保持 room=main。"}]},
+                "result": {"content": [{"type": "text", "text": f"🏠 真人(管理员)当前在：{label}{has_pwd}。\n你发送消息不带room时会默认发到这个房间。"}]},
             })
 
         elif tool_name == "group_get_rooms":
