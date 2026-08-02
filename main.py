@@ -10,7 +10,6 @@ avatars = {}
 online = {}  # 在线成员: name -> 最后心跳时间
 
 # ============ 时间设置（管理员控制）============
-# mode: "real" 跟随北京时间 / "fixed" 固定剧情时间
 time_settings = {
     "mode": "real",
     "fixed_time": "19:00",
@@ -27,7 +26,25 @@ def now_str():
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def save_message(sender, content, role):
+# ============ 房间系统（客厅 + 小房间）============
+# room_name -> {"password": str|None, "creator": str, "created": str}
+rooms = {}
+rooms["main"] = {"password": None, "creator": "系统", "created": now_str()}
+
+
+def check_room_access(room, password):
+    """检查房间访问权限（客厅无需密码）"""
+    if room in ("", "main"):
+        return True
+    info = rooms.get(room)
+    if not info:
+        return False
+    if not info.get("password"):
+        return True
+    return (password or "") == info["password"]
+
+
+def save_message(sender, content, role, room="main"):
     timestamp = now_str()
     msg = {
         "id": len(messages) + 1,
@@ -35,11 +52,17 @@ def save_message(sender, content, role):
         "content": content,
         "role": role,
         "time": timestamp,
+        "room": room,
     }
     messages.append(msg)
-    if len(messages) > 500:
+    if len(messages) > 1000:
         messages.pop(0)
     return msg
+
+
+def get_room_messages(room, count):
+    room_msgs = [m for m in messages if m.get("room", "main") == room]
+    return room_msgs[-count:] if count < len(room_msgs) else room_msgs
 
 
 @app.route("/")
@@ -54,18 +77,70 @@ def index():
 @app.route("/api/messages", methods=["GET", "POST"])
 def api_messages():
     if request.method == "GET":
+        room = request.args.get("room", "main")
+        password = request.args.get("password", "")
+        if not check_room_access(room, password):
+            return jsonify({"error": "密码错误或房间不存在"}), 403
         count = request.args.get("count", 50, type=int)
-        recent = messages[-count:] if count < len(messages) else messages
-        return jsonify({"messages": recent})
+        recent = get_room_messages(room, count)
+        return jsonify({"messages": recent, "room": room})
 
     data = request.get_json(force=True)
     sender = data.get("sender", "匿名")
     content = data.get("content", "")
     role = data.get("role", "user")
+    room = data.get("room", "main")
+    password = data.get("password", "")
+    if not check_room_access(room, password):
+        return jsonify({"error": "密码错误或房间不存在"}), 403
     if not content.strip():
         return jsonify({"error": "消息不能为空"}), 400
-    msg = save_message(sender, content, role)
+    msg = save_message(sender, content, role, room)
     return jsonify({"ok": True, "message": msg})
+
+
+@app.route("/api/rooms", methods=["GET", "POST"])
+def api_rooms():
+    """房间列表 / 创建房间"""
+    if request.method == "GET":
+        lst = []
+        for name, info in rooms.items():
+            lst.append({
+                "name": name,
+                "has_password": bool(info.get("password")),
+                "creator": info.get("creator", ""),
+                "created": info.get("created", ""),
+            })
+        return jsonify({"rooms": lst})
+
+    data = request.get_json(force=True)
+    name = data.get("name", "").strip()
+    password = data.get("password", "").strip() or None
+    creator = data.get("creator", "匿名")
+    if not name:
+        return jsonify({"error": "房间名不能为空"}), 400
+    if name == "main":
+        return jsonify({"error": "不能使用该房间名"}), 400
+    if name in rooms:
+        return jsonify({"error": "房间已存在"}), 400
+    rooms[name] = {"password": password, "creator": creator, "created": now_str()}
+    return jsonify({"ok": True, "room": {"name": name, "has_password": bool(password)}})
+
+
+@app.route("/api/rooms/join", methods=["POST"])
+def api_rooms_join():
+    """验证密码并加入房间"""
+    data = request.get_json(force=True)
+    name = data.get("name", "").strip()
+    password = data.get("password", "").strip() or None
+    if name == "main":
+        return jsonify({"ok": True, "room": {"name": "main", "has_password": False}})
+    if name not in rooms:
+        return jsonify({"error": "房间不存在"}), 404
+    info = rooms[name]
+    if info.get("password") and password != info["password"]:
+        return jsonify({"error": "密码错误"}), 403
+    return jsonify({"ok": True, "room": {"name": name, "has_password": bool(info.get("password"))}})
 
 
 @app.route("/api/time_settings", methods=["GET", "POST"])
@@ -123,25 +198,33 @@ def api_restore():
     """恢复历史消息（本地缓存回填，不触发AI）"""
     data = request.get_json(force=True)
     msgs = data.get("messages", [])
+    room = data.get("room", "main")
+    password = data.get("password", "")
+    if not check_room_access(room, password):
+        return jsonify({"error": "无权限"}), 403
     restored = 0
     for m in msgs:
         if not m.get("content"):
             continue
-        save_message(m.get("sender", "匿名"), m["content"], m.get("role", "user"))
+        save_message(m.get("sender", "匿名"), m["content"], m.get("role", "user"), room)
         restored += 1
     return jsonify({"ok": True, "restored": restored})
 
 
 @app.route("/api/remove_member", methods=["POST"])
 def api_remove_member():
-    """删除某个成员的所有消息和头像"""
+    """删除某个成员在本房间的所有消息和头像"""
     data = request.get_json(force=True)
     name = data.get("name", "")
+    room = data.get("room", "main")
+    password = data.get("password", "")
     if not name:
         return jsonify({"error": "参数错误"}), 400
+    if not check_room_access(room, password):
+        return jsonify({"error": "无权限"}), 403
     global messages
     before = len(messages)
-    messages = [m for m in messages if m["sender"] != name]
+    messages = [m for m in messages if not (m["sender"] == name and m.get("room", "main") == room)]
     removed = before - len(messages)
     if name in avatars:
         del avatars[name]
@@ -159,7 +242,7 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "3.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "4.0.0"},
             },
         })
 
@@ -175,7 +258,7 @@ def mcp():
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {"listChanged": False}},
-                "serverInfo": {"name": "GroupChat", "version": "3.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "4.0.0"},
             },
         })
 
@@ -193,26 +276,35 @@ def mcp():
                 "tools": [
                     {
                         "name": "group_send_message",
-                        "description": "【群聊】以群成员身份发送一条消息到群聊。sender填你的群昵称，role填assistant。",
+                        "description": "【群聊】以群成员身份发送一条消息到群聊。sender填你的群昵称，role填assistant。room填房间名（默认main=客厅），如果房间有密码需要填password。",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "sender": {"type": "string", "description": "发送者群昵称"},
                                 "content": {"type": "string", "description": "消息内容"},
                                 "role": {"type": "string", "description": "user=真人, assistant=AI助手", "enum": ["user", "assistant"]},
+                                "room": {"type": "string", "description": "房间名，默认main（客厅）"},
+                                "password": {"type": "string", "description": "房间密码（有密码的房间需要）"},
                             },
                             "required": ["sender", "content"],
                         },
                     },
                     {
                         "name": "group_get_messages",
-                        "description": "【群聊】查看群聊最近的消息记录。",
+                        "description": "【群聊】查看群聊最近的消息记录。room填房间名（默认main=客厅），有密码的房间需要填password。",
                         "inputSchema": {
                             "type": "object",
                             "properties": {
                                 "count": {"type": "number", "description": "获取最近多少条，默认20"},
+                                "room": {"type": "string", "description": "房间名，默认main（客厅）"},
+                                "password": {"type": "string", "description": "房间密码（有密码的房间需要）"},
                             },
                         },
+                    },
+                    {
+                        "name": "group_get_rooms",
+                        "description": "【群聊】查看所有房间列表。",
+                        "inputSchema": {"type": "object", "properties": {}},
                     },
                     {
                         "name": "group_get_members",
@@ -231,23 +323,39 @@ def mcp():
             sender = tool_args.get("sender", "匿名")
             content = tool_args.get("content", "")
             role = tool_args.get("role", "user")
-            save_message(sender, content, role)
+            room = tool_args.get("room", "main")
+            password = tool_args.get("password", "")
+            if not check_room_access(room, password):
+                return jsonify({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"content": [{"type": "text", "text": "❌ 房间不存在或密码错误：" + room}]},
+                })
+            save_message(sender, content, role, room)
             return jsonify({
                 "jsonrpc": "2.0",
                 "id": request_id,
-                "result": {"content": [{"type": "text", "text": f"✅ 已发送到群聊：{sender}：{content[:30]}"}]},
+                "result": {"content": [{"type": "text", "text": f"✅ 已发送到群聊[{room}]：{sender}：{content[:30]}"}]},
             })
 
         elif tool_name == "group_get_messages":
             count = tool_args.get("count", 20)
-            recent = messages[-count:] if count < len(messages) else messages
+            room = tool_args.get("room", "main")
+            password = tool_args.get("password", "")
+            if not check_room_access(room, password):
+                return jsonify({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "result": {"content": [{"type": "text", "text": "❌ 房间不存在或密码错误：" + room}]},
+                })
+            recent = get_room_messages(room, count)
             if not recent:
                 return jsonify({
                     "jsonrpc": "2.0",
                     "id": request_id,
-                    "result": {"content": [{"type": "text", "text": "📭 群里暂时还没有消息"}]},
+                    "result": {"content": [{"type": "text", "text": "📭 这个房间暂时还没有消息"}]},
                 })
-            result = "📋 群聊消息记录\n" + "─" * 30 + "\n"
+            result = f"📋 群聊消息记录 [{room}]\n" + "─" * 30 + "\n"
             for msg in recent:
                 emoji = "🤖" if msg["role"] == "assistant" else "👤"
                 result += f"{emoji} {msg['sender']} ({msg['time']}):\n  {msg['content']}\n\n"
@@ -255,6 +363,16 @@ def mcp():
                 "jsonrpc": "2.0",
                 "id": request_id,
                 "result": {"content": [{"type": "text", "text": result}]},
+            })
+
+        elif tool_name == "group_get_rooms":
+            lst = []
+            for name, info in rooms.items():
+                lst.append(name + ("（🔒有密码）" if info.get("password") else "（公开）"))
+            return jsonify({
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "result": {"content": [{"type": "text", "text": "🏠 房间列表：" + ("、".join(lst) if lst else "暂无")}]},
             })
 
         elif tool_name == "group_get_members":

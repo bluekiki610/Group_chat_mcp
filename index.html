@@ -65,6 +65,7 @@
     <h1>人❤️机の小窝</h1>
     <div class="toolbar">
       <span id="members">👤 名字</span>
+      <span id="roomBtn">🚪 客厅</span>
       <span id="avatarBtn">🖼️ 头像</span>
       <span id="ttsBtn">🔇 朗读</span>
       <span id="timeBtn">⏰ 时间</span>
@@ -90,12 +91,108 @@ const ttsBtn = document.getElementById('ttsBtn');
 const memberListEl = document.getElementById('memberList');
 const tipToast = document.getElementById('tipToast');
 const timeBtn = document.getElementById('timeBtn');
+const roomBtn = document.getElementById('roomBtn');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
 // 我的名字（默认空，没设置时按钮显示"名字"提示）
 let myName = localStorage.getItem('myName') || '';
 membersP.textContent = '👤 ' + (myName || '名字');
+
+// ===== 房间系统（客厅 + 小房间）=====
+let currentRoom = localStorage.getItem('currentRoom') || 'main';
+let roomPassword = localStorage.getItem('roomPass_' + currentRoom) || '';
+
+function updateRoomBtn() {
+  if (!roomBtn) return;
+  roomBtn.textContent = '🚪 ' + (currentRoom === 'main' ? '客厅' : currentRoom);
+}
+
+function saveRoomState() {
+  localStorage.setItem('currentRoom', currentRoom);
+  localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
+}
+
+async function switchRoom(room, password) {
+  currentRoom = room;
+  roomPassword = password || '';
+  saveRoomState();
+  updateRoomBtn();
+  loadMessages();
+  alert('✅ 已进入房间：' + (room === 'main' ? '客厅' : room));
+}
+
+async function joinRoom(name, password) {
+  try {
+    const res = await fetch('/api/rooms/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 加入失败：' + (data.error || '房间不存在')); return; }
+    switchRoom(name, password);
+  } catch(e) { alert('❌ 网络错误'); }
+}
+
+async function createRoom(name, password) {
+  try {
+    const res = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password, creator: myName || '匿名' })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 创建失败：' + (data.error || '')); return; }
+    switchRoom(name, password);
+  } catch(e) { alert('❌ 网络错误'); }
+}
+
+async function listRooms() {
+  try {
+    const res = await fetch('/api/rooms');
+    const data = await res.json();
+    const rooms = data.rooms || [];
+    let text = '🏠 所有房间：\n';
+    rooms.forEach(r => {
+      const label = r.name === 'main' ? '🏠 客厅（公共）' : (r.has_password ? '🔒 ' + r.name + '（有密码）' : '🔓 ' + r.name + '（公开）');
+      text += label + '  创建者：' + (r.creator || '?') + '\n';
+    });
+    text += '\n想加入某个房间，请选择菜单里的"加入其他房间"';
+    alert(text);
+  } catch(e) { alert('❌ 网络错误'); }
+}
+
+roomBtn.addEventListener('click', async () => {
+  const cur = currentRoom === 'main' ? '客厅' : currentRoom;
+  const menu = prompt(
+    '🚪 房间管理\n\n当前房间：' + cur + '\n\n' +
+    '1 = 回到客厅（公共大厅）\n' +
+    '2 = 加入其他房间（输入房间名+密码）\n' +
+    '3 = 创建新房间（可设密码）\n' +
+    '4 = 查看所有房间',
+    '1'
+  );
+  if (menu === null) return;
+  const m = menu.trim();
+  if (m === '1') {
+    switchRoom('main', '');
+  } else if (m === '2') {
+    const name = prompt('输入要加入的房间名：');
+    if (!name || !name.trim()) return;
+    const pass = prompt('该房间密码（没有密码直接确定）：');
+    if (pass === null) return;
+    await joinRoom(name.trim(), pass.trim());
+  } else if (m === '3') {
+    const name = prompt('新房间名字（如：火锅小分队）：');
+    if (!name || !name.trim()) return;
+    const pass = prompt('设置密码（可留空=公开房间，其他朋友也能进）：');
+    if (pass === null) return;
+    await createRoom(name.trim(), pass.trim());
+  } else if (m === '4') {
+    await listRooms();
+  }
+});
 
 // ===== 聊天室时间设置（管理员）=====
 let timeSettings = { mode: 'real', fixed_time: '19:00' };
@@ -253,7 +350,7 @@ avatarBtn.addEventListener('click', () => {
 avatarInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const name = prompt('这张头像给谁？输入成员名字（如：亦言 / 黎深 / 小旭 / 秦彻）：');
+  const name = prompt('这张头像给谁？输入成员名字：');
   if (!name || !name.trim()) {
     avatarInput.value = '';
     return;
@@ -290,12 +387,12 @@ function compressImage(file, cb) {
   reader.readAsDataURL(file);
 }
 
-// ===== 本地消息缓存 =====
+// ===== 本地消息缓存（按房间分开）=====
 function saveLocal(msgs) {
-  try { localStorage.setItem('chatHistory', JSON.stringify(msgs)); } catch(e) {}
+  try { localStorage.setItem('chatHistory_' + currentRoom, JSON.stringify(msgs)); } catch(e) {}
 }
 function loadLocal() {
-  try { return JSON.parse(localStorage.getItem('chatHistory') || '[]'); } catch(e) { return []; }
+  try { return JSON.parse(localStorage.getItem('chatHistory_' + currentRoom) || '[]'); } catch(e) { return []; }
 }
 function mergeMsgs(localMsgs, serverMsgs) {
   const seen = new Set();
@@ -316,15 +413,16 @@ function mergeMsgs(localMsgs, serverMsgs) {
 async function loadMessages() {
   render(loadLocal());
   try {
-    const res = await fetch('/api/messages?count=200');
+    const res = await fetch('/api/messages?count=200&room=' + encodeURIComponent(currentRoom) + '&password=' + encodeURIComponent(roomPassword));
     const data = await res.json();
+    if (data.error) { console.log(data.error); return; }
     const serverMsgs = data.messages || [];
     speakNewMessages(serverMsgs);
     if (serverMsgs.length === 0 && loadLocal().length > 0) {
       await fetch('/api/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: loadLocal() })
+        body: JSON.stringify({ messages: loadLocal(), room: currentRoom, password: roomPassword })
       });
       loadMessages();
       return;
@@ -361,7 +459,6 @@ async function loadOnline() {
     const data = await res.json();
     const online = data.online || [];
 
-    // 进出检测（首次不提示，避免刚打开刷屏）
     if (lastOnline !== null) {
       for (const name of online) {
         if (!lastOnline.includes(name)) {
@@ -385,7 +482,7 @@ async function loadOnline() {
       memberListEl.textContent = '👥 当前无人在线（点我管理）';
     }
     memberListEl.onclick = () => {
-      const name = prompt('输入要删除的成员名字（将删除ta的所有消息）：');
+      const name = prompt('输入要删除的成员名字（将删除ta在本房间的所有消息）：');
       if (!name || !name.trim()) return;
       removeMember(name.trim());
     };
@@ -409,7 +506,7 @@ async function removeMember(name) {
     await fetch('/api/remove_member', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name })
+      body: JSON.stringify({ name: name, room: currentRoom, password: roomPassword })
     });
   } catch(e) {}
   if (avatarMap[name]) {
@@ -418,7 +515,7 @@ async function removeMember(name) {
   }
   loadMessages();
   loadOnline();
-  alert('✅ 已删除「' + name + '」的所有消息');
+  alert('✅ 已删除「' + name + '」在本房间的所有消息');
 }
 
 function render(msgs) {
@@ -484,7 +581,7 @@ async function sendMessage() {
     const res = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sender, content, role })
+      body: JSON.stringify({ sender, content, role, room: currentRoom, password: roomPassword })
     });
     const data = await res.json();
     if (!data.ok) { alert('发送失败: ' + (data.error || '')); return; }
@@ -501,17 +598,16 @@ msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage()
 // 防休眠：每10分钟访问一次服务器
 setInterval(() => { fetch('/').catch(() => {}); }, 600000);
 
-// 加载头像（30秒同步一次）
+// 初始化
+updateRoomBtn();
 loadAvatars();
 setInterval(loadAvatars, 30000);
 
-// 在线心跳（15秒一次）+ 在线列表（10秒刷新）
 heartbeat();
 setInterval(heartbeat, 15000);
 loadOnline();
 setInterval(loadOnline, 10000);
 
-// 加载时间设置
 loadTimeSettings();
 setInterval(loadTimeSettings, 30000);
 
