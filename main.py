@@ -9,9 +9,26 @@ messages = []
 avatars = {}
 online = {}  # 在线成员: name -> 最后心跳时间
 
+# ============ 时间设置（管理员控制）============
+# mode: "real" 跟随北京时间 / "fixed" 固定剧情时间
+time_settings = {
+    "mode": "real",
+    "fixed_time": "19:00",
+}
+
+BEIJING_OFFSET = datetime.timedelta(hours=8)
+
+
+def now_str():
+    """生成消息时间（默认北京时间；可切换为固定剧情时间）"""
+    now = datetime.datetime.now(datetime.timezone.utc) + BEIJING_OFFSET
+    if time_settings.get("mode") == "fixed":
+        return now.strftime("%Y-%m-%d") + " " + time_settings.get("fixed_time", "19:00")
+    return now.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def save_message(sender, content, role):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = now_str()
     msg = {
         "id": len(messages) + 1,
         "sender": sender,
@@ -49,6 +66,22 @@ def api_messages():
         return jsonify({"error": "消息不能为空"}), 400
     msg = save_message(sender, content, role)
     return jsonify({"ok": True, "message": msg})
+
+
+@app.route("/api/time_settings", methods=["GET", "POST"])
+def api_time_settings():
+    """获取/设置聊天室时间模式（管理员用）"""
+    if request.method == "GET":
+        return jsonify({"settings": time_settings})
+    data = request.get_json(force=True)
+    mode = data.get("mode", "real")
+    if mode not in ("real", "fixed"):
+        return jsonify({"error": "mode 参数错误"}), 400
+    time_settings["mode"] = mode
+    ft = data.get("fixed_time", "")
+    if ft:
+        time_settings["fixed_time"] = ft
+    return jsonify({"ok": True, "settings": time_settings})
 
 
 @app.route("/api/avatar", methods=["GET", "POST"])

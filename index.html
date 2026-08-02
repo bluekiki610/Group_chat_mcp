@@ -67,6 +67,7 @@
       <span id="members">👤 名字</span>
       <span id="avatarBtn">🖼️ 头像</span>
       <span id="ttsBtn">🔇 朗读</span>
+      <span id="timeBtn">⏰ 时间</span>
     </div>
   </div>
   <div class="tip" id="memberList">🟢 在线：无（点我管理）</div>
@@ -88,12 +89,68 @@ const avatarInput = document.getElementById('avatarInput');
 const ttsBtn = document.getElementById('ttsBtn');
 const memberListEl = document.getElementById('memberList');
 const tipToast = document.getElementById('tipToast');
+const timeBtn = document.getElementById('timeBtn');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
 // 我的名字（默认空，没设置时按钮显示"名字"提示）
 let myName = localStorage.getItem('myName') || '';
 membersP.textContent = '👤 ' + (myName || '名字');
+
+// ===== 聊天室时间设置（管理员）=====
+let timeSettings = { mode: 'real', fixed_time: '19:00' };
+
+function updateTimeBtn() {
+  if (!timeBtn) return;
+  timeBtn.textContent = timeSettings.mode === 'fixed' ? '⏰ 剧情 ' + timeSettings.fixed_time : '⏰ 现实时间';
+}
+
+async function loadTimeSettings() {
+  try {
+    const res = await fetch('/api/time_settings');
+    const data = await res.json();
+    timeSettings = data.settings || timeSettings;
+    updateTimeBtn();
+  } catch(e) {}
+}
+
+async function saveTimeSettings(mode, fixed_time) {
+  try {
+    const res = await fetch('/api/time_settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode, fixed_time: fixed_time })
+    });
+    const data = await res.json();
+    if (data.settings) timeSettings = data.settings;
+    updateTimeBtn();
+  } catch(e) { alert('设置失败，请检查网络'); }
+}
+
+timeBtn.addEventListener('click', () => {
+  const current = timeSettings.mode === 'fixed' ? '固定剧情时间 ' + timeSettings.fixed_time : '跟随现实时间（北京时间）';
+  const input = prompt(
+    '【管理员】聊天室时间设置\n\n当前：' + current + '\n\n' +
+    '输入 1 = 跟随现实时间（北京时间）\n' +
+    '输入 2 = 固定剧情时间（然后输入时间，如 19:00）',
+    '1'
+  );
+  if (input === null) return;
+  const v = input.trim();
+  if (v === '1') {
+    saveTimeSettings('real', '').then(() => {
+      alert('✅ 已切换为跟随现实时间（北京时间）');
+    });
+  } else if (v === '2') {
+    const ft = prompt('固定剧情时间（格式 时:分，如 19:00）：', timeSettings.fixed_time || '19:00');
+    if (ft === null) return;
+    const ftv = ft.trim();
+    if (!ftv) return;
+    saveTimeSettings('fixed', ftv).then(() => {
+      alert('✅ 已切换为固定剧情时间：' + ftv + '\n（之后所有消息都显示这个时间）');
+    });
+  }
+});
 
 // ===== 头像映射（本地 + 服务器同步）=====
 let avatarMap = {};
@@ -453,6 +510,10 @@ heartbeat();
 setInterval(heartbeat, 15000);
 loadOnline();
 setInterval(loadOnline, 10000);
+
+// 加载时间设置
+loadTimeSettings();
+setInterval(loadTimeSettings, 30000);
 
 loadMessages();
 setInterval(loadMessages, 2000);
