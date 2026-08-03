@@ -507,8 +507,18 @@ async def mcp_endpoint(request: Request):
         })
 
     if method == "tools/call":
-        tool_name = params.get("name")
+        tool_name = params.get("name") or ""
         arguments = params.get("arguments", {})
+
+        # 兼容 RikkaHub 等客户端给工具名加的前缀（如 mcp_xxx_group_get_messages）
+        KNOWN_TOOLS = ["group_send_to_living_room", "group_send_message", "group_get_messages",
+                       "group_get_room_status", "group_get_current_room", "group_get_rooms", "group_get_members"]
+        if tool_name not in KNOWN_TOOLS:
+            for known in KNOWN_TOOLS:
+                if tool_name.endswith(known):
+                    log(f"→ 工具名兼容转换: {tool_name} -> {known}")
+                    tool_name = known
+                    break
         log(f"→ 处理 tools/call: {tool_name}")
 
         if tool_name == "group_send_to_living_room":
