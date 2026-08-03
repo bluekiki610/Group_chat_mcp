@@ -5,11 +5,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
 import time
-import asyncio
 from datetime import datetime
-import random
 import os
-import uuid
 
 app = FastAPI()
 
@@ -45,29 +42,62 @@ avatars: Dict[str, str] = {}
 online_users: Dict[str, str] = {}  # 用户名 -> 房间名
 online_times: Dict[str, float] = {}  # 用户名 -> 最后心跳时间
 time_settings: Dict[str, Dict] = {}  # 房间 -> {"mode": "real"|"fixed", "fixed_time": "19:00"}
-active_room: Dict[str, str] = {}  # 记录真人当前所在房间（用于 AI 跟随）
+active_room: Dict[str, str] = {"current": "main", "password": ""}  # 真人当前房间 + 密码（AI 自动跟随/授权）
 
 # ============================================================
 #  辅助函数
 # ============================================================
 def get_current_time(room: str = "main") -> str:
-    """根据房间的时间设置返回当前显示时间（北京时间）"""
+    """根据房间的时间设置返回当前显示时间（北京时间，完整日期时间）"""
     settings = time_settings.get(room, {"mode": "real"})
+    now = datetime.now().astimezone()
     if settings.get("mode") == "fixed":
-        return settings.get("fixed_time", "19:00")
-    else:
-        # 北京时间（UTC+8）
-        now = datetime.now().astimezone()
-        return now.strftime("%H:%M")
+        return now.strftime("%Y-%m-%d") + " " + settings.get("fixed_time", "19:00")
+    return now.strftime("%Y-%m-%d %H:%M:%S")
+
 
 def get_room_password(room: str) -> str:
     return rooms.get(room, {}).get("password", "")
 
+
 def room_exists(room: str) -> bool:
     return room in rooms
 
+
 def is_room_locked(room: str) -> bool:
     return rooms.get(room, {}).get("has_password", False)
+
+
+def check_room_access(room: str, password: str) -> bool:
+    room = clean_room_name(room)
+    if room in ("", "main"):
+        return True
+    if not room_exists(room):
+        return False
+    if not is_room_locked(room):
+        return True
+    return (password or "") == get_room_password(room)
+
+
+def save_entry(sender: str, content: str, role: str, room: str = "main") -> dict:
+    room = clean_room_name(room)
+    entry = {
+        "sender": sender,
+        "content": content,
+        "role": role,
+        "time": get_current_time(room),
+        "room": room,
+    }
+    if room not in messages:
+        messages[room] = []
+    messages[room].append(entry)
+    if len(messages[room]) > 500:
+        messages[room] = messages[room][-500:]
+    # 发消息 = 活跃，更新 AI 跟随的房间
+    active_room["current"] = room
+    active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
+    return entry
+
 
 def get_all_rooms() -> List[Dict]:
     result = []
@@ -79,10 +109,10 @@ def get_all_rooms() -> List[Dict]:
         })
     return result
 
+
 def get_online_members() -> List[Dict]:
     """返回在线成员列表，每个元素包含 name 和 room"""
     now = time.time()
-    # 清理超时（30秒无心跳视为离线）
     to_remove = []
     for name, last_time in online_times.items():
         if now - last_time > 30:
@@ -92,15 +122,16 @@ def get_online_members() -> List[Dict]:
             del online_users[name]
         if name in online_times:
             del online_times[name]
-    
     result = []
     for name, room in online_users.items():
         result.append({"name": name, "room": room})
     return result
 
+
 def clean_room_name(room: str) -> str:
     """标准化房间名"""
     return room.strip() if room else "main"
+
 
 # ============================================================
 #  API 模型（Pydantic）
@@ -112,45 +143,55 @@ class Message(BaseModel):
     room: str = "main"
     password: str = ""
 
+
 class RoomCreate(BaseModel):
     name: str
     password: str = ""
     creator: str = "匿名"
 
+
 class RoomJoin(BaseModel):
     name: str
     password: str = ""
+
 
 class RoomDelete(BaseModel):
     name: str
     password: str = ""
 
+
 class Heartbeat(BaseModel):
     name: str
     room: str = "main"
 
+
 class CurrentRoom(BaseModel):
     room: str
     password: str = ""
+
 
 class TimeSettings(BaseModel):
     mode: str  # "real" or "fixed"
     fixed_time: str = ""
     room: str = "main"
 
+
 class AvatarUpload(BaseModel):
     name: str
     image: str  # base64
+
 
 class RemoveMember(BaseModel):
     name: str
     room: str = "main"
     password: str = ""
 
+
 class RestoreMessages(BaseModel):
     messages: List[Dict]
     room: str = "main"
     password: str = ""
+
 
 # ============================================================
 #  API 端点（网页用）
@@ -162,70 +203,57 @@ async def send_message(msg: Message):
     room = clean_room_name(msg.room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    if is_room_locked(room) and msg.password != get_room_password(room):
+    if not check_room_access(room, msg.password):
         raise HTTPException(status_code=403, detail="密码错误")
-    
-    msg_time = get_current_time(room)
-    entry = {
-        "sender": msg.sender,
-        "content": msg.content,
-        "role": msg.role,
-        "time": msg_time,
-        "room": room
-    }
-    if room not in messages:
-        messages[room] = []
-    messages[room].append(entry)
-    if len(messages[room]) > 500:
-        messages[room] = messages[room][-500:]
-    
-    return {"ok": True, "time": msg_time}
+    if not msg.content.strip():
+        raise HTTPException(status_code=400, detail="消息不能为空")
+    entry = save_entry(msg.sender, msg.content, msg.role, room)
+    return {"ok": True, "time": entry["time"]}
+
 
 @app.get("/api/messages")
 async def get_messages(count: int = 200, room: str = "main", password: str = ""):
     room = clean_room_name(room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    if is_room_locked(room) and password != get_room_password(room):
+    if not check_room_access(room, password):
         raise HTTPException(status_code=403, detail="密码错误")
-    
-    msgs = messages.get(room, [])
-    msgs_sorted = sorted(msgs, key=lambda x: x.get("time", ""))
-    if len(msgs_sorted) > count:
-        msgs_sorted = msgs_sorted[-count:]
-    return {"messages": msgs_sorted, "room": room}
+    msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))
+    if len(msgs) > count:
+        msgs = msgs[-count:]
+    return {"messages": msgs, "room": room}
+
 
 @app.post("/api/restore")
 async def restore_messages(data: RestoreMessages):
     room = clean_room_name(data.room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    if is_room_locked(room) and data.password != get_room_password(room):
+    if not check_room_access(room, data.password):
         raise HTTPException(status_code=403, detail="密码错误")
-    
     if room not in messages:
         messages[room] = []
-    
     existing = set()
     for m in messages[room]:
         key = f"{m['sender']}|{m['content']}|{m['time']}"
         existing.add(key)
-    
     for m in data.messages:
         key = f"{m['sender']}|{m['content']}|{m['time']}"
         if key not in existing:
             messages[room].append(m)
             existing.add(key)
-    
     if len(messages[room]) > 500:
         messages[room] = messages[room][-500:]
-    
+    active_room["current"] = room
+    active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
     return {"ok": True}
+
 
 # ----- 房间管理 -----
 @app.get("/api/rooms")
 async def list_rooms():
     return {"rooms": get_all_rooms()}
+
 
 @app.post("/api/rooms")
 async def create_room(data: RoomCreate):
@@ -234,7 +262,6 @@ async def create_room(data: RoomCreate):
         raise HTTPException(status_code=400, detail="房间名不能为空")
     if name in rooms:
         raise HTTPException(status_code=400, detail="房间已存在")
-    
     rooms[name] = {
         "name": name,
         "has_password": bool(data.password),
@@ -243,6 +270,7 @@ async def create_room(data: RoomCreate):
     }
     messages[name] = []
     return {"ok": True, "room": name}
+
 
 @app.post("/api/rooms/join")
 async def join_room(data: RoomJoin):
@@ -253,6 +281,7 @@ async def join_room(data: RoomJoin):
         raise HTTPException(status_code=403, detail="密码错误")
     return {"ok": True, "room": name}
 
+
 @app.post("/api/rooms/delete")
 async def delete_room(data: RoomDelete):
     name = data.name.strip()
@@ -262,19 +291,19 @@ async def delete_room(data: RoomDelete):
         raise HTTPException(status_code=404, detail="房间不存在")
     if is_room_locked(name) and data.password != get_room_password(name):
         raise HTTPException(status_code=403, detail="密码错误")
-    
     del rooms[name]
     if name in messages:
         del messages[name]
     if name in time_settings:
         del time_settings[name]
-    
-    # 踢出所有在该房间的用户（移到客厅）
     for user, room in list(online_users.items()):
         if room == name:
             online_users[user] = "main"
-    
+    if active_room["current"] == name:
+        active_room["current"] = "main"
+        active_room["password"] = ""
     return {"ok": True}
+
 
 @app.post("/api/current_room")
 async def set_current_room(data: CurrentRoom):
@@ -282,11 +311,12 @@ async def set_current_room(data: CurrentRoom):
     room = clean_room_name(data.room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    if is_room_locked(room) and data.password != get_room_password(room):
+    if not check_room_access(room, data.password):
         raise HTTPException(status_code=403, detail="密码错误")
-    
     active_room["current"] = room
-    return {"ok": True}
+    active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
+    return {"ok": True, "room": room}
+
 
 # ----- 在线状态 -----
 @app.post("/api/heartbeat")
@@ -294,15 +324,14 @@ async def heartbeat(data: Heartbeat):
     if data.name:
         online_users[data.name] = data.room or "main"
         online_times[data.name] = time.time()
-        # 同时更新 active_room（如果这个用户是真人）
-        if data.name and not data.name.endswith("助手") and "AI" not in data.name:
-            active_room["current"] = data.room or "main"
         return {"ok": True}
     return {"ok": False}
+
 
 @app.get("/api/online")
 async def get_online():
     return {"online": get_online_members()}
+
 
 # ----- 头像 -----
 @app.post("/api/avatar")
@@ -312,9 +341,11 @@ async def upload_avatar(data: AvatarUpload):
         return {"ok": True}
     return {"ok": False}
 
+
 @app.get("/api/avatar")
 async def get_avatars():
     return {"avatars": avatars}
+
 
 # ----- 时间设置 -----
 @app.get("/api/time_settings")
@@ -323,13 +354,17 @@ async def get_time_settings(room: str = "main"):
     settings = time_settings.get(room, {"mode": "real", "fixed_time": "19:00"})
     return {"settings": settings}
 
+
 @app.post("/api/time_settings")
 async def set_time_settings(data: TimeSettings):
     room = clean_room_name(data.room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
+    if data.mode not in ("real", "fixed"):
+        raise HTTPException(status_code=400, detail="mode 必须为 real 或 fixed")
     time_settings[room] = {"mode": data.mode, "fixed_time": data.fixed_time}
     return {"settings": time_settings[room]}
+
 
 # ----- 删除成员 -----
 @app.post("/api/remove_member")
@@ -337,62 +372,61 @@ async def remove_member(data: RemoveMember):
     room = clean_room_name(data.room)
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    if is_room_locked(room) and data.password != get_room_password(room):
+    if not check_room_access(room, data.password):
         raise HTTPException(status_code=403, detail="密码错误")
-    
     if room in messages:
         messages[room] = [m for m in messages[room] if m["sender"] != data.name]
-    
     if data.name in online_users:
         online_users[data.name] = "main"
-    
     return {"ok": True}
+
 
 # ============================================================
 #  MCP 接口（JSON-RPC 2.0）- RikkaHub 连接用
 # ============================================================
-
-@app.post("/mcp")
+@app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
-    """MCP JSON-RPC 2.0 端点"""
+    """MCP JSON-RPC 2.0 端点（GET 用于健康检查，POST 用于 RikkaHub）"""
+    if request.method == "GET":
+        return JSONResponse(content={
+            "jsonrpc": "2.0",
+            "result": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "GroupChat", "version": "13.0.0"},
+            },
+        })
+
     try:
         body = await request.json()
-    except:
+    except Exception:
         return JSONResponse(
             status_code=400,
             content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}}
         )
-    
-    # 打印收到的请求（调试用）
-    print(f"📨 MCP 收到请求: {json.dumps(body, ensure_ascii=False, indent=2)}")
-    
+
     method = body.get("method")
     params = body.get("params", {})
     request_id = body.get("id")
-    
-    # ===== 处理 initialize 握手 =====
+
     if method == "initialize":
         return JSONResponse(content={
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
-                "protocolVersion": "0.1.0",
-                "serverInfo": {"name": "group-chat-mcp", "version": "1.0.0"},
-                "capabilities": {
-                    "tools": {}
-                }
-            }
+                "protocolVersion": "2025-03-26",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "GroupChat", "version": "13.0.0"},
+            },
         })
-    
-    # ===== 处理 notifications/initialized =====
-    if method == "notifications/initialized":
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {}
-        })
-    
-    # ===== 处理 tools/list =====
+
+    # 通知类请求不返回内容
+    if isinstance(method, str) and method.startswith("notifications/"):
+        return JSONResponse(content=None)
+
+    if method == "ping":
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
+
     if method == "tools/list":
         return JSONResponse(content={
             "jsonrpc": "2.0",
@@ -432,7 +466,7 @@ async def mcp_endpoint(request: Request):
                         "inputSchema": {
                             "type": "object",
                             "properties": {
-                                "room": {"type": "string", "description": "可选，指定房间名。不填则返回所有房间的总览（每个房间最后几条消息）"},
+                                "room": {"type": "string", "description": "可选，指定房间名。不填则返回所有房间的总览"},
                                 "count": {"type": "integer", "description": "每个房间获取的消息数量，默认 10"}
                             }
                         }
@@ -440,44 +474,31 @@ async def mcp_endpoint(request: Request):
                     {
                         "name": "group_get_room_status",
                         "description": "获取所有房间的活跃状态（在线人数、最近消息时间等），用于 AI 决定去哪个房间串门。",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {}
-                        }
+                        "inputSchema": {"type": "object", "properties": {}}
                     },
                     {
                         "name": "group_get_current_room",
                         "description": "查询真人当前在哪个房间，用于 AI 判断是否要跟过去。",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {}
-                        }
+                        "inputSchema": {"type": "object", "properties": {}}
                     },
                     {
                         "name": "group_get_rooms",
                         "description": "获取所有房间列表（含密码状态）。",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {}
-                        }
+                        "inputSchema": {"type": "object", "properties": {}}
                     },
                     {
                         "name": "group_get_members",
                         "description": "获取在线成员列表及他们所在的房间。",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {}
-                        }
+                        "inputSchema": {"type": "object", "properties": {}}
                     }
                 ]
             }
         })
-    
-    # ===== 处理 tools/call =====
+
     if method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
-        
+
         if tool_name == "group_send_to_living_room":
             return await mcp_send_to_living_room(arguments, request_id)
         elif tool_name == "group_send_message":
@@ -498,180 +519,129 @@ async def mcp_endpoint(request: Request):
                 "id": request_id,
                 "error": {"code": -32601, "message": f"Tool '{tool_name}' not found"}
             })
-    
-    # ===== 未知方法 =====
+
     return JSONResponse(content={
         "jsonrpc": "2.0",
         "id": request_id,
         "error": {"code": -32601, "message": f"Method '{method}' not found"}
     })
 
+
 # ============================================================
 #  MCP 工具实现
 # ============================================================
-
 async def mcp_send_to_living_room(args: dict, request_id):
     """发送到客厅（没有 room 参数，永远发到 main）"""
     sender = args.get("sender", "助手")
     content = args.get("content", "")
     role = args.get("role", "assistant")
-    
-    room = "main"
-    msg_time = get_current_time(room)
-    entry = {
-        "sender": sender,
-        "content": content,
-        "role": role,
-        "time": msg_time,
-        "room": room
-    }
-    if room not in messages:
-        messages[room] = []
-    messages[room].append(entry)
-    if len(messages[room]) > 500:
-        messages[room] = messages[room][-500:]
-    
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": f"✅ 已发送到客厅：{content}"}]
-        }
-    })
+    if not content:
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                    "result": {"content": [{"type": "text", "text": "❌ 消息不能为空"}]}})
+    save_entry(sender, content, role, "main")
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": f"✅ 已发送到客厅：{content}"}]}})
+
 
 async def mcp_send_message(args: dict, request_id):
-    """发送消息（自动跟随真人房间）"""
+    """发送消息（自动跟随真人房间；真人所在房间自动授权密码）"""
     sender = args.get("sender", "助手")
     content = args.get("content", "")
     role = args.get("role", "assistant")
     room = args.get("room")
-    
+
+    password = ""
     if not room:
+        # 自动跟随真人当前房间（自动授权密码）
         room = active_room.get("current", "main")
-    
-    room = clean_room_name(room)
-    
+        password = active_room.get("password", "")
+    else:
+        room = clean_room_name(room)
+        # 如果指定的是真人所在房间，自动授权
+        if active_room.get("current") == room:
+            password = active_room.get("password", "")
+
     if not room_exists(room):
         room = "main"
-    
-    msg_time = get_current_time(room)
-    entry = {
-        "sender": sender,
-        "content": content,
-        "role": role,
-        "time": msg_time,
-        "room": room
-    }
-    if room not in messages:
-        messages[room] = []
-    messages[room].append(entry)
-    if len(messages[room]) > 500:
-        messages[room] = messages[room][-500:]
-    
+    # 有密码的房间：非真人所在则需要正确密码，否则拒绝
+    if is_room_locked(room) and password != get_room_password(room):
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                    "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」有密码，未授权发送（真人不在该房间）。"}]}})
+    if not content:
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                    "result": {"content": [{"type": "text", "text": "❌ 消息不能为空"}]}})
+
+    save_entry(sender, content, role, room)
     room_label = "客厅" if room == "main" else room
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": f"✅ 已发送到「{room_label}」：{content}"}]
-        }
-    })
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": f"✅ 已发送到「{room_label}」：{content}"}]}})
+
 
 async def mcp_get_messages(args: dict, request_id):
     """获取聊天记录"""
     room = args.get("room")
     count = args.get("count", 10)
-    
+
     if room:
         room = clean_room_name(room)
         if not room_exists(room):
-            return JSONResponse(content={
-                "jsonrpc": "2.0",
-                "id": request_id,
-                "error": {"code": -32000, "message": f"房间 '{room}' 不存在"}
-            })
-        msgs = messages.get(room, [])[-count:]
-        text = f"📋 房间「{room}」最近 {len(msgs)} 条消息：\n" + "\n".join(
-            [f"{m['sender']}: {m['content']} ({m['time']})" for m in msgs]
-        )
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "content": [{"type": "text", "text": text}]
-            }
-        })
+            return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                        "error": {"code": -32000, "message": f"房间 '{room}' 不存在"}})
+        msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
+        if not msgs:
+            text = f"📭 房间「{room}」暂无消息"
+        else:
+            text = f"📋 房间「{room}」最近 {len(msgs)} 条消息：\n" + "\n".join(
+                [f"{m['sender']}: {m['content']} ({m['time']})" for m in msgs]
+            )
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                    "result": {"content": [{"type": "text", "text": text}]}})
     else:
         result_text = "📋 所有房间消息总览：\n"
         for room_name, msgs in messages.items():
+            room_label = "客厅" if room_name == "main" else room_name
             if msgs:
-                last_msgs = msgs[-count:]
-                room_label = "客厅" if room_name == "main" else room_name
+                last_msgs = sorted(msgs, key=lambda x: x.get("time", ""))[-count:]
                 result_text += f"\n🏠 {room_label}（{len(last_msgs)} 条）：\n"
                 for m in last_msgs:
                     result_text += f"  {m['sender']}: {m['content']} ({m['time']})\n"
             else:
-                room_label = "客厅" if room_name == "main" else room_name
                 result_text += f"\n🏠 {room_label}：暂无消息\n"
-        
-        return JSONResponse(content={
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "result": {
-                "content": [{"type": "text", "text": result_text}]
-            }
-        })
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                    "result": {"content": [{"type": "text", "text": result_text}]}})
+
 
 async def mcp_get_room_status(request_id):
     """获取所有房间的活跃状态"""
     online = get_online_members()
-    
     room_stats = {}
     for room_name in rooms.keys():
         room_label = "客厅" if room_name == "main" else room_name
         online_count = len([u for u in online if u["room"] == room_name])
         msg_count = len(messages.get(room_name, []))
         last_msg = messages.get(room_name, [])[-1] if messages.get(room_name) else None
-        
         room_stats[room_label] = {
             "在线人数": online_count,
             "消息数": msg_count,
             "最后消息": f"{last_msg['sender']}: {last_msg['content']} ({last_msg['time']})" if last_msg else "无"
         }
-    
     result_text = "📊 房间活跃状态：\n"
     for room, stats in room_stats.items():
-        result_text += f"\n🏠 {room}：\n"
-        result_text += f"  👤 在线：{stats['在线人数']} 人\n"
-        result_text += f"  💬 消息数：{stats['消息数']} 条\n"
-        result_text += f"  📝 最后消息：{stats['最后消息']}\n"
-    
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": result_text}]
-        }
-    })
+        result_text += f"\n🏠 {room}：\n  👤 在线：{stats['在线人数']} 人\n  💬 消息数：{stats['消息数']} 条\n  📝 最后消息：{stats['最后消息']}\n"
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": result_text}]}})
+
 
 async def mcp_get_current_room(request_id):
     """查询真人当前在哪个房间"""
     current = active_room.get("current", "main")
     room_label = "客厅" if current == "main" else current
-    
     online = get_online_members()
     members_in_room = [u["name"] for u in online if u["room"] == current]
-    
-    result_text = f"📍 真人当前在：{room_label}\n"
-    result_text += f"👤 该房间在线成员：{', '.join(members_in_room) if members_in_room else '无'}"
-    
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": result_text}]
-        }
-    })
+    result_text = f"📍 真人当前在：{room_label}\n👤 该房间在线成员：{', '.join(members_in_room) if members_in_room else '无'}\n\n💡 想跟随就用 group_send_message，想留客厅招待就用 group_send_to_living_room。"
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": result_text}]}})
+
 
 async def mcp_get_rooms(request_id):
     """获取所有房间列表"""
@@ -683,14 +653,9 @@ async def mcp_get_rooms(request_id):
         locked = "🔒 有密码" if room["has_password"] else "🔓 公开"
         creator = room.get("creator", "system")
         result_text += f"\n🏠 {label}（{locked}，创建者：{creator}）"
-    
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": result_text}]
-        }
-    })
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": result_text}]}})
+
 
 async def mcp_get_members(request_id):
     """获取在线成员列表"""
@@ -702,14 +667,9 @@ async def mcp_get_members(request_id):
         for member in online:
             room_label = "客厅" if member["room"] == "main" else member["room"]
             result_text += f"\n👤 {member['name']}（在 {room_label}）"
-    
-    return JSONResponse(content={
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "result": {
-            "content": [{"type": "text", "text": result_text}]
-        }
-    })
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
+                                "result": {"content": [{"type": "text", "text": result_text}]}})
+
 
 # ============================================================
 #  启动
