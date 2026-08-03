@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
@@ -384,6 +384,11 @@ async def remove_member(data: RemoveMember):
 # ============================================================
 #  MCP 接口（JSON-RPC 2.0）- RikkaHub 连接用
 # ============================================================
+def log(msg: str):
+    """打印日志（Render Logs 可见）"""
+    print(f"[MCP] {msg}", flush=True)
+
+
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     """MCP JSON-RPC 2.0 端点（GET 用于健康检查，POST 用于 RikkaHub）"""
@@ -393,13 +398,14 @@ async def mcp_endpoint(request: Request):
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "GroupChat", "version": "13.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "14.0.0"},
             },
         })
 
     try:
         body = await request.json()
     except Exception:
+        log("⚠️ 请求不是合法 JSON")
         return JSONResponse(
             status_code=400,
             content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}}
@@ -408,26 +414,31 @@ async def mcp_endpoint(request: Request):
     method = body.get("method")
     params = body.get("params", {})
     request_id = body.get("id")
+    log(f"收到请求: method={method}, id={request_id}")
 
     if method == "initialize":
+        log("→ 处理 initialize")
         return JSONResponse(content={
             "jsonrpc": "2.0",
             "id": request_id,
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "GroupChat", "version": "13.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "14.0.0"},
             },
         })
 
-    # 通知类请求不返回内容
+    # 通知类请求：返回空响应 202（不返回 null，避免客户端解析报错）
     if isinstance(method, str) and method.startswith("notifications/"):
-        return JSONResponse(content=None)
+        log(f"→ 处理通知 {method}（返回空 202）")
+        return Response(status_code=202)
 
     if method == "ping":
+        log("→ 处理 ping")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
 
     if method == "tools/list":
+        log("→ 处理 tools/list")
         return JSONResponse(content={
             "jsonrpc": "2.0",
             "id": request_id,
@@ -498,6 +509,7 @@ async def mcp_endpoint(request: Request):
     if method == "tools/call":
         tool_name = params.get("name")
         arguments = params.get("arguments", {})
+        log(f"→ 处理 tools/call: {tool_name}")
 
         if tool_name == "group_send_to_living_room":
             return await mcp_send_to_living_room(arguments, request_id)
@@ -520,6 +532,7 @@ async def mcp_endpoint(request: Request):
                 "error": {"code": -32601, "message": f"Tool '{tool_name}' not found"}
             })
 
+    log(f"→ 未知方法: {method}")
     return JSONResponse(content={
         "jsonrpc": "2.0",
         "id": request_id,
@@ -552,18 +565,15 @@ async def mcp_send_message(args: dict, request_id):
 
     password = ""
     if not room:
-        # 自动跟随真人当前房间（自动授权密码）
         room = active_room.get("current", "main")
         password = active_room.get("password", "")
     else:
         room = clean_room_name(room)
-        # 如果指定的是真人所在房间，自动授权
         if active_room.get("current") == room:
             password = active_room.get("password", "")
 
     if not room_exists(room):
         room = "main"
-    # 有密码的房间：非真人所在则需要正确密码，否则拒绝
     if is_room_locked(room) and password != get_room_password(room):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id,
                                     "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」有密码，未授权发送（真人不在该房间）。"}]}})
