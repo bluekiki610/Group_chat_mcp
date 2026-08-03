@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import os
 
 app = FastAPI()
@@ -50,7 +50,7 @@ active_room: Dict[str, str] = {"current": "main", "password": ""}  # 真人当�
 def get_current_time(room: str = "main") -> str:
     """根据房间的时间设置返回当前显示时间（北京时间，完整日期时间）"""
     settings = time_settings.get(room, {"mode": "real"})
-    now = datetime.now().astimezone()
+    now = datetime.now(timezone.utc) + timedelta(hours=8)  # 固定北京时间（UTC+8），不受服务器时区影响
     if settings.get("mode") == "fixed":
         return now.strftime("%Y-%m-%d") + " " + settings.get("fixed_time", "19:00")
     return now.strftime("%Y-%m-%d %H:%M:%S")
@@ -398,7 +398,7 @@ async def mcp_endpoint(request: Request):
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "GroupChat", "version": "14.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "17.0.0"},
             },
         })
 
@@ -424,7 +424,7 @@ async def mcp_endpoint(request: Request):
             "result": {
                 "protocolVersion": "2025-03-26",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "GroupChat", "version": "14.0.0"},
+                "serverInfo": {"name": "GroupChat", "version": "17.0.0"},
             },
         })
 
