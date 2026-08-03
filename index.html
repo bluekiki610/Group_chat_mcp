@@ -2,99 +2,41 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>人❤️机の小窝</title>
 <style>
-  /* ===== 全局重置 ===== */
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; overflow: hidden; }
-
-  /* ===== 左右两栏布局（桌面版） ===== */
-  .app { display: flex; height: 100vh; width: 100%; }
-  .left-panel {
-    width: 260px;
-    min-width: 260px;
-    background: #f0f0f0;
-    padding: 12px 10px;
-    border-right: 1px solid #ccc;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-  }
-  .left-panel h3 {
-    font-size: 16px;
-    margin-bottom: 8px;
-    color: #333;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .left-panel h3 span {
-    font-size: 12px;
-    color: #888;
-    cursor: pointer;
-  }
-  #mapCanvas {
-    width: 100%;
-    height: auto;
-    background: #e0e0e0;
-    border-radius: 8px;
-    cursor: pointer;
-    aspect-ratio: 260 / 360;
-  }
-  .left-panel .legend {
-    margin-top: 8px;
-    font-size: 12px;
-    color: #666;
-    line-height: 1.6;
-  }
-  .left-panel .legend span { display: inline-block; margin-right: 10px; }
-
-  .right-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    position: relative;
-  }
-
-  /* ===== 聊天界面样式（不变） ===== */
-  .header { background: #ededed; padding: 10px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; flex-shrink: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  
+  .header { background: #ededed; padding: 10px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; }
   .header h1 { font-size: 16px; font-weight: 600; }
+  .header p { font-size: 12px; color: #888; margin-top: 3px; cursor: pointer; }
+  .header p:hover { color: #07c160; }
   .toolbar { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
   .toolbar span { font-size: 13px; color: #555; background: #fff; border-radius: 14px; padding: 3px 10px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
   .toolbar span:hover { color: #07c160; }
-
+  
   #chat { flex: 1; overflow-y: auto; padding: 16px 12px 76px; }
+  
   .msg { display: flex; margin-bottom: 16px; }
   .msg.right { justify-content: flex-end; }
+  
   .avatar { width: 38px; height: 38px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 600; flex-shrink: 0; overflow: hidden; }
   .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  
   .bubble { max-width: 66%; margin: 0 10px; }
   .bubble .name { font-size: 11px; color: #999; margin-bottom: 3px; }
   .bubble .content { padding: 9px 12px; border-radius: 8px; font-size: 15px; line-height: 1.5; word-break: break-word; background: #fff; white-space: pre-wrap; }
   .msg.right .bubble .content { background: #95ec69; }
   .bubble .time { font-size: 10px; color: #bbb; margin-top: 3px; }
-
-  .input-bar {
-    background: #f7f7f7;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    border-top: 1px solid #ddd;
-    gap: 8px;
-    flex-shrink: 0;
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
+  
+  .input-bar { background: #f7f7f7; padding: 10px 12px; display: flex; align-items: center; border-top: 1px solid #ddd; gap: 8px; position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; }
   .input-bar input { flex: 1; height: 38px; border: none; border-radius: 6px; padding: 0 12px; font-size: 15px; outline: none; background: #fff; min-width: 0; }
   .input-bar button { height: 38px; padding: 0 18px; border: none; border-radius: 6px; background: #07c160; color: #fff; font-size: 15px; cursor: pointer; flex-shrink: 0; }
   .input-bar button:active { background: #06ad56; }
-
+  
   .tip { text-align: center; color: #bbb; font-size: 12px; padding: 4px 0 10px; cursor: pointer; }
-
+  
   #tipToast {
     position: fixed;
     top: 15%;
@@ -116,145 +58,29 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
-  /* ===== 模态框（弹出地图） ===== */
-  #mapModal {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 1000;
-    justify-content: center;
-    align-items: center;
-  }
-  #mapModal .modal-content {
-    background: #f0f0f0;
-    border-radius: 16px;
-    padding: 20px;
-    width: 92%;
-    max-width: 500px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    position: relative;
-  }
-  #mapModal .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-  #mapModal .modal-header h3 {
-    font-size: 18px;
-  }
-  #mapModal .modal-header .close-btn {
-    font-size: 24px;
-    cursor: pointer;
-    color: #888;
-    background: none;
-    border: none;
-    padding: 0 8px;
-  }
-  #mapModal .modal-header .close-btn:hover { color: #333; }
-  #mapModal canvas {
-    width: 100%;
-    height: auto;
-    background: #e0e0e0;
-    border-radius: 8px;
-    aspect-ratio: 1 / 1.2;
-  }
-  #mapModal .modal-footer {
-    margin-top: 12px;
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  #mapModal .modal-footer button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 8px;
-    background: #07c160;
-    color: #fff;
-    font-size: 14px;
-    cursor: pointer;
-    flex: 1;
-  }
-  #mapModal .modal-footer button.secondary {
-    background: #888;
-  }
-  #mapModal .modal-footer button:hover { opacity: 0.8; }
-
-  /* ===== 手机端：隐藏左侧面板，只显示聊天 ===== */
-  @media (max-width: 700px) {
-    .left-panel { display: none; }   /* 隐藏左侧地图 */
-    .right-panel { width: 100%; }
-    #chat { padding: 10px 8px 70px; }
-    .bubble { max-width: 80%; }
-    .input-bar { padding: 6px 8px; }
-    .input-bar input { height: 32px; font-size: 14px; }
-    .input-bar button { height: 32px; padding: 0 14px; font-size: 14px; }
-    .header h1 { font-size: 14px; }
-    .toolbar span { font-size: 12px; padding: 2px 8px; }
-    /* 房间按钮加个提示 */
-    #roomBtn::after { content: " 📍"; font-size: 12px; }
-  }
 </style>
 </head>
 <body>
-<div class="app">
-  <!-- 左侧面板（桌面版显示） -->
-  <div class="left-panel">
-    <h3>🏠 家园地图 <span id="refreshMapBtn" title="刷新地图">🔄</span></h3>
-    <canvas id="mapCanvas" width="260" height="360"></canvas>
-    <div class="legend">
-      <span>🟢 在线</span>
-      <span>🔒 有密码</span>
-      <span>点击房间串门</span>
+  <div class="header">
+    <h1>人❤️机の小窝</h1>
+    <div class="toolbar">
+      <span id="members" title="点这里修改你的名字">👤 名字</span>
+      <span id="roomBtn" title="房间管理">🚪</span>
+      <span id="avatarBtn" title="设置头像">🖼️</span>
+      <span id="ttsBtn" title="语音朗读">🔇</span>
+      <span id="timeBtn" title="时间设置">⏰</span>
     </div>
   </div>
-
-  <!-- 右侧聊天区 -->
-  <div class="right-panel">
-    <div class="header">
-      <h1>人❤️机の小窝</h1>
-      <div class="toolbar">
-        <span id="members" title="点这里修改你的名字">👤 名字</span>
-        <span id="roomBtn" title="房间管理">🚪</span>
-        <span id="avatarBtn" title="设置头像">🖼️</span>
-        <span id="ttsBtn" title="语音朗读">🔇</span>
-        <span id="timeBtn" title="时间设置">⏰</span>
-      </div>
-    </div>
-    <div class="tip" id="memberList">🏠 客厅 · 🟢 在线：无 · ⏰ 现实时间（点我管理）</div>
-    <div id="chat"></div>
-    <div class="input-bar">
-      <input id="msgInput" placeholder="说点什么..." />
-      <button id="sendBtn">发送</button>
-    </div>
+  <div class="tip" id="memberList">🏠 客厅 · 🟢 在线：无 · ⏰ 现实时间（点我管理）</div>
+  <div id="chat"></div>
+  <div class="input-bar">
+    <input id="msgInput" placeholder="说点什么..." />
+    <button id="sendBtn">发送</button>
   </div>
-</div>
-
-<!-- ===== 模态框（弹出地图） ===== -->
-<div id="mapModal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>🏠 家园地图</h3>
-      <button class="close-btn" id="closeModalBtn">&times;</button>
-    </div>
-    <canvas id="modalMapCanvas" width="400" height="480"></canvas>
-    <div class="modal-footer">
-      <button id="modalManageBtn" class="secondary">📋 管理房间</button>
-      <button id="modalCloseBtn">关闭</button>
-    </div>
-  </div>
-</div>
-
-<!-- 隐藏控件 -->
-<input type="file" id="avatarInput" accept="image/*" style="display:none;">
-<div id="tipToast"></div>
+  <input type="file" id="avatarInput" accept="image/*" style="display:none;">
+  <div id="tipToast"></div>
 
 <script>
-// ===================== 全局变量 =====================
 const chat = document.getElementById('chat');
 const msgInput = document.getElementById('msgInput');
 const sendBtn = document.getElementById('sendBtn');
@@ -266,487 +92,215 @@ const memberListEl = document.getElementById('memberList');
 const tipToast = document.getElementById('tipToast');
 const timeBtn = document.getElementById('timeBtn');
 const roomBtn = document.getElementById('roomBtn');
-const refreshMapBtn = document.getElementById('refreshMapBtn');
-const mapCanvas = document.getElementById('mapCanvas');
-const ctx = mapCanvas.getContext('2d');
-
-// 模态框元素
-const mapModal = document.getElementById('mapModal');
-const modalMapCanvas = document.getElementById('modalMapCanvas');
-const modalCtx = modalMapCanvas.getContext('2d');
-const closeModalBtn = document.getElementById('closeModalBtn');
-const modalCloseBtn = document.getElementById('modalCloseBtn');
-const modalManageBtn = document.getElementById('modalManageBtn');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
-// 我的名字
+// 我的名字（默认空，没设置时按钮显示"名字"提示）
 let myName = localStorage.getItem('myName') || '';
 membersP.textContent = '👤 ' + (myName || '名字');
 
-// 当前房间
+// ===== 房间系统（客厅 + 小房间）=====
 let currentRoom = localStorage.getItem('currentRoom') || 'main';
 let roomPassword = localStorage.getItem('roomPass_' + currentRoom) || '';
-
-// 头像映射
-let avatarMap = {};
-try { avatarMap = JSON.parse(localStorage.getItem('avatarMap') || '{}'); } catch(e) { avatarMap = {}; }
-
-// TTS 设置
-let ttsTargetName = localStorage.getItem('ttsTargetName') || '';
-let lastSpokenTime = localStorage.getItem('lastSpokenTime') || '';
-function updateTtsBtn() {
-  ttsBtn.textContent = ttsTargetName ? '🔊' : '🔇';
-  ttsBtn.title = ttsTargetName ? '朗读：' + ttsTargetName : '语音朗读';
-}
-updateTtsBtn();
-
-// 时间设置
-let timeSettings = { mode: 'real', fixed_time: '19:00' };
-
-// 在线列表
-let onlineUsers = [];
-
-// ===================== 辅助函数 =====================
-function colorFor(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + hash;
-  return COLORS[hash % COLORS.length];
-}
-
-function showTip(text) {
-  if (!tipToast) return;
-  tipToast.textContent = text;
-  tipToast.style.display = 'block';
-  tipToast.style.opacity = '1';
-  clearTimeout(tipToast._timer);
-  tipToast._timer = setTimeout(() => {
-    tipToast.style.opacity = '0';
-    setTimeout(() => { tipToast.style.display = 'none'; }, 300);
-  }, 3000);
-}
-
-function saveLocal(msgs) {
-  try { localStorage.setItem('chatHistory_' + currentRoom, JSON.stringify(msgs)); } catch(e) {}
-}
-function loadLocal() {
-  try { return JSON.parse(localStorage.getItem('chatHistory_' + currentRoom) || '[]'); } catch(e) { return []; }
-}
-function filterRoom(msgs) {
-  return (msgs || []).filter(m => (m.room || 'main') === currentRoom);
-}
-function mergeMsgs(localMsgs, serverMsgs) {
-  const seen = new Set();
-  const all = [...serverMsgs, ...localMsgs];
-  const merged = [];
-  for (const m of all) {
-    const key = m.sender + '|' + m.content + '|' + m.time;
-    if (!seen.has(key)) {
-      seen.add(key);
-      merged.push(m);
-    }
-  }
-  merged.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
-  return merged.slice(-500);
-}
 
 function saveRoomState() {
   localStorage.setItem('currentRoom', currentRoom);
   localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
 }
 
-// ===================== API 调用 =====================
-async function apiFetch(endpoint, options = {}) {
-  const res = await fetch(endpoint, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers }
-  });
-  return res.json();
-}
-
-async function loadRooms() {
-  try {
-    const data = await apiFetch('/api/rooms');
-    return data.rooms || [];
-  } catch(e) { console.error('加载房间失败', e); return []; }
-}
-
-async function createRoom(name, password) {
-  const data = await apiFetch('/api/rooms', {
+// 上报当前房间给服务器（AI 可查询）
+function reportRoom() {
+  fetch('/api/current_room', {
     method: 'POST',
-    body: JSON.stringify({ name, password, creator: myName || '匿名' })
-  });
-  if (!data.ok) throw new Error(data.error || '创建失败');
-  return data;
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room: currentRoom, password: roomPassword })
+  }).catch(() => {});
+}
+
+async function switchRoom(room, password) {
+  currentRoom = room;
+  roomPassword = password || '';
+  saveRoomState();
+  reportRoom();
+  loadTimeSettings();
+  loadOnline();
+  loadMessages();
+  alert('✅ 已进入房间：' + (room === 'main' ? '客厅' : room));
 }
 
 async function joinRoom(name, password) {
-  const data = await apiFetch('/api/rooms/join', {
-    method: 'POST',
-    body: JSON.stringify({ name, password })
-  });
-  if (!data.ok) throw new Error(data.error || '加入失败');
-  return data;
+  try {
+    const res = await fetch('/api/rooms/join', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 加入失败：' + (data.error || '房间不存在')); return; }
+    switchRoom(name, password);
+  } catch(e) { alert('❌ 网络错误'); }
+}
+
+async function createRoom(name, password) {
+  try {
+    const res = await fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password, creator: myName || '匿名' })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 创建失败：' + (data.error || '')); return; }
+    switchRoom(name, password);
+  } catch(e) { alert('❌ 网络错误'); }
 }
 
 async function deleteRoom(name, password) {
-  const data = await apiFetch('/api/rooms/delete', {
-    method: 'POST',
-    body: JSON.stringify({ name, password })
-  });
-  if (!data.ok) throw new Error(data.error || '删除失败');
-  return data;
-}
-
-async function loadMessages() {
-  render(filterRoom(loadLocal()));
   try {
-    const res = await fetch(`/api/messages?count=200&room=${encodeURIComponent(currentRoom)}&password=${encodeURIComponent(roomPassword)}`);
-    const data = await res.json();
-    if (data.error) { console.log(data.error); return; }
-    const serverMsgs = filterRoom(data.messages || []);
-    speakNewMessages(serverMsgs);
-    const localRoom = filterRoom(loadLocal());
-    if (serverMsgs.length === 0 && localRoom.length > 0) {
-      await apiFetch('/api/restore', {
-        method: 'POST',
-        body: JSON.stringify({ messages: localRoom, room: currentRoom, password: roomPassword })
-      });
-      loadMessages();
-      return;
-    }
-    if (serverMsgs.length > 0) {
-      const merged = filterRoom(mergeMsgs(loadLocal(), serverMsgs));
-      saveLocal(merged);
-      render(merged);
-    }
-  } catch (e) { console.log('服务器连接失败，显示本地缓存', e); }
-}
-
-async function sendMessage(content) {
-  if (!myName) { alert('请先点左上角「👤 名字」设置你的名字！'); return; }
-  const data = await apiFetch('/api/messages', {
-    method: 'POST',
-    body: JSON.stringify({
-      sender: myName,
-      content: content,
-      role: myName.includes('助手') ? 'assistant' : 'user',
-      room: currentRoom,
-      password: roomPassword
-    })
-  });
-  if (!data.ok) throw new Error(data.error || '发送失败');
-  return data;
-}
-
-async function loadOnline() {
-  try {
-    const data = await apiFetch('/api/online');
-    onlineUsers = data.online || [];
-    updateStatusLine(onlineUsers);
-    drawMap();          // 更新左侧地图
-    drawModalMap();     // 更新模态框地图（如果打开）
-  } catch(e) { console.error('加载在线失败', e); }
-}
-
-async function heartbeat() {
-  if (!myName) return;
-  try {
-    await apiFetch('/api/heartbeat', {
+    const res = await fetch('/api/rooms/delete', {
       method: 'POST',
-      body: JSON.stringify({ name: myName, room: currentRoom })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, password: password })
     });
-  } catch(e) {}
+    const data = await res.json();
+    if (!data.ok) { alert('❌ 删除失败：' + (data.error || '')); return; }
+    if (currentRoom === name) {
+      currentRoom = 'main';
+      roomPassword = '';
+      saveRoomState();
+      reportRoom();
+    }
+    try { localStorage.removeItem('chatHistory_' + name); } catch(e) {}
+    alert('✅ 房间「' + name + '」已删除');
+    loadMessages();
+  } catch(e) { alert('❌ 网络错误'); }
 }
 
-async function loadAvatars() {
+roomBtn.addEventListener('click', async () => {
+  // 先获取房间列表
+  let roomsList = [];
   try {
-    const data = await apiFetch('/api/avatar');
-    const serverAvatars = data.avatars || {};
-    for (const k in avatarMap) {
-      if (!serverAvatars[k]) {
-        apiFetch('/api/avatar', {
-          method: 'POST',
-          body: JSON.stringify({ name: k, image: avatarMap[k] })
-        });
-      }
-    }
-    for (const k in serverAvatars) {
-      avatarMap[k] = serverAvatars[k];
-    }
-    saveAvatarMap();
-    drawMap();
-    drawModalMap();
+    const res = await fetch('/api/rooms');
+    const data = await res.json();
+    roomsList = data.rooms || [];
   } catch(e) {}
-}
 
-function saveAvatarMap() {
-  try { localStorage.setItem('avatarMap', JSON.stringify(avatarMap)); } catch(e) {}
-}
+  const cur = currentRoom === 'main' ? '客厅' : currentRoom;
+  let listText = '🚪 房间管理\n当前：' + cur + '\n\n📋 房间列表：\n';
+  roomsList.forEach(r => {
+    const label = r.name === 'main' ? '🏠 客厅（公共）' : (r.has_password ? '🔒 ' + r.name + '（有密码）' : '🔓 ' + r.name);
+    listText += '  ' + label + '\n';
+  });
+  listText += '\n👉 直接输入房间名就能进入；\n或输入：\n1 = 创建新房间\n2 = 删除房间\n3 = 回到客厅';
+
+  const input = prompt(listText);
+  if (input === null) return;
+  const v = input.trim();
+  if (v === '1') {
+    const name = prompt('新房间名字（如：火锅小分队）：');
+    if (!name || !name.trim()) return;
+    const pass = prompt('设置密码（可留空=公开房间）：');
+    if (pass === null) return;
+    await createRoom(name.trim(), pass.trim());
+  } else if (v === '2') {
+    const name = prompt('输入要删除的房间名：');
+    if (!name || !name.trim()) return;
+    const pass = prompt('该房间密码（没有密码直接确定）：');
+    if (pass === null) return;
+    const ok = confirm('确定要删除房间「' + name.trim() + '」吗？\n该房间所有消息都会被删除！');
+    if (ok) await deleteRoom(name.trim(), pass.trim());
+  } else if (v === '3') {
+    switchRoom('main', '');
+  } else if (v) {
+    // 直接输入房间名进入
+    const pass = prompt('房间「' + v + '」密码（没有密码直接确定）：');
+    if (pass === null) return;
+    await joinRoom(v, pass.trim());
+  }
+});
+
+// ===== 聊天室时间设置（按房间独立）=====
+let timeSettings = { mode: 'real', fixed_time: '19:00' };
 
 async function loadTimeSettings() {
   try {
-    const data = await apiFetch(`/api/time_settings?room=${encodeURIComponent(currentRoom)}`);
+    const res = await fetch('/api/time_settings?room=' + encodeURIComponent(currentRoom));
+    const data = await res.json();
     timeSettings = data.settings || timeSettings;
     timeBtn.title = timeSettings.mode === 'fixed' ? '时间设置：剧情 ' + timeSettings.fixed_time : '时间设置：现实时间';
-    updateStatusLine(onlineUsers);
+    updateStatusLine(lastOnline || []);
   } catch(e) {}
 }
 
 async function saveTimeSettings(mode, fixed_time) {
-  const data = await apiFetch('/api/time_settings', {
-    method: 'POST',
-    body: JSON.stringify({ mode, fixed_time, room: currentRoom })
-  });
-  if (data.settings) timeSettings = data.settings;
-  timeBtn.title = timeSettings.mode === 'fixed' ? '时间设置：剧情 ' + timeSettings.fixed_time : '时间设置：现实时间';
-  updateStatusLine(onlineUsers);
-}
-
-async function removeMember(name) {
-  const local = loadLocal().filter(m => m.sender !== name);
-  saveLocal(local);
   try {
-    await apiFetch('/api/remove_member', {
+    const res = await fetch('/api/time_settings', {
       method: 'POST',
-      body: JSON.stringify({ name, room: currentRoom, password: roomPassword })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: mode, fixed_time: fixed_time, room: currentRoom })
     });
-  } catch(e) {}
-  if (avatarMap[name]) {
-    delete avatarMap[name];
-    saveAvatarMap();
-  }
-  loadMessages();
-  loadOnline();
-  showTip('✅ 已删除「' + name + '」在本房间的消息');
+    const data = await res.json();
+    if (data.settings) timeSettings = data.settings;
+    timeBtn.title = timeSettings.mode === 'fixed' ? '时间设置：剧情 ' + timeSettings.fixed_time : '时间设置：现实时间';
+    updateStatusLine(lastOnline || []);
+  } catch(e) { alert('设置失败，请检查网络'); }
 }
 
-// ===================== 绘制地图（通用） =====================
-async function drawMapOnCanvas(canvas, ctx, clickable = true) {
-  const rooms = await loadRooms();
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#d0d0d0';
-  ctx.fillRect(0, 0, w, h);
-
-  const cols = 2;
-  const boxW = 110, boxH = 80, gap = 12;
-  const startX = 12, startY = 12;
-
-  // 存储点击区域（用于模态框）
-  if (clickable) {
-    canvas._clickAreas = [];
-  }
-
-  rooms.forEach((room, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = startX + col * (boxW + gap);
-    const y = startY + row * (boxH + gap);
-
-    const isActive = (room.name === currentRoom);
-    ctx.fillStyle = isActive ? '#b8d4f0' : '#f5f5f5';
-    ctx.shadowColor = 'rgba(0,0,0,0.1)';
-    ctx.shadowBlur = 4;
-    ctx.fillRect(x, y, boxW, boxH);
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = isActive ? '#2a6f9c' : '#aaa';
-    ctx.lineWidth = isActive ? 3 : 1;
-    ctx.strokeRect(x, y, boxW, boxH);
-
-    ctx.fillStyle = '#333';
-    ctx.font = 'bold 12px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(room.name === 'main' ? '🏠 客厅' : room.name, x + 8, y + 22);
-
-    if (room.has_password) {
-      ctx.fillStyle = '#e67e22';
-      ctx.font = '14px sans-serif';
-      ctx.fillText('🔒', x + boxW - 24, y + 22);
-    }
-
-    const onlineHere = onlineUsers.filter(u => u.room === room.name);
-    const count = onlineHere.length;
-    ctx.fillStyle = '#2ecc71';
-    ctx.font = '11px sans-serif';
-    ctx.fillText('🟢 ' + count + '人', x + 8, y + 48);
-
-    const maxShow = Math.min(count, 4);
-    for (let i = 0; i < maxShow; i++) {
-      const user = onlineHere[i];
-      const avatarUrl = avatarMap[user.name] || '';
-      const px = x + 8 + i * 26;
-      const py = y + 52;
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(px + 11, py + 11, 10, 0, 2 * Math.PI);
-      ctx.closePath();
-      ctx.clip();
-      ctx.fillStyle = colorFor(user.name);
-      ctx.fillRect(px, py, 22, 22);
-      ctx.restore();
-      ctx.fillStyle = '#fff';
-      ctx.font = '9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(user.name.substring(0,1), px + 11, py + 15);
-    }
-
-    if (clickable) {
-      canvas._clickAreas.push({ x, y, w: boxW, h: boxH, room: room.name, has_password: room.has_password });
-    }
-  });
-}
-
-// 绘制左侧地图
-async function drawMap() {
-  await drawMapOnCanvas(mapCanvas, ctx, true);
-}
-
-// 绘制模态框地图
-async function drawModalMap() {
-  await drawMapOnCanvas(modalMapCanvas, modalCtx, true);
-}
-
-// ===================== 地图点击处理（模态框） =====================
-modalMapCanvas.addEventListener('click', function(e) {
-  const rect = modalMapCanvas.getBoundingClientRect();
-  const scaleX = modalMapCanvas.width / rect.width;
-  const scaleY = modalMapCanvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
-  if (!modalMapCanvas._clickAreas) return;
-  for (const area of modalMapCanvas._clickAreas) {
-    if (mx >= area.x && mx <= area.x + area.w && my >= area.y && my <= area.y + area.h) {
-      if (area.room !== currentRoom) {
-        if (area.has_password) {
-          const pwd = prompt('输入「' + area.room + '」的密码：');
-          if (pwd === null) return;
-          enterRoom(area.room, pwd);
-        } else {
-          enterRoom(area.room, '');
-        }
-        // 点击后关闭模态框
-        closeModal();
-      }
-      break;
-    }
-  }
-});
-
-// 左侧地图点击处理（桌面版）
-mapCanvas.addEventListener('click', function(e) {
-  const rect = mapCanvas.getBoundingClientRect();
-  const scaleX = mapCanvas.width / rect.width;
-  const scaleY = mapCanvas.height / rect.height;
-  const mx = (e.clientX - rect.left) * scaleX;
-  const my = (e.clientY - rect.top) * scaleY;
-  if (!mapCanvas._clickAreas) return;
-  for (const area of mapCanvas._clickAreas) {
-    if (mx >= area.x && mx <= area.x + area.w && my >= area.y && my <= area.y + area.h) {
-      if (area.room !== currentRoom) {
-        if (area.has_password) {
-          const pwd = prompt('输入「' + area.room + '」的密码：');
-          if (pwd === null) return;
-          enterRoom(area.room, pwd);
-        } else {
-          enterRoom(area.room, '');
-        }
-      }
-      break;
-    }
-  }
-});
-
-// ===================== 模态框控制 =====================
-function openModal() {
-  mapModal.style.display = 'flex';
-  drawModalMap();  // 绘制最新地图
-}
-function closeModal() {
-  mapModal.style.display = 'none';
-}
-closeModalBtn.addEventListener('click', closeModal);
-modalCloseBtn.addEventListener('click', closeModal);
-// 点击背景关闭
-mapModal.addEventListener('click', function(e) {
-  if (e.target === mapModal) closeModal();
-});
-
-// ===================== 切换房间 =====================
-async function enterRoom(room, password) {
-  try {
-    if (room !== 'main') {
-      await joinRoom(room, password);
-    }
-    currentRoom = room;
-    roomPassword = password || '';
-    saveRoomState();
-    await apiFetch('/api/current_room', {
-      method: 'POST',
-      body: JSON.stringify({ room: currentRoom, password: roomPassword })
+timeBtn.addEventListener('click', () => {
+  const roomLabel = currentRoom === 'main' ? '客厅' : currentRoom;
+  const current = timeSettings.mode === 'fixed' ? '固定剧情时间 ' + timeSettings.fixed_time : '跟随现实时间（北京时间）';
+  const input = prompt(
+    '【管理员】房间「' + roomLabel + '」时间设置\n\n当前：' + current + '\n\n' +
+    '输入 1 = 跟随现实时间（北京时间）\n' +
+    '输入 2 = 固定剧情时间（然后输入时间，如 19:00）',
+    '1'
+  );
+  if (input === null) return;
+  const v = input.trim();
+  if (v === '1') {
+    saveTimeSettings('real', '').then(() => {
+      alert('✅ 已切换为跟随现实时间（北京时间）');
     });
-    loadTimeSettings();
-    loadOnline();
-    loadMessages();
-    drawMap();
-    drawModalMap();
-    showTip('✅ 进入房间：' + (room === 'main' ? '客厅' : room));
-  } catch(e) {
-    alert('❌ 切换失败：' + e.message);
+  } else if (v === '2') {
+    const ft = prompt('固定剧情时间（格式 时:分，如 19:00）：', timeSettings.fixed_time || '19:00');
+    if (ft === null) return;
+    const ftv = ft.trim();
+    if (!ftv) return;
+    saveTimeSettings('fixed', ftv).then(() => {
+      alert('✅ 已切换为固定剧情时间：' + ftv + '\n（之后本房间所有消息都显示这个时间）');
+    });
   }
+});
+
+// ===== 头像映射（本地 + 服务器同步）=====
+let avatarMap = {};
+try { avatarMap = JSON.parse(localStorage.getItem('avatarMap') || '{}'); } catch(e) { avatarMap = {}; }
+function saveAvatarMap() {
+  try { localStorage.setItem('avatarMap', JSON.stringify(avatarMap)); } catch(e) {}
 }
 
-// ===================== 渲染消息 =====================
-function render(msgs) {
-  const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
-  chat.innerHTML = '';
-  msgs.forEach(m => {
-    const isMe = m.sender === myName;
-    const row = document.createElement('div');
-    row.className = 'msg' + (isMe ? ' right' : '');
+// ===== TTS 语音朗读设置 =====
+let ttsTargetName = localStorage.getItem('ttsTargetName') || '';
+let lastSpokenTime = localStorage.getItem('lastSpokenTime') || '';
 
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    if (avatarMap[m.sender]) {
-      const img = document.createElement('img');
-      img.src = avatarMap[m.sender];
-      avatar.appendChild(img);
-    } else {
-      avatar.style.background = colorFor(m.sender);
-      avatar.textContent = m.sender.charAt(0);
-    }
-
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'name';
-    nameDiv.textContent = m.sender + (m.role === 'assistant' ? ' 🤖' : '');
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'content';
-    contentDiv.textContent = m.content;
-    const timeDiv = document.createElement('div');
-    timeDiv.className = 'time';
-    timeDiv.textContent = m.time;
-
-    bubble.appendChild(nameDiv);
-    bubble.appendChild(contentDiv);
-    bubble.appendChild(timeDiv);
-
-    if (isMe) {
-      row.appendChild(bubble);
-      row.appendChild(avatar);
-    } else {
-      row.appendChild(avatar);
-      row.appendChild(bubble);
-    }
-    chat.appendChild(row);
-  });
-  if (wasNearBottom) {
-    chat.scrollTop = chat.scrollHeight;
-  }
+function updateTtsBtn() {
+  ttsBtn.textContent = ttsTargetName ? '🔊' : '🔇';
+  ttsBtn.title = ttsTargetName ? '朗读：' + ttsTargetName : '语音朗读';
 }
+updateTtsBtn();
 
-// ===================== 语音朗读 =====================
+ttsBtn.addEventListener('click', () => {
+  const input = prompt('自动朗读谁的发言？输入成员名字（如：黎深）。\n输入"关"或留空 = 关闭朗读：', ttsTargetName);
+  if (input === null) return;
+  const v = input.trim();
+  ttsTargetName = (v === '关' || v === '') ? '' : v;
+  localStorage.setItem('ttsTargetName', ttsTargetName);
+  if (ttsTargetName) lastSpokenTime = '';
+  updateTtsBtn();
+  if (ttsTargetName) {
+    speakText('语音朗读已开启，这是一条测试语音，能听到吗？');
+  }
+});
+
 function speakText(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
@@ -769,63 +323,68 @@ function speakNewMessages(msgs) {
   }
 }
 
-// ===================== 状态行 =====================
-function updateStatusLine(online) {
-  if (!memberListEl) return;
-  const roomLabel = currentRoom === 'main' ? '客厅' : currentRoom;
-  const timeLabel = timeSettings.mode === 'fixed' ? '剧情 ' + timeSettings.fixed_time : '现实时间';
-  const names = online.map(u => u.name).join(' · ');
-  memberListEl.textContent = '🏠 ' + roomLabel + ' · 🟢 在线：' + (names || '无') + ' · ⏰ ' + timeLabel + '（点我管理）';
-  memberListEl.onclick = () => {
-    const name = prompt('输入要删除的成员名字（将删除ta在本房间的所有消息）：');
-    if (!name || !name.trim()) return;
-    removeMember(name.trim());
-  };
+function colorFor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + hash;
+  return COLORS[hash % COLORS.length];
 }
 
-// ===================== 事件绑定 =====================
-// 发送消息
-sendBtn.addEventListener('click', async () => {
-  const content = msgInput.value.trim();
-  if (!content) return;
-  try {
-    await sendMessage(content);
-    msgInput.value = '';
-    loadMessages();
-  } catch(e) { alert('发送失败：' + e.message); }
-});
-msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendBtn.click(); });
-
-// 设置名字
+// ===== 设置我的名字 =====
 membersP.addEventListener('click', () => {
   const name = prompt('设置"我"的名字（发送消息会以这个名字发出）：', myName || '名字');
   if (name && name.trim()) {
     myName = name.trim();
     localStorage.setItem('myName', myName);
     membersP.textContent = '👤 ' + myName;
-    heartbeat();
   }
 });
 
-// 头像上传
-avatarBtn.addEventListener('click', () => avatarInput.click());
+// ===== 头像：上传到服务器（双方可见）=====
+function uploadAvatar(name, dataUrl) {
+  fetch('/api/avatar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: name, image: dataUrl })
+  }).catch(() => {});
+}
+
+async function loadAvatars() {
+  try {
+    const res = await fetch('/api/avatar');
+    const data = await res.json();
+    const serverAvatars = data.avatars || {};
+    for (const k in avatarMap) {
+      if (!serverAvatars[k]) {
+        uploadAvatar(k, avatarMap[k]);
+      }
+    }
+    for (const k in serverAvatars) {
+      avatarMap[k] = serverAvatars[k];
+    }
+    saveAvatarMap();
+    loadMessages();
+  } catch(e) {}
+}
+
+// ===== 设置头像 =====
+avatarBtn.addEventListener('click', () => {
+  avatarInput.click();
+});
 avatarInput.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const name = prompt('这张头像给谁？输入成员名字：');
-  if (!name || !name.trim()) { avatarInput.value = ''; return; }
+  if (!name || !name.trim()) {
+    avatarInput.value = '';
+    return;
+  }
   const target = name.trim();
   compressImage(file, (dataUrl) => {
     avatarMap[target] = dataUrl;
     saveAvatarMap();
-    apiFetch('/api/avatar', {
-      method: 'POST',
-      body: JSON.stringify({ name: target, image: dataUrl })
-    });
+    uploadAvatar(target, dataUrl);
     avatarInput.value = '';
     loadMessages();
-    drawMap();
-    drawModalMap();
     alert('✅ ' + target + ' 的头像已设置，已同步给所有人！');
   });
 });
@@ -837,7 +396,8 @@ function compressImage(file, cb) {
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const size = 96;
-      canvas.width = size; canvas.height = size;
+      canvas.width = size;
+      canvas.height = size;
       const ctx = canvas.getContext('2d');
       const min = Math.min(img.width, img.height);
       const sx = (img.width - min) / 2;
@@ -850,135 +410,239 @@ function compressImage(file, cb) {
   reader.readAsDataURL(file);
 }
 
-// TTS
-ttsBtn.addEventListener('click', () => {
-  const input = prompt('自动朗读谁的发言？输入成员名字（如：黎深）。\n输入"关"或留空 = 关闭朗读：', ttsTargetName);
-  if (input === null) return;
-  const v = input.trim();
-  ttsTargetName = (v === '关' || v === '') ? '' : v;
-  localStorage.setItem('ttsTargetName', ttsTargetName);
-  if (ttsTargetName) lastSpokenTime = '';
-  updateTtsBtn();
-  if (ttsTargetName) {
-    speakText('语音朗读已开启，这是一条测试语音，能听到吗？');
-  }
-});
-
-// 时间设置
-timeBtn.addEventListener('click', () => {
-  const current = timeSettings.mode === 'fixed' ? '固定剧情时间 ' + timeSettings.fixed_time : '跟随现实时间（北京时间）';
-  const input = prompt(
-    '【管理员】房间「' + (currentRoom === 'main' ? '客厅' : currentRoom) + '」时间设置\n\n当前：' + current + '\n\n' +
-    '输入 1 = 跟随现实时间（北京时间）\n' +
-    '输入 2 = 固定剧情时间（然后输入时间，如 19:00）',
-    '1'
-  );
-  if (input === null) return;
-  const v = input.trim();
-  if (v === '1') {
-    saveTimeSettings('real', '').then(() => alert('✅ 已切换为跟随现实时间（北京时间）'));
-  } else if (v === '2') {
-    const ft = prompt('固定剧情时间（格式 时:分，如 19:00）：', timeSettings.fixed_time || '19:00');
-    if (ft !== null && ft.trim()) {
-      saveTimeSettings('fixed', ft.trim()).then(() => alert('✅ 已切换为固定剧情时间：' + ft.trim()));
+// ===== 本地消息缓存（按房间分开）=====
+function saveLocal(msgs) {
+  try { localStorage.setItem('chatHistory_' + currentRoom, JSON.stringify(msgs)); } catch(e) {}
+}
+function loadLocal() {
+  try { return JSON.parse(localStorage.getItem('chatHistory_' + currentRoom) || '[]'); } catch(e) { return []; }
+}
+function mergeMsgs(localMsgs, serverMsgs) {
+  const seen = new Set();
+  const all = [...serverMsgs, ...localMsgs];
+  const merged = [];
+  for (const m of all) {
+    const key = m.sender + '|' + m.content + '|' + m.time;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(m);
     }
   }
-});
+  merged.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+  return merged.slice(-500);
+}
 
-// ===== 房间按钮：弹出模态框（地图） =====
-roomBtn.addEventListener('click', () => {
-  openModal();
-});
+// ===== 加载消息（含服务器回填 + 语音朗读 + 房间双保险过滤）=====
+function filterRoom(msgs) {
+  return (msgs || []).filter(m => (m.room || 'main') === currentRoom);
+}
 
-// ===== 模态框中的“管理房间”按钮 =====
-modalManageBtn.addEventListener('click', () => {
-  // 关闭模态框后，调用原有的房间管理 prompt
-  closeModal();
-  // 延迟一点点，等模态框关闭后再弹出 prompt
-  setTimeout(() => {
-    // 复用原有房间管理逻辑（与之前一致）
-    openRoomManagement();
-  }, 300);
-});
+async function loadMessages() {
+  render(filterRoom(loadLocal()));
+  try {
+    const res = await fetch('/api/messages?count=200&room=' + encodeURIComponent(currentRoom) + '&password=' + encodeURIComponent(roomPassword));
+    const data = await res.json();
+    if (data.error) { console.log(data.error); return; }
+    const serverMsgs = filterRoom(data.messages || []);
+    speakNewMessages(serverMsgs);
+    const localRoom = filterRoom(loadLocal());
+    if (serverMsgs.length === 0 && localRoom.length > 0) {
+      await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: localRoom, room: currentRoom, password: roomPassword })
+      });
+      loadMessages();
+      return;
+    }
+    if (serverMsgs.length > 0) {
+      const merged = filterRoom(mergeMsgs(loadLocal(), serverMsgs));
+      saveLocal(merged);
+      render(merged);
+    }
+  } catch (e) {
+    console.log('服务器连接失败，显示本地缓存', e);
+  }
+}
 
-// 原有的房间管理逻辑（抽成函数）
-async function openRoomManagement() {
-  const rooms = await loadRooms();
-  let listText = '🚪 房间管理\n当前：' + (currentRoom === 'main' ? '客厅' : currentRoom) + '\n\n📋 房间列表：\n';
-  rooms.forEach(r => {
-    const label = r.name === 'main' ? '🏠 客厅（公共）' : (r.has_password ? '🔒 ' + r.name + '（有密码）' : '🔓 ' + r.name);
-    listText += '  ' + label + '\n';
-  });
-  listText += '\n👉 直接输入房间名就能进入；\n或输入：\n1 = 创建新房间\n2 = 删除房间\n3 = 回到客厅';
+// ===== 进出聊天室提示 =====
+function showSystemTip(text) {
+  if (!tipToast) return;
+  tipToast.textContent = text;
+  tipToast.style.display = 'block';
+  tipToast.style.opacity = '1';
+  clearTimeout(tipToast._timer);
+  tipToast._timer = setTimeout(() => {
+    tipToast.style.opacity = '0';
+    setTimeout(() => { tipToast.style.display = 'none'; }, 300);
+  }, 4000);
+}
 
-  const input = prompt(listText);
-  if (input === null) return;
-  const v = input.trim();
-  if (v === '1') {
-    const name = prompt('新房间名字（如：火锅小分队）：');
+// ===== 状态行：房间 + 在线 + 时间（点我管理）=====
+let lastOnline = null; // null = 首次加载，不提示
+
+function updateStatusLine(online) {
+  if (!memberListEl) return;
+  memberListEl.style.cursor = 'pointer';
+  memberListEl.title = '点我可以删除某个成员的所有消息';
+  const roomLabel = currentRoom === 'main' ? '客厅' : currentRoom;
+  const timeLabel = timeSettings.mode === 'fixed' ? '剧情 ' + timeSettings.fixed_time : '现实时间';
+  const onlineText = online && online.length ? online.join(' · ') : '无';
+  memberListEl.textContent = '🏠 ' + roomLabel + ' · 🟢 在线：' + onlineText + ' · ⏰ ' + timeLabel + '（点我管理）';
+  memberListEl.onclick = () => {
+    const name = prompt('输入要删除的成员名字（将删除ta在本房间的所有消息）：');
     if (!name || !name.trim()) return;
-    const pass = prompt('设置密码（可留空=公开房间）：');
-    if (pass === null) return;
-    try {
-      await createRoom(name.trim(), pass.trim());
-      await enterRoom(name.trim(), pass.trim());
-    } catch(e) { alert('创建失败：' + e.message); }
-  } else if (v === '2') {
-    const name = prompt('输入要删除的房间名：');
-    if (!name || !name.trim()) return;
-    const pass = prompt('该房间密码（没有密码直接确定）：');
-    if (pass === null) return;
-    const ok = confirm('确定要删除房间「' + name.trim() + '」吗？\n该房间所有消息都会被删除！');
-    if (ok) {
-      try {
-        await deleteRoom(name.trim(), pass.trim());
-        if (currentRoom === name.trim()) {
-          await enterRoom('main', '');
+    removeMember(name.trim());
+  };
+}
+
+async function loadOnline() {
+  try {
+    const res = await fetch('/api/online');
+    const data = await res.json();
+    const online = data.online || [];
+
+    if (lastOnline !== null) {
+      for (const name of online) {
+        if (!lastOnline.includes(name)) {
+          showSystemTip('🟢 ' + name + ' 进入了聊天室');
         }
-        loadMessages();
-        drawMap();
-        drawModalMap();
-      } catch(e) { alert('删除失败：' + e.message); }
+      }
+      for (const name of lastOnline) {
+        if (!online.includes(name)) {
+          showSystemTip('⚪ ' + name + ' 离开了聊天室');
+        }
+      }
     }
-  } else if (v === '3') {
-    await enterRoom('main', '');
-  } else if (v) {
-    const pass = prompt('房间「' + v + '」密码（没有密码直接确定）：');
-    if (pass === null) return;
-    try {
-      await enterRoom(v, pass.trim());
-    } catch(e) { alert('进入失败：' + e.message); }
+    lastOnline = online;
+    updateStatusLine(online);
+  } catch(e) {}
+}
+
+// 心跳：告诉服务器我在线（没设置名字就不发）
+function heartbeat() {
+  if (!myName) return;
+  fetch('/api/heartbeat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: myName })
+  }).catch(() => {});
+}
+
+async function removeMember(name) {
+  const local = loadLocal().filter(m => m.sender !== name);
+  saveLocal(local);
+  try {
+    await fetch('/api/remove_member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, room: currentRoom, password: roomPassword })
+    });
+  } catch(e) {}
+  if (avatarMap[name]) {
+    delete avatarMap[name];
+    saveAvatarMap();
+  }
+  loadMessages();
+  loadOnline();
+  alert('✅ 已删除「' + name + '」在本房间的所有消息');
+}
+
+function render(msgs) {
+  const wasNearBottom = chat.scrollTop + chat.clientHeight >= chat.scrollHeight - 50;
+  chat.innerHTML = '';
+  msgs.forEach(m => {
+    const isMe = m.sender === myName;
+    const row = document.createElement('div');
+    row.className = 'msg' + (isMe ? ' right' : '');
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    if (avatarMap[m.sender]) {
+      const img = document.createElement('img');
+      img.src = avatarMap[m.sender];
+      avatar.appendChild(img);
+    } else {
+      avatar.style.background = colorFor(m.sender);
+      avatar.textContent = m.sender.charAt(0);
+    }
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    const nameDiv = document.createElement('div');
+    nameDiv.className = 'name';
+    nameDiv.textContent = m.sender + (m.role === 'assistant' ? ' 🤖' : '');
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'content';
+    contentDiv.textContent = m.content;
+
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'time';
+    timeDiv.textContent = m.time;
+
+    bubble.appendChild(nameDiv);
+    bubble.appendChild(contentDiv);
+    bubble.appendChild(timeDiv);
+
+    if (isMe) {
+      row.appendChild(bubble);
+      row.appendChild(avatar);
+    } else {
+      row.appendChild(avatar);
+      row.appendChild(bubble);
+    }
+    chat.appendChild(row);
+  });
+  if (wasNearBottom) {
+    chat.scrollTop = chat.scrollHeight;
   }
 }
 
-// 刷新地图按钮
-refreshMapBtn.addEventListener('click', () => {
-  loadOnline();
-  drawMap();
-  drawModalMap();
-});
-
-// ===================== 初始化与定时器 =====================
-async function init() {
-  await apiFetch('/api/current_room', {
-    method: 'POST',
-    body: JSON.stringify({ room: currentRoom, password: roomPassword })
-  }).catch(() => {});
-  await loadAvatars();
-  await loadTimeSettings();
-  await loadOnline();
-  await loadMessages();
-  await drawMap();
-  heartbeat();
-  setInterval(heartbeat, 15000);
-  setInterval(loadOnline, 10000);
-  setInterval(loadMessages, 2000);
-  setInterval(loadAvatars, 30000);
-  setInterval(loadTimeSettings, 30000);
-  setInterval(() => { drawMap(); drawModalMap(); }, 30000);
+// ===== 发送消息 =====
+async function sendMessage() {
+  const content = msgInput.value.trim();
+  if (!content) return;
+  if (!myName) { alert('请先点左上角「👤 名字」设置你的名字！'); return; }
+  const sender = myName;
+  const role = sender.includes('助手') ? 'assistant' : 'user';
+  try {
+    const res = await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sender, content, role, room: currentRoom, password: roomPassword })
+    });
+    const data = await res.json();
+    if (!data.ok) { alert('发送失败: ' + (data.error || '')); return; }
+    msgInput.value = '';
+    loadMessages();
+  } catch (e) {
+    alert('发送失败: ' + e);
+  }
 }
 
-init();
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+// 防休眠：每10分钟访问一次服务器
+setInterval(() => { fetch('/').catch(() => {}); }, 600000);
+
+// 初始化
+reportRoom();
+loadAvatars();
+setInterval(loadAvatars, 30000);
+
+heartbeat();
+setInterval(heartbeat, 15000);
+loadOnline();
+setInterval(loadOnline, 10000);
+
+loadTimeSettings();
+setInterval(loadTimeSettings, 30000);
+
+loadMessages();
+setInterval(loadMessages, 2000);
 </script>
 </body>
 </html>
