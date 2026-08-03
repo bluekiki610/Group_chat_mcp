@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse  # 新增 HTMLResponse
+from fastapi.staticfiles import StaticFiles  # 新增
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
@@ -8,6 +9,7 @@ import time
 import asyncio
 from datetime import datetime
 import random
+import os  # 新增
 
 app = FastAPI()
 
@@ -19,7 +21,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+# ===== 提供 HTML 页面 =====
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            html_content = f.read()
+        return HTMLResponse(content=html_content)
+    except FileNotFoundError:
+        return {"status": "error", "message": "index.html not found"}
 # ------------------- 数据存储（内存） -------------------
 # 消息存储：每个房间一个列表
 messages: Dict[str, List[Dict]] = {
