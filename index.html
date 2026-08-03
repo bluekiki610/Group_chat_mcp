@@ -2,14 +2,14 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>人❤️机の小窝</title>
 <style>
-  /* 全局重置 */
+  /* ===== 全局重置 ===== */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #ededed; height: 100vh; overflow: hidden; }
 
-  /* 左右两栏布局 */
+  /* ===== 左右两栏布局（桌面版） ===== */
   .app { display: flex; height: 100vh; width: 100%; }
   .left-panel {
     width: 260px;
@@ -40,7 +40,7 @@
     background: #e0e0e0;
     border-radius: 8px;
     cursor: pointer;
-    aspect-ratio: 260 / 360; /* 保持比例 */
+    aspect-ratio: 260 / 360;
   }
   .left-panel .legend {
     margin-top: 8px;
@@ -58,27 +58,18 @@
     position: relative;
   }
 
-  /* 原有的样式，稍作调整 */
+  /* ===== 聊天界面样式（不变） ===== */
   .header { background: #ededed; padding: 10px 16px; text-align: center; border-bottom: 1px solid #d9d9d9; flex-shrink: 0; }
   .header h1 { font-size: 16px; font-weight: 600; }
-  .header p { font-size: 12px; color: #888; margin-top: 3px; cursor: pointer; }
-  .header p:hover { color: #07c160; }
   .toolbar { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
   .toolbar span { font-size: 13px; color: #555; background: #fff; border-radius: 14px; padding: 3px 10px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
   .toolbar span:hover { color: #07c160; }
 
-  #chat {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px 12px 76px;
-  }
-
+  #chat { flex: 1; overflow-y: auto; padding: 16px 12px 76px; }
   .msg { display: flex; margin-bottom: 16px; }
   .msg.right { justify-content: flex-end; }
-
   .avatar { width: 38px; height: 38px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; font-weight: 600; flex-shrink: 0; overflow: hidden; }
   .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-
   .bubble { max-width: 66%; margin: 0 10px; }
   .bubble .name { font-size: 11px; color: #999; margin-bottom: 3px; }
   .bubble .content { padding: 9px 12px; border-radius: 8px; font-size: 15px; line-height: 1.5; word-break: break-word; background: #fff; white-space: pre-wrap; }
@@ -126,16 +117,92 @@
     text-overflow: ellipsis;
   }
 
-  /* 响应式：小屏设备隐藏地图或调整宽度 */
-  @media (max-width: 600px) {
-    .left-panel { width: 180px; min-width: 180px; }
-    #mapCanvas { aspect-ratio: 180 / 260; }
+  /* ===== 模态框（弹出地图） ===== */
+  #mapModal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+  }
+  #mapModal .modal-content {
+    background: #f0f0f0;
+    border-radius: 16px;
+    padding: 20px;
+    width: 92%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    position: relative;
+  }
+  #mapModal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  #mapModal .modal-header h3 {
+    font-size: 18px;
+  }
+  #mapModal .modal-header .close-btn {
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+    background: none;
+    border: none;
+    padding: 0 8px;
+  }
+  #mapModal .modal-header .close-btn:hover { color: #333; }
+  #mapModal canvas {
+    width: 100%;
+    height: auto;
+    background: #e0e0e0;
+    border-radius: 8px;
+    aspect-ratio: 1 / 1.2;
+  }
+  #mapModal .modal-footer {
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  #mapModal .modal-footer button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #07c160;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+    flex: 1;
+  }
+  #mapModal .modal-footer button.secondary {
+    background: #888;
+  }
+  #mapModal .modal-footer button:hover { opacity: 0.8; }
+
+  /* ===== 手机端：隐藏左侧面板，只显示聊天 ===== */
+  @media (max-width: 700px) {
+    .left-panel { display: none; }   /* 隐藏左侧地图 */
+    .right-panel { width: 100%; }
+    #chat { padding: 10px 8px 70px; }
+    .bubble { max-width: 80%; }
+    .input-bar { padding: 6px 8px; }
+    .input-bar input { height: 32px; font-size: 14px; }
+    .input-bar button { height: 32px; padding: 0 14px; font-size: 14px; }
+    .header h1 { font-size: 14px; }
+    .toolbar span { font-size: 12px; padding: 2px 8px; }
+    /* 房间按钮加个提示 */
+    #roomBtn::after { content: " 📍"; font-size: 12px; }
   }
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- 左侧家园地图 -->
+  <!-- 左侧面板（桌面版显示） -->
   <div class="left-panel">
     <h3>🏠 家园地图 <span id="refreshMapBtn" title="刷新地图">🔄</span></h3>
     <canvas id="mapCanvas" width="260" height="360"></canvas>
@@ -167,7 +234,22 @@
   </div>
 </div>
 
-<!-- 隐藏的控件 -->
+<!-- ===== 模态框（弹出地图） ===== -->
+<div id="mapModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>🏠 家园地图</h3>
+      <button class="close-btn" id="closeModalBtn">&times;</button>
+    </div>
+    <canvas id="modalMapCanvas" width="400" height="480"></canvas>
+    <div class="modal-footer">
+      <button id="modalManageBtn" class="secondary">📋 管理房间</button>
+      <button id="modalCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 隐藏控件 -->
 <input type="file" id="avatarInput" accept="image/*" style="display:none;">
 <div id="tipToast"></div>
 
@@ -187,6 +269,14 @@ const roomBtn = document.getElementById('roomBtn');
 const refreshMapBtn = document.getElementById('refreshMapBtn');
 const mapCanvas = document.getElementById('mapCanvas');
 const ctx = mapCanvas.getContext('2d');
+
+// 模态框元素
+const mapModal = document.getElementById('mapModal');
+const modalMapCanvas = document.getElementById('modalMapCanvas');
+const modalCtx = modalMapCanvas.getContext('2d');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const modalCloseBtn = document.getElementById('modalCloseBtn');
+const modalManageBtn = document.getElementById('modalManageBtn');
 
 const COLORS = ['#5B8FF9', '#5AD8A6', '#F6BD16', '#E8684A', '#6DC8EC', '#9270CA', '#FF9D4D', '#269A99'];
 
@@ -214,8 +304,8 @@ updateTtsBtn();
 // 时间设置
 let timeSettings = { mode: 'real', fixed_time: '19:00' };
 
-// 在线列表（用于地图）
-let onlineUsers = [];  // [{name, room}, ...]
+// 在线列表
+let onlineUsers = [];
 
 // ===================== 辅助函数 =====================
 function colorFor(name) {
@@ -265,7 +355,7 @@ function saveRoomState() {
   localStorage.setItem('roomPass_' + currentRoom, roomPassword || '');
 }
 
-// ===================== 核心 API 调用 =====================
+// ===================== API 调用 =====================
 async function apiFetch(endpoint, options = {}) {
   const res = await fetch(endpoint, {
     ...options,
@@ -274,15 +364,11 @@ async function apiFetch(endpoint, options = {}) {
   return res.json();
 }
 
-// ----- 房间管理 -----
 async function loadRooms() {
   try {
     const data = await apiFetch('/api/rooms');
     return data.rooms || [];
-  } catch(e) {
-    console.error('加载房间失败', e);
-    return [];
-  }
+  } catch(e) { console.error('加载房间失败', e); return []; }
 }
 
 async function createRoom(name, password) {
@@ -312,20 +398,16 @@ async function deleteRoom(name, password) {
   return data;
 }
 
-// ----- 消息 -----
 async function loadMessages() {
-  // 先显示本地
   render(filterRoom(loadLocal()));
   try {
     const res = await fetch(`/api/messages?count=200&room=${encodeURIComponent(currentRoom)}&password=${encodeURIComponent(roomPassword)}`);
     const data = await res.json();
     if (data.error) { console.log(data.error); return; }
     const serverMsgs = filterRoom(data.messages || []);
-    // 语音朗读
     speakNewMessages(serverMsgs);
     const localRoom = filterRoom(loadLocal());
     if (serverMsgs.length === 0 && localRoom.length > 0) {
-      // 恢复本地到服务器
       await apiFetch('/api/restore', {
         method: 'POST',
         body: JSON.stringify({ messages: localRoom, room: currentRoom, password: roomPassword })
@@ -338,9 +420,7 @@ async function loadMessages() {
       saveLocal(merged);
       render(merged);
     }
-  } catch (e) {
-    console.log('服务器连接失败，显示本地缓存', e);
-  }
+  } catch (e) { console.log('服务器连接失败，显示本地缓存', e); }
 }
 
 async function sendMessage(content) {
@@ -359,15 +439,13 @@ async function sendMessage(content) {
   return data;
 }
 
-// ----- 在线状态 -----
 async function loadOnline() {
   try {
     const data = await apiFetch('/api/online');
     onlineUsers = data.online || [];
-    // 更新状态行
     updateStatusLine(onlineUsers);
-    // 重绘地图
-    drawMap();
+    drawMap();          // 更新左侧地图
+    drawModalMap();     // 更新模态框地图（如果打开）
   } catch(e) { console.error('加载在线失败', e); }
 }
 
@@ -381,14 +459,12 @@ async function heartbeat() {
   } catch(e) {}
 }
 
-// ----- 头像 -----
 async function loadAvatars() {
   try {
     const data = await apiFetch('/api/avatar');
     const serverAvatars = data.avatars || {};
     for (const k in avatarMap) {
       if (!serverAvatars[k]) {
-        // 上传本地头像到服务器
         apiFetch('/api/avatar', {
           method: 'POST',
           body: JSON.stringify({ name: k, image: avatarMap[k] })
@@ -399,7 +475,8 @@ async function loadAvatars() {
       avatarMap[k] = serverAvatars[k];
     }
     saveAvatarMap();
-    drawMap(); // 更新地图头像
+    drawMap();
+    drawModalMap();
   } catch(e) {}
 }
 
@@ -407,7 +484,6 @@ function saveAvatarMap() {
   try { localStorage.setItem('avatarMap', JSON.stringify(avatarMap)); } catch(e) {}
 }
 
-// ----- 时间设置 -----
 async function loadTimeSettings() {
   try {
     const data = await apiFetch(`/api/time_settings?room=${encodeURIComponent(currentRoom)}`);
@@ -427,7 +503,6 @@ async function saveTimeSettings(mode, fixed_time) {
   updateStatusLine(onlineUsers);
 }
 
-// ----- 删除成员 -----
 async function removeMember(name) {
   const local = loadLocal().filter(m => m.sender !== name);
   saveLocal(local);
@@ -446,10 +521,10 @@ async function removeMember(name) {
   showTip('✅ 已删除「' + name + '」在本房间的消息');
 }
 
-// ===================== 地图绘制 =====================
-async function drawMap() {
+// ===================== 绘制地图（通用） =====================
+async function drawMapOnCanvas(canvas, ctx, clickable = true) {
   const rooms = await loadRooms();
-  const w = mapCanvas.width, h = mapCanvas.height;
+  const w = canvas.width, h = canvas.height;
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#d0d0d0';
   ctx.fillRect(0, 0, w, h);
@@ -458,13 +533,17 @@ async function drawMap() {
   const boxW = 110, boxH = 80, gap = 12;
   const startX = 12, startY = 12;
 
+  // 存储点击区域（用于模态框）
+  if (clickable) {
+    canvas._clickAreas = [];
+  }
+
   rooms.forEach((room, index) => {
     const col = index % cols;
     const row = Math.floor(index / cols);
     const x = startX + col * (boxW + gap);
     const y = startY + row * (boxH + gap);
 
-    // 背景
     const isActive = (room.name === currentRoom);
     ctx.fillStyle = isActive ? '#b8d4f0' : '#f5f5f5';
     ctx.shadowColor = 'rgba(0,0,0,0.1)';
@@ -475,27 +554,23 @@ async function drawMap() {
     ctx.lineWidth = isActive ? 3 : 1;
     ctx.strokeRect(x, y, boxW, boxH);
 
-    // 房间名
     ctx.fillStyle = '#333';
     ctx.font = 'bold 12px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(room.name === 'main' ? '🏠 客厅' : room.name, x + 8, y + 22);
 
-    // 锁
     if (room.has_password) {
       ctx.fillStyle = '#e67e22';
       ctx.font = '14px sans-serif';
       ctx.fillText('🔒', x + boxW - 24, y + 22);
     }
 
-    // 在线用户
     const onlineHere = onlineUsers.filter(u => u.room === room.name);
     const count = onlineHere.length;
     ctx.fillStyle = '#2ecc71';
     ctx.font = '11px sans-serif';
     ctx.fillText('🟢 ' + count + '人', x + 8, y + 48);
 
-    // 绘制用户头像（最多4个）
     const maxShow = Math.min(count, 4);
     for (let i = 0; i < maxShow; i++) {
       const user = onlineHere[i];
@@ -507,16 +582,8 @@ async function drawMap() {
       ctx.arc(px + 11, py + 11, 10, 0, 2 * Math.PI);
       ctx.closePath();
       ctx.clip();
-      if (avatarUrl) {
-        const img = new Image();
-        img.src = avatarUrl;
-        // 由于图片可能异步，先画底色，稍后重绘时再加载？简单起见，用文字代替
-        ctx.fillStyle = colorFor(user.name);
-        ctx.fillRect(px, py, 22, 22);
-      } else {
-        ctx.fillStyle = colorFor(user.name);
-        ctx.fillRect(px, py, 22, 22);
-      }
+      ctx.fillStyle = colorFor(user.name);
+      ctx.fillRect(px, py, 22, 22);
       ctx.restore();
       ctx.fillStyle = '#fff';
       ctx.font = '9px sans-serif';
@@ -524,13 +591,49 @@ async function drawMap() {
       ctx.fillText(user.name.substring(0,1), px + 11, py + 15);
     }
 
-    // 存储点击区域（用对象属性）
-    if (!mapCanvas._clickAreas) mapCanvas._clickAreas = [];
-    mapCanvas._clickAreas.push({ x, y, w: boxW, h: boxH, room: room.name, has_password: room.has_password });
+    if (clickable) {
+      canvas._clickAreas.push({ x, y, w: boxW, h: boxH, room: room.name, has_password: room.has_password });
+    }
   });
 }
 
-// 地图点击事件
+// 绘制左侧地图
+async function drawMap() {
+  await drawMapOnCanvas(mapCanvas, ctx, true);
+}
+
+// 绘制模态框地图
+async function drawModalMap() {
+  await drawMapOnCanvas(modalMapCanvas, modalCtx, true);
+}
+
+// ===================== 地图点击处理（模态框） =====================
+modalMapCanvas.addEventListener('click', function(e) {
+  const rect = modalMapCanvas.getBoundingClientRect();
+  const scaleX = modalMapCanvas.width / rect.width;
+  const scaleY = modalMapCanvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+  if (!modalMapCanvas._clickAreas) return;
+  for (const area of modalMapCanvas._clickAreas) {
+    if (mx >= area.x && mx <= area.x + area.w && my >= area.y && my <= area.y + area.h) {
+      if (area.room !== currentRoom) {
+        if (area.has_password) {
+          const pwd = prompt('输入「' + area.room + '」的密码：');
+          if (pwd === null) return;
+          enterRoom(area.room, pwd);
+        } else {
+          enterRoom(area.room, '');
+        }
+        // 点击后关闭模态框
+        closeModal();
+      }
+      break;
+    }
+  }
+});
+
+// 左侧地图点击处理（桌面版）
 mapCanvas.addEventListener('click', function(e) {
   const rect = mapCanvas.getBoundingClientRect();
   const scaleX = mapCanvas.width / rect.width;
@@ -554,10 +657,19 @@ mapCanvas.addEventListener('click', function(e) {
   }
 });
 
-// 刷新地图按钮
-refreshMapBtn.addEventListener('click', () => {
-  loadOnline();
-  drawMap();
+// ===================== 模态框控制 =====================
+function openModal() {
+  mapModal.style.display = 'flex';
+  drawModalMap();  // 绘制最新地图
+}
+function closeModal() {
+  mapModal.style.display = 'none';
+}
+closeModalBtn.addEventListener('click', closeModal);
+modalCloseBtn.addEventListener('click', closeModal);
+// 点击背景关闭
+mapModal.addEventListener('click', function(e) {
+  if (e.target === mapModal) closeModal();
 });
 
 // ===================== 切换房间 =====================
@@ -569,16 +681,15 @@ async function enterRoom(room, password) {
     currentRoom = room;
     roomPassword = password || '';
     saveRoomState();
-    // 报告当前房间
     await apiFetch('/api/current_room', {
       method: 'POST',
       body: JSON.stringify({ room: currentRoom, password: roomPassword })
     });
-    // 更新界面
     loadTimeSettings();
     loadOnline();
     loadMessages();
     drawMap();
+    drawModalMap();
     showTip('✅ 进入房间：' + (room === 'main' ? '客厅' : room));
   } catch(e) {
     alert('❌ 切换失败：' + e.message);
@@ -714,6 +825,7 @@ avatarInput.addEventListener('change', (e) => {
     avatarInput.value = '';
     loadMessages();
     drawMap();
+    drawModalMap();
     alert('✅ ' + target + ' 的头像已设置，已同步给所有人！');
   });
 });
@@ -773,8 +885,24 @@ timeBtn.addEventListener('click', () => {
   }
 });
 
-// 房间管理
-roomBtn.addEventListener('click', async () => {
+// ===== 房间按钮：弹出模态框（地图） =====
+roomBtn.addEventListener('click', () => {
+  openModal();
+});
+
+// ===== 模态框中的“管理房间”按钮 =====
+modalManageBtn.addEventListener('click', () => {
+  // 关闭模态框后，调用原有的房间管理 prompt
+  closeModal();
+  // 延迟一点点，等模态框关闭后再弹出 prompt
+  setTimeout(() => {
+    // 复用原有房间管理逻辑（与之前一致）
+    openRoomManagement();
+  }, 300);
+});
+
+// 原有的房间管理逻辑（抽成函数）
+async function openRoomManagement() {
   const rooms = await loadRooms();
   let listText = '🚪 房间管理\n当前：' + (currentRoom === 'main' ? '客厅' : currentRoom) + '\n\n📋 房间列表：\n';
   rooms.forEach(r => {
@@ -809,6 +937,7 @@ roomBtn.addEventListener('click', async () => {
         }
         loadMessages();
         drawMap();
+        drawModalMap();
       } catch(e) { alert('删除失败：' + e.message); }
     }
   } else if (v === '3') {
@@ -820,30 +949,33 @@ roomBtn.addEventListener('click', async () => {
       await enterRoom(v, pass.trim());
     } catch(e) { alert('进入失败：' + e.message); }
   }
+}
+
+// 刷新地图按钮
+refreshMapBtn.addEventListener('click', () => {
+  loadOnline();
+  drawMap();
+  drawModalMap();
 });
 
 // ===================== 初始化与定时器 =====================
 async function init() {
-  // 报告当前房间
   await apiFetch('/api/current_room', {
     method: 'POST',
     body: JSON.stringify({ room: currentRoom, password: roomPassword })
   }).catch(() => {});
-  // 加载数据
   await loadAvatars();
   await loadTimeSettings();
   await loadOnline();
   await loadMessages();
   await drawMap();
-  // 发送心跳
   heartbeat();
-  // 定时任务
   setInterval(heartbeat, 15000);
   setInterval(loadOnline, 10000);
   setInterval(loadMessages, 2000);
   setInterval(loadAvatars, 30000);
   setInterval(loadTimeSettings, 30000);
-  setInterval(drawMap, 30000);
+  setInterval(() => { drawMap(); drawModalMap(); }, 30000);
 }
 
 init();
