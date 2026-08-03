@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse  # 新增 HTMLResponse
-from fastapi.staticfiles import StaticFiles  # 新增
+from fastapi.responses import JSONResponse, HTMLResponse  # ← 新增 HTMLResponse
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
@@ -9,11 +8,11 @@ import time
 import asyncio
 from datetime import datetime
 import random
-import os  # 新增
+import os  # ← 新增
 
 app = FastAPI()
 
-# 允许跨域（你的前端可能在不同端口）
+# 允许跨域
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,7 +20,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ===== 提供 HTML 页面 =====
+
+# ============================================================
+#  ⭐ 关键修改：根路径返回 HTML 页面（聊天界面）
+# ============================================================
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     try:
@@ -29,37 +31,25 @@ async def get_index():
             html_content = f.read()
         return HTMLResponse(content=html_content)
     except FileNotFoundError:
-        return {"status": "error", "message": "index.html not found"}
+        return HTMLResponse(content="<h1>index.html 未找到，请确保文件已上传</h1>", status_code=404)
+
+# ============================================================
+#  以下所有 /api 路径保持不变（返回 JSON 数据）
+# ============================================================
+
 # ------------------- 数据存储（内存） -------------------
-# 消息存储：每个房间一个列表
-messages: Dict[str, List[Dict]] = {
-    "main": []   # 默认客厅
-}
-
-# 房间信息：存储密码等
-rooms: Dict[str, Dict] = {
-    "main": {"name": "main", "has_password": False, "password": "", "creator": "system"}
-}
-
-# 在线用户：{ username: room_name }
+messages: Dict[str, List[Dict]] = {"main": []}
+rooms: Dict[str, Dict] = {"main": {"name": "main", "has_password": False, "password": "", "creator": "system"}}
 online_users: Dict[str, str] = {}
-
-# 头像存储：{ username: base64_image }
 avatars: Dict[str, str] = {}
-
-# 时间设置：每个房间独立
-time_settings: Dict[str, Dict] = {}  # { room: {"mode": "real"|"fixed", "fixed_time": "19:00"} }
-
-# 为了持久化，你可以将这些存储到文件或数据库，这里用内存演示
+time_settings: Dict[str, Dict] = {}
 
 # ------------------- 辅助函数 -------------------
 def get_current_time(room: str = "main") -> str:
-    """根据房间的时间设置返回当前显示时间"""
     settings = time_settings.get(room, {"mode": "real"})
     if settings.get("mode") == "fixed":
         return settings.get("fixed_time", "19:00")
     else:
-        # 返回北京时间（时:分）
         now = datetime.now().astimezone()
         return now.strftime("%H:%M")
 
@@ -76,7 +66,7 @@ def is_room_locked(room: str) -> bool:
 class Message(BaseModel):
     sender: str
     content: str
-    role: str = "user"   # user / assistant
+    role: str = "user"
     room: str = "main"
     password: str = ""
 
@@ -102,13 +92,13 @@ class CurrentRoom(BaseModel):
     password: str = ""
 
 class TimeSettings(BaseModel):
-    mode: str   # "real" or "fixed"
+    mode: str
     fixed_time: str = ""
     room: str = "main"
 
 class AvatarUpload(BaseModel):
     name: str
-    image: str   # base64
+    image: str
 
 class RemoveMember(BaseModel):
     name: str
@@ -121,23 +111,14 @@ class RestoreMessages(BaseModel):
     password: str = ""
 
 # ------------------- API 端点 -------------------
-
-@app.get("/")
-async def root():
-    return {"status": "ok", "message": "人机小窝后端运行中"}
-
-# ----- 消息相关 -----
 @app.post("/api/messages")
 async def send_message(msg: Message):
     room = msg.room or "main"
-    # 检查房间是否存在
     if not room_exists(room):
         raise HTTPException(status_code=404, detail="房间不存在")
-    # 如果房间有密码，验证
     if is_room_locked(room) and msg.password != get_room_password(room):
         raise HTTPException(status_code=403, detail="密码错误")
     
-    # 生成时间
     msg_time = get_current_time(room)
     entry = {
         "sender": msg.sender,
@@ -149,33 +130,19 @@ async def send_message(msg: Message):
     if room not in messages:
         messages[room] = []
     messages[room].append(entry)
-    # 限制消息数量
     if len(messages[room]) > 500:
         messages[room] = messages[room][-500:]
     
-    # ---- 这里可以触发 AI 助手回复（调用 MCP 工具） ----
-    # 你可以在这里调用你的 MCP 工具，让 AI 自动回复
-    # 例如：如果消息发送者是用户，可以触发 AI 回复
-    # 我们这里简单演示：如果 sender 不是 "助手"，则触发一个异步任务
+    # 触发 AI 自动回复（可替换成你的 MCP 工具）
     if msg.role != "assistant" and msg.sender != "助手":
         asyncio.create_task(auto_reply(msg.sender, msg.content, room))
     
     return {"ok": True, "time": msg_time}
 
 async def auto_reply(sender: str, content: str, room: str):
-    """模拟 AI 自动回复（你可以替换为真实的 MCP 调用）"""
-    # 这里演示随机回复，实际可以调用你的 MCP 工具
-    await asyncio.sleep(1)  # 模拟思考
-    # 简单的自动回复（你可以替换为调用 deepseek 等）
-    replies = [
-        "我听到啦！",
-        "嗯嗯，有道理～",
-        "好有意思！",
-        "继续说吧，我在听。",
-        "我会记住的。"
-    ]
+    await asyncio.sleep(1)
+    replies = ["我听到啦！", "嗯嗯，有道理～", "好有意思！", "继续说吧，我在听。", "我会记住的。"]
     reply_text = random.choice(replies)
-    # 发送回复消息
     entry = {
         "sender": "助手",
         "content": reply_text,
@@ -193,9 +160,7 @@ async def get_messages(count: int = 200, room: str = "main", password: str = "")
         raise HTTPException(status_code=404, detail="房间不存在")
     if is_room_locked(room) and password != get_room_password(room):
         raise HTTPException(status_code=403, detail="密码错误")
-    
     msgs = messages.get(room, [])
-    # 按时间排序
     msgs_sorted = sorted(msgs, key=lambda x: x.get("time", ""))
     if len(msgs_sorted) > count:
         msgs_sorted = msgs_sorted[-count:]
@@ -210,7 +175,6 @@ async def restore_messages(data: RestoreMessages):
         raise HTTPException(status_code=403, detail="密码错误")
     if room not in messages:
         messages[room] = []
-    # 合并去重（按内容+发送者+时间简单去重）
     existing = set()
     for m in messages[room]:
         key = f"{m['sender']}|{m['content']}|{m['time']}"
@@ -220,12 +184,10 @@ async def restore_messages(data: RestoreMessages):
         if key not in existing:
             messages[room].append(m)
             existing.add(key)
-    # 限制长度
     if len(messages[room]) > 500:
         messages[room] = messages[room][-500:]
     return {"ok": True}
 
-# ----- 房间管理 -----
 @app.get("/api/rooms")
 async def list_rooms():
     room_list = []
@@ -250,7 +212,7 @@ async def create_room(data: RoomCreate):
         "password": data.password,
         "creator": data.creator
     }
-    messages[name] = []   # 初始化消息列表
+    messages[name] = []
     return {"ok": True, "room": name}
 
 @app.post("/api/rooms/join")
@@ -276,10 +238,9 @@ async def delete_room(data: RoomDelete):
         del messages[name]
     if name in time_settings:
         del time_settings[name]
-    # 踢出所有在该房间的用户
     for user, room in list(online_users.items()):
         if room == name:
-            online_users[user] = "main"   # 踢回客厅
+            online_users[user] = "main"
     return {"ok": True}
 
 @app.post("/api/current_room")
@@ -291,29 +252,20 @@ async def set_current_room(data: CurrentRoom):
         raise HTTPException(status_code=403, detail="密码错误")
     return {"ok": True}
 
-# ----- 在线状态 -----
 @app.post("/api/heartbeat")
 async def heartbeat(data: Heartbeat):
     if data.name:
         online_users[data.name] = data.room or "main"
-        # 清理超时（30秒无心跳视为离线）
-        # 实际可以用定时任务，这里简单处理，由前端定期调用
         return {"ok": True}
     return {"ok": False}
 
 @app.get("/api/online")
 async def get_online():
-    # 清理超过30秒未更新的用户（这里不自动清理，交给心跳超时机制）
-    # 我们可以返回当前在线列表
     online_list = []
-    now = time.time()
-    # 由于没有存储心跳时间，我们简单返回所有在线用户（实际应该存时间）
-    # 但为了演示，我们返回当前所有用户
     for name, room in online_users.items():
         online_list.append({"name": name, "room": room})
     return {"online": online_list}
 
-# ----- 头像 -----
 @app.post("/api/avatar")
 async def upload_avatar(data: AvatarUpload):
     if data.name:
@@ -325,7 +277,6 @@ async def upload_avatar(data: AvatarUpload):
 async def get_avatars():
     return {"avatars": avatars}
 
-# ----- 时间设置 -----
 @app.get("/api/time_settings")
 async def get_time_settings(room: str = "main"):
     settings = time_settings.get(room, {"mode": "real", "fixed_time": "19:00"})
@@ -339,7 +290,6 @@ async def set_time_settings(data: TimeSettings):
     time_settings[room] = {"mode": data.mode, "fixed_time": data.fixed_time}
     return {"settings": time_settings[room]}
 
-# ----- 删除成员 -----
 @app.post("/api/remove_member")
 async def remove_member(data: RemoveMember):
     room = data.room or "main"
@@ -349,7 +299,6 @@ async def remove_member(data: RemoveMember):
         raise HTTPException(status_code=403, detail="密码错误")
     if room in messages:
         messages[room] = [m for m in messages[room] if m["sender"] != data.name]
-    # 如果该用户在线，将其移至客厅
     if data.name in online_users:
         online_users[data.name] = "main"
     return {"ok": True}
@@ -357,4 +306,5 @@ async def remove_member(data: RemoveMember):
 # ------------------- 启动 -------------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
