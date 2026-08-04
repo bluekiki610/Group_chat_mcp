@@ -282,9 +282,26 @@ function renderRegion(){
   var r=mapData.regions[currentRegion];
   document.getElementById('regionTitle').textContent=currentRegion;
   var img=document.getElementById('regionImg');
-  img.onerror=function(){ img.style.opacity=0.15; };
-  img.onload=function(){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); };
-  img.src=(r&&r.image)?r.image:'/images/map_n109.png';
+  var base=(r&&r.image)?r.image:'/images/map_n109.png';
+  if(base.charAt(0)!=='/') base='/'+base;
+  var cands=[base];
+  if(base.indexOf('.png')>=0){ cands.push(base.replace('.png','.jpg')); cands.push(base.replace('.png','.jpeg')); }
+  else if(base.indexOf('.jpg')>=0){ cands.push(base.replace('.jpg','.png')); cands.push(base.replace('.jpg','.jpeg')); }
+  else if(base.indexOf('.jpeg')>=0){ cands.push(base.replace('.jpeg','.png')); cands.push(base.replace('.jpeg','.jpg')); }
+  var idx=0;
+  function tryLoad(){
+    if(idx>=cands.length){
+      img.style.opacity=1;
+      layoutMap('region');
+      renderMarkers('regionCanvas','region',currentRegion);
+      toast('⚠️ 分区图未找到：'+base+'（请确认 images 文件夹里有这个文件，或重建设置区域时改路径）');
+      return;
+    }
+    img.onload=function(){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); };
+    img.onerror=function(){ idx++; tryLoad(); };
+    img.src=cands[idx];
+  }
+  tryLoad();
   renderMarkers('regionCanvas','region',currentRegion);
 }
 function canvasOf(scope){ return scope==='map'?document.getElementById('mapCanvas'):document.getElementById('regionCanvas'); }
