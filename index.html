@@ -474,8 +474,10 @@ function applyTransform(canvas, scope){
   var s=parseFloat(canvas.dataset.s||'1'), x=parseFloat(canvas.dataset.x||'0'), y=parseFloat(canvas.dataset.y||'0');
   var stage=stageOf(scope), cw=parseFloat(canvas.dataset.w||stage.clientWidth), ch=parseFloat(canvas.dataset.h||stage.clientHeight);
   var sw=stage.clientWidth, sh=stage.clientHeight;
-  var maxX=Math.max(0,(cw*s-sw)/2+40), maxY=Math.max(0,(ch*s-sh)/2+40);
-  x=Math.max(-maxX,Math.min(maxX,x)); y=Math.max(-maxY,Math.min(maxY,y));
+  var maxX=Math.max(0, cw*s - sw);
+  var maxY=Math.max(0, ch*s - sh);
+  x=Math.max(-maxX, Math.min(0, x));
+  y=Math.max(-maxY, Math.min(0, y));
   canvas.dataset.x=x; canvas.dataset.y=y;
   canvas.style.transform='translate('+x+'px,'+y+'px) scale('+s+')';
 }
