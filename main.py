@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
@@ -9,6 +10,10 @@ from datetime import datetime, timedelta, timezone
 import os
 
 app = FastAPI()
+
+# 挂载图片静态目录（用户上传的地图/分区图放在 images/ 文件夹）
+if os.path.isdir("images"):
+    app.mount("/images", StaticFiles(directory="images"), name="images")
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,17 +47,37 @@ time_settings: Dict[str, Dict] = {}
 active_room: Dict[str, str] = {"current": "main", "password": ""}
 
 # ----- 地图/区域/建筑 -----
-map_main_image: str = "/images/map_main.png"  # 主地图（用户上传，支持 jpg/png）
-map_image_fallbacks: List[str] = ["/images/map_main.png", "/images/map_main.jpg", "/images/map_main.jpeg"]
+map_main_image: str = "/images/map_main.png"
 regions: Dict[str, Dict] = {}  # name -> {"label", "x", "y", "image"}
 buildings: Dict[str, Dict] = {}  # bid -> {"name","emoji","type"("home"|"npc"),"region","x","y","owner","rooms":[]}
 npcs: Dict[str, List[Dict]] = {}  # bid -> [{"name","emoji","desc"}]
 stories: Dict[str, List[Dict]] = {}  # bid -> [{"author","text","time"}] 剧情簿
 notes: Dict[str, List[Dict]] = {}  # room -> [{"id","author","text","time","reply":null}]
-diaries: Dict[str, List[Dict]] = {}  # 保留旧功能
+diaries: Dict[str, List[Dict]] = {}
 room_bg: Dict[str, str] = {}
 building_seq: int = 0
 note_seq: int = 0
+
+# ----- 预置行政区（总览图上的 xxx区，位置可在地图上拖动调整）-----
+# (区域名, x%, y%, 分区图路径)
+DEFAULT_REGIONS = [
+    ("花浦区", 45, 12, ""),
+    ("环珑区", 72, 15, ""),
+    ("九江", 48, 30, "/images/map_city.png"),
+    ("万恒区", 20, 40, "/images/map_city.png"),
+    ("禁猎区", 12, 12, ""),
+    ("深山", 15, 75, ""),
+    ("菲叶区", 22, 55, ""),
+    ("鎏金区", 30, 68, ""),
+    ("寰飞区", 48, 50, "/images/map_city.png"),
+    ("棠里区", 55, 65, "/images/map_city.png"),
+    ("新港区", 45, 78, ""),
+    ("银湾区", 55, 88, ""),
+    ("帽儿岛", 85, 80, ""),
+    ("N109区", 12, 30, "/images/map_n109.png"),
+]
+for _label, _x, _y, _img in DEFAULT_REGIONS:
+    regions[_label] = {"label": _label, "x": _x, "y": _y, "image": _img}
 
 # ============================================================
 #  辅助函数
@@ -139,6 +164,10 @@ def add_note_to_room(room: str, author: str, text: str) -> dict:
     return item
 
 
+def room_label(name: str) -> str:
+    return "公共大厅" if name == "main" else name
+
+
 # ============================================================
 #  Pydantic 模型
 # ============================================================
@@ -199,7 +228,6 @@ class RestoreMessages(BaseModel):
     password: str = ""
 
 
-# ----- 地图模型 -----
 class RegionCreate(BaseModel):
     label: str
     x: float = 50
@@ -214,7 +242,7 @@ class RegionDelete(BaseModel):
 class BuildingCreate(BaseModel):
     name: str
     emoji: str = "🏠"
-    type: str = "home"  # home / npc
+    type: str = "home"
     region: str = ""
     x: float = 50
     y: float = 50
@@ -278,7 +306,7 @@ class StoryItem(BaseModel):
 
 
 # ============================================================
-#  聊天 API（原有）
+#  聊天 API
 # ============================================================
 @app.post("/api/messages")
 async def send_message(msg: Message):
@@ -357,7 +385,7 @@ async def join_room(data: RoomJoin):
 async def delete_room(data: RoomDelete):
     name = data.name.strip()
     if name == "main":
-        raise HTTPException(status_code=403, detail="不能删除公共客厅")
+        raise HTTPException(status_code=403, detail="不能删除公共大厅")
     if name not in rooms:
         raise HTTPException(status_code=404, detail="房间不存在")
     if is_room_locked(name) and data.password != get_room_password(name):
@@ -449,7 +477,6 @@ async def remove_member(data: RemoveMember):
 # ============================================================
 @app.get("/api/map")
 async def get_map():
-    # 尝试返回可用的主地图图片
     return {
         "main_image": map_main_image,
         "regions": regions,
@@ -646,7 +673,7 @@ def log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.1.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -658,7 +685,7 @@ async def mcp_endpoint(request: Request):
     log(f"收到请求: method={method}, id={request_id}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.1.0"}}})
 
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
@@ -669,7 +696,7 @@ async def mcp_endpoint(request: Request):
     if method == "tools/list":
         log("→ 处理 tools/list")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": [
-            {"name": "group_send_to_living_room", "description": "发送消息到客厅（公共区域）。当用户要求你留在客厅招待客人时使用此工具。注意：此工具没有 room 参数，永远发到客厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "发送者名字"}, "content": {"type": "string", "description": "要发送的消息内容"}, "role": {"type": "string", "description": "填 'assistant'"}}, "required": ["sender", "content"]}},
+            {"name": "group_send_to_living_room", "description": "发送消息到公共大厅（公共区域）。当用户要求你留在公共大厅招待客人时使用此工具。注意：此工具没有 room 参数，永远发到公共大厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "发送者名字"}, "content": {"type": "string", "description": "要发送的消息内容"}, "role": {"type": "string", "description": "填 'assistant'"}}, "required": ["sender", "content"]}},
             {"name": "group_send_message", "description": "发送消息到真人当前所在的房间（自动跟随）。AI 默认使用此工具，会自动跟随真人切换房间。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "发送者名字"}, "content": {"type": "string", "description": "要发送的消息内容"}, "role": {"type": "string", "description": "填 'assistant'"}, "room": {"type": "string", "description": "可选，指定房间名。不填自动发送到真人当前所在房间"}}, "required": ["sender", "content"]}},
             {"name": "group_get_messages", "description": "获取聊天记录。可以获取所有房间的总览，也可以获取指定房间的详细消息。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string", "description": "可选，指定房间名"}, "count": {"type": "integer", "description": "获取数量，默认 10"}}}},
             {"name": "group_get_room_status", "description": "获取所有房间的活跃状态，用于 AI 决定去哪个房间串门。", "inputSchema": {"type": "object", "properties": {}}},
@@ -742,7 +769,7 @@ async def mcp_send_to_living_room(args: dict, request_id):
     if not content:
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 消息不能为空"}]}})
     save_entry(sender, content, role, "main")
-    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到客厅：{content}"}]}})
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到公共大厅：{content}"}]}})
 
 
 async def mcp_send_message(args: dict, request_id):
@@ -761,7 +788,7 @@ async def mcp_send_message(args: dict, request_id):
     if not content:
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 消息不能为空"}]}})
     save_entry(sender, content, role, room)
-    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到「{'客厅' if room == 'main' else room}」：{content}"}]}})
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到「{room_label(room)}」：{content}"}]}})
 
 
 async def mcp_get_messages(args: dict, request_id):
@@ -771,16 +798,16 @@ async def mcp_get_messages(args: dict, request_id):
         if not room_exists(room):
             return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32000, "message": f"房间 '{room}' 不存在"}})
         msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
-        text = f"📋 房间「{room}」最近 {len(msgs)} 条消息：\n" + "\n".join([f"{m['sender']}: {m['content']} ({m['time']})" for m in msgs]) if msgs else f"📭 房间「{room}」暂无消息"
+        text = f"📋 房间「{room_label(room)}」最近 {len(msgs)} 条消息：\n" + "\n".join([f"{m['sender']}: {m['content']} ({m['time']})" for m in msgs]) if msgs else f"📭 房间「{room_label(room)}」暂无消息"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     result_text = "📋 所有房间消息总览：\n"
     for room_name, msgs in messages.items():
-        room_label = "客厅" if room_name == "main" else room_name
+        room_label_name = room_label(room_name)
         if msgs:
             last_msgs = sorted(msgs, key=lambda x: x.get("time", ""))[-count:]
-            result_text += f"\n🏠 {room_label}（{len(last_msgs)} 条）：\n" + "\n".join([f"  {m['sender']}: {m['content']} ({m['time']})" for m in last_msgs])
+            result_text += f"\n🏠 {room_label_name}（{len(last_msgs)} 条）：\n" + "\n".join([f"  {m['sender']}: {m['content']} ({m['time']})" for m in last_msgs])
         else:
-            result_text += f"\n🏠 {room_label}：暂无消息\n"
+            result_text += f"\n🏠 {room_label_name}：暂无消息\n"
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": result_text}]}})
 
 
@@ -788,27 +815,27 @@ async def mcp_get_room_status(request_id):
     online = get_online_members()
     result_text = "📊 房间活跃状态：\n"
     for room_name in rooms.keys():
-        room_label = "客厅" if room_name == "main" else room_name
+        room_label_name = room_label(room_name)
         online_count = len([u for u in online if u["room"] == room_name])
         msg_count = len(messages.get(room_name, []))
         last_msg = messages.get(room_name, [])[-1] if messages.get(room_name) else None
-        result_text += f"\n🏠 {room_label}：👤 在线 {online_count} 人 / 💬 {msg_count} 条" + (f" / 📝 {last_msg['sender']}: {last_msg['content']}" if last_msg else "")
+        result_text += f"\n🏠 {room_label_name}：👤 在线 {online_count} 人 / 💬 {msg_count} 条" + (f" / 📝 {last_msg['sender']}: {last_msg['content']}" if last_msg else "")
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": result_text}]}})
 
 
 async def mcp_get_current_room(request_id):
     current = active_room.get("current", "main")
-    room_label = "客厅" if current == "main" else current
+    room_label_name = room_label(current)
     online = get_online_members()
     members_in_room = [u["name"] for u in online if u["room"] == current]
-    result_text = f"📍 真人当前在：{room_label}\n👤 该房间在线成员：{', '.join(members_in_room) if members_in_room else '无'}\n\n💡 想跟随就用 group_send_message，想留客厅招待就用 group_send_to_living_room。"
+    result_text = f"📍 真人当前在：{room_label_name}\n👤 该房间在线成员：{', '.join(members_in_room) if members_in_room else '无'}\n\n💡 想跟随就用 group_send_message，想留公共大厅招待就用 group_send_to_living_room。"
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": result_text}]}})
 
 
 async def mcp_get_rooms(request_id):
     result_text = "📋 所有房间列表：\n"
     for room in get_all_rooms():
-        label = "客厅" if room["name"] == "main" else room["name"]
+        label = room_label(room["name"])
         locked = "🔒 有密码" if room["has_password"] else "🔓 公开"
         result_text += f"\n🏠 {label}（{locked}）"
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": result_text}]}})
@@ -819,7 +846,7 @@ async def mcp_get_members(request_id):
     if not online:
         result_text = "🟢 当前没有在线成员"
     else:
-        result_text = "🟢 在线成员：\n" + "\n".join([f"\n👤 {m['name']}（在 {'客厅' if m['room'] == 'main' else m['room']}）" for m in online])
+        result_text = "🟢 在线成员：\n" + "\n".join([f"\n👤 {m['name']}（在 {room_label(m['room'])}）" for m in online])
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": result_text}]}})
 
 
