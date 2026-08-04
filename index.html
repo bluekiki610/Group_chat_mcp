@@ -34,14 +34,12 @@ header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding
 footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:8px 10px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
 #msgInput { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:9px 12px; font-size:15px; outline:none; background:#13233d; color:#e6f1ff; }
 #sendBtn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:15px; }
-/* ===== 地图 ===== */
 .map-view { display:none; flex-direction:column; height:100%; background:#070d18; }
 .map-top { position:relative; z-index:30; background:linear-gradient(135deg,#12213a,#0b1526); color:#9fd8ff; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
 .map-top .title { font-size:16px; font-weight:bold; color:#fff; display:flex; align-items:center; gap:8px; }
 .map-stage { flex:1; position:relative; overflow:hidden; background:#070d18; touch-action:none; }
 #mapCanvas, #regionCanvas { position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
 #mapCanvas img, #regionCanvas img { display:block; width:100%; height:auto; pointer-events:none; user-select:none; -webkit-user-drag:none; }
-/* 全息标记 */
 .holo { position:absolute; transform:translate(-50%,-50%); cursor:pointer; text-align:center; z-index:10; }
 .holo .core { display:inline-block; font-size:26px; line-height:1; filter:drop-shadow(0 0 8px var(--glow,#4dd2ff)); animation:floaty 2.4s ease-in-out infinite; }
 .holo .lbl { display:block; margin-top:2px; font-size:11px; color:#d8f4ff; background:rgba(6,18,38,.82); border:1px solid var(--bord,#4dd2ff88); border-radius:8px; padding:2px 8px; white-space:nowrap; box-shadow:0 0 12px rgba(77,210,255,.25), inset 0 0 6px rgba(77,210,255,.08); letter-spacing:.5px; }
@@ -53,7 +51,6 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .holo.homepink .core { color:#ff7ab8; --glow:#ff7ab8; --bord:#ff7ab8aa; }
 @keyframes floaty { 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-4px);} }
 .holo.selected { outline:2px dashed #ffd166; outline-offset:5px; border-radius:12px; }
-/* 底部工具栏 */
 .map-bar { position:relative; z-index:30; display:flex; gap:10px; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); background:rgba(10,20,38,.96); border-top:1px solid rgba(80,180,255,.25); flex-shrink:0; backdrop-filter:blur(8px); }
 .map-bar .bar-btn { flex:1; background:rgba(80,180,255,.12); border:1px solid rgba(80,180,255,.35); color:#bfe6ff; padding:9px 0; border-radius:12px; font-size:13px; cursor:pointer; text-align:center; }
 .map-bar .bar-btn:active { background:#0e7fd4; color:#fff; }
@@ -75,7 +72,6 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .style-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:10px; padding:10px 4px; text-align:center; cursor:pointer; font-size:22px; }
 .style-item:active { background:#0e7fd4; }
 .style-item .st { font-size:10px; color:#7fa8cf; display:block; margin-top:2px; }
-/* ===== 建筑内部 ===== */
 .building-view { display:none; flex-direction:column; height:100%; background:#0d1424; }
 .bv-body { flex:1; overflow-y:auto; padding:14px; }
 .room-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
@@ -97,7 +93,6 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .home-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .act-btn { background:#13233d; border:1px solid rgba(80,180,255,.3); border-radius:10px; padding:9px 10px; font-size:13px; cursor:pointer; color:#cfe8ff; flex:1; text-align:center; min-width:44%; }
 .act-btn:active { background:#0e7fd4; color:#fff; }
-/* ===== 弹窗 ===== */
 .modal-mask { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:60; }
 .modal-mask.show { display:flex; }
 .modal { background:#101d33; border:1px solid rgba(80,180,255,.3); border-radius:14px; width:88%; max-height:85%; overflow-y:auto; padding:18px; }
@@ -121,7 +116,6 @@ textarea.input { color:#e6f1ff; }
 </head>
 <body>
 <div class="app">
-  <!-- 聊天 -->
   <div id="chatView">
     <header>
       <div class="header-title"><span>🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
@@ -132,12 +126,8 @@ textarea.input { color:#e6f1ff; }
     <footer><input id="msgInput" placeholder="说点什么吧…" autocomplete="off"><button id="sendBtn" onclick="sendMessage()">发送</button></footer>
   </div>
 
-  <!-- 地图 -->
   <div class="map-view" id="mapView">
-    <div class="map-top">
-      <div class="title"><span>🗺️</span> <span>临空市</span></div>
-      <div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div>
-    </div>
+    <div class="map-top"><div class="title"><span>🗺️</span> <span>临空市</span></div><div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div></div>
     <div class="map-stage" id="mapStage">
       <div id="mapCanvas"><img id="mapImg" alt="map"></div>
       <div class="place-hint" id="placeHint" style="display:none">📌 点击地图放置 <span class="cancel" onclick="cancelPlace()">✕ 取消</span></div>
@@ -150,12 +140,8 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 
-  <!-- 分区视图 -->
   <div class="map-view" id="regionView">
-    <div class="map-top">
-      <div class="title"><span>📍</span> <span id="regionTitle">区域</span></div>
-      <div class="header-btns"><button class="hbtn" onclick="showMap()">← 总览</button></div>
-    </div>
+    <div class="map-top"><div class="title"><span>📍</span> <span id="regionTitle">区域</span></div><div class="header-btns"><button class="hbtn" onclick="showMap()">← 总览</button></div></div>
     <div class="map-stage" id="regionStage">
       <div id="regionCanvas"><img id="regionImg" alt="region"></div>
       <div class="place-hint" id="regionPlaceHint" style="display:none">📌 点击放置 <span class="cancel" onclick="cancelPlace()">✕ 取消</span></div>
@@ -168,16 +154,11 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 
-  <!-- 建筑内部 -->
   <div class="building-view" id="buildingView">
-    <div class="map-top">
-      <div class="title"><span id="bEmoji">🏠</span> <span id="bTitle">建筑</span></div>
-      <div class="header-btns"><button class="hbtn" onclick="backFromBuilding()">← 返回</button></div>
-    </div>
+    <div class="map-top"><div class="title"><span id="bEmoji">🏠</span> <span id="bTitle">建筑</span></div><div class="header-btns"><button class="hbtn" onclick="backFromBuilding()">← 返回</button></div></div>
     <div class="bv-body" id="bvBody"></div>
   </div>
 
-  <!-- 建造菜单 -->
   <div class="sheet-mask" id="buildMask" onclick="hideBuildSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title">🏗️ 建造</div>
@@ -191,7 +172,6 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 
-  <!-- 样式选择 -->
   <div class="sheet-mask" id="styleMask" onclick="hideStyleSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title">🎨 选择建筑样式</div>
@@ -200,7 +180,6 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 
-  <!-- 操作菜单 -->
   <div class="sheet-mask" id="opMask" onclick="hideOp()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title" id="opTitle">操作</div>
@@ -209,7 +188,6 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 
-  <!-- 设置 -->
   <div class="modal-mask" id="settingsMask" onclick="if(event.target===this)closeSettings()">
     <div class="modal">
       <h3>⚙️ 设置</h3>
@@ -217,11 +195,11 @@ textarea.input { color:#e6f1ff; }
       <div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div>
       <div class="set-group"><label>🔊 朗读（名字逗号分隔，如：黎深,秦彻）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div>
       <div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div>
+      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">换服务器前先下载备份，新服务器上传恢复；地图/房子/聊天全保留</div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
 
-  <!-- 便签墙 -->
   <div class="modal-mask" id="noteMask" onclick="if(event.target===this)hideNote()">
     <div class="modal"><h3 id="noteTitle">📌 便签墙</h3><div id="noteList"></div><textarea class="input" id="noteInput" rows="2" placeholder="写一张便签…"></textarea><button class="btn" onclick="submitNote()">贴上去</button><button class="btn gray" onclick="hideNote()">关闭</button></div>
   </div>
@@ -335,7 +313,6 @@ function renderMarkers(canvasId, scope, regionName){
   });
 }
 
-// ===== 建造 =====
 function showBuildSheet(){ document.getElementById('buildMask').classList.add('show'); }
 function hideBuildSheet(){ document.getElementById('buildMask').classList.remove('show'); }
 function startPlace(type){
@@ -346,31 +323,21 @@ function startPlace(type){
     document.getElementById('placeHint').style.display='flex';
     toast('📌 点击地图放置区域');
   } else {
-    pendingType = type; // 'home' or 'npc'
+    pendingType = type;
     showStyleSheet();
   }
 }
 var STYLES = ['🏠','🏡','🏰','🏯','🏕️','🛖','🏨','🏩','☕','🍜','🍰','🍕','🍷','🍸','🥂','🍺','🏪','🏬','🏦','💐','📚','🖼️','🐱','🐶','🧸','🏥','💊','🏫','🎓','🏋️','🚓','🚒','🚑','🚉','✈️','🚂','⛽','🎬','🎭','🎪','🎡','🎠','🎢','🌳','🏞️','⛰️','🏖️','🗼','🎰','🎲'];
 function showStyleSheet(){
   var g=document.getElementById('styleGrid'); g.innerHTML='';
-  STYLES.forEach(function(s){
-    var d=document.createElement('div'); d.className='style-item'; d.textContent=s;
-    d.onclick=function(){ pickStyle(s); };
-    g.appendChild(d);
-  });
+  STYLES.forEach(function(s){ var d=document.createElement('div'); d.className='style-item'; d.textContent=s; d.onclick=function(){ pickStyle(s); }; g.appendChild(d); });
   var c=document.createElement('div'); c.className='style-item'; c.innerHTML='<span>➕</span><span class="st">自定义</span>';
   c.onclick=function(){ var e=prompt('输入任意 emoji 符号：','🏠'); if(e) pickStyle(e.trim()); };
   g.appendChild(c);
   document.getElementById('styleMask').classList.add('show');
 }
 function hideStyleSheet(){ document.getElementById('styleMask').classList.remove('show'); }
-function pickStyle(e){
-  pendingEmoji=e; hideStyleSheet();
-  placeType=pendingType;
-  var hint=currentRegion?document.getElementById('regionPlaceHint'):document.getElementById('placeHint');
-  hint.style.display='flex';
-  toast('📌 点击地图放置建筑');
-}
+function pickStyle(e){ pendingEmoji=e; hideStyleSheet(); placeType=pendingType; var hint=currentRegion?document.getElementById('regionPlaceHint'):document.getElementById('placeHint'); hint.style.display='flex'; toast('📌 点击地图放置建筑'); }
 function cancelPlace(){ placeType=null; pendingType=null; document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function onStageTap(e, scope){
   if(!placeType) return;
@@ -394,7 +361,6 @@ function onStageTap(e, scope){
   }
 }
 
-// ===== 整理/操作 =====
 function toggleEditMode(){ editMode=!editMode; updateEditBtn(); toast(editMode?'✋ 整理模式：点标记可编辑':'已退出整理模式'); if(currentRegion) renderRegion(); else loadMap(); }
 function openOp(type, key){
   opType=type; opTarget=key;
@@ -431,7 +397,6 @@ function openOpDelete(){
   p.then(function(){ toast('🗑️ 已删除'); hideOp(); if(currentRegion) renderRegion(); else loadMap(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 
-// ===== 地图手势 =====
 var gestures = {};
 function initGestures(scope){
   var stage = stageOf(scope);
@@ -493,7 +458,6 @@ function openRegion(name){
   else { toast('📍 「'+name+'」暂无分区图，可在里面点「建造」放建筑'); }
 }
 
-// ===== 建筑内部 =====
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
@@ -507,7 +471,6 @@ function renderBuilding(){
     html+='<button class="act-btn" onclick="openNotes()">📌 便签墙</button>';
     html+='<button class="act-btn" onclick="setBgPrompt()">🖼️ 背景</button></div>';
   }
-  // NPC 管理（住宅和公共建筑都可以有 NPC）
   html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）</div>';
   (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div><span class="n-del" onclick="deleteNpc(\''+esc(n.name)+'\')">✖</span></div>'; });
   html+='<button class="btn" style="width:100%" onclick="addNpcPrompt()">➕ 添加 NPC</button>';
@@ -638,16 +601,19 @@ function switchRoom(room,pwd){
   applyBg(room); reportRoom(); restoreCache().then(function(){ loadMessages(false); }); refreshOnline();
 }
 function enterRoom(room){
-  if(room===currentRoom) return;
+  if(room===currentRoom){ showChat(); return; }
   api('/api/rooms').then(function(d){ var target=null; (d.rooms||[]).forEach(function(r){if(r.name===room)target=r;});
-    if(target&&target.has_password){ var pwd=prompt('房间「'+roomLabel(room)+'」需要密码：',''); if(pwd===null)return; api('/api/rooms/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:room,password:pwd})}).then(function(){ switchRoom(room,pwd); }).catch(function(e){ toast('❌ '+e.message); }); }
-    else { switchRoom(room,''); }
-  }).catch(function(){ switchRoom(room,''); });
+    if(target&&target.has_password){ var pwd=prompt('房间「'+roomLabel(room)+'」需要密码：',''); if(pwd===null)return; api('/api/rooms/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:room,password:pwd})}).then(function(){ switchRoom(room,pwd); showChat(); }).catch(function(e){ toast('❌ '+e.message); }); }
+    else { switchRoom(room,''); showChat(); }
+  }).catch(function(){ switchRoom(room,''); showChat(); });
 }
 function loadRooms(){
   api('/api/rooms').then(function(d){
     var tabs=document.getElementById('roomTabs'); tabs.innerHTML='';
-    (d.rooms||[]).forEach(function(r){ var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b); });
+    (d.rooms||[]).forEach(function(r){
+      if(r.creator==='home') return; // 家园房间不显示在顶部标签
+      var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b);
+    });
   }).catch(function(){});
 }
 function openSettings(){ document.getElementById('setName').value=userName; document.getElementById('settingsMask').classList.add('show'); document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll; loadTimeSettings(); }
@@ -658,7 +624,27 @@ function uploadAvatar(){ var name=document.getElementById('avatarName').value.tr
 function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; }).catch(function(){}); }
 function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(currentRoom)).then(function(d){ var s=d.settings||{}; document.getElementById('setTimeMode').value=s.mode||'real'; document.getElementById('setFixedTime').value=s.fixed_time||''; }).catch(function(){}); }
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
-
+function backupNow(){
+  api('/api/backup').then(function(d){
+    var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='backup.json'; a.click();
+    toast('📦 备份已下载！数据安全了');
+  }).catch(function(e){ toast('❌ 备份失败：'+e.message); });
+}
+function restoreBackup(){
+  var f=document.createElement('input'); f.type='file'; f.accept='.json';
+  f.onchange=function(){ var file=f.files[0]; if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var data=JSON.parse(e.target.result);
+        api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(){ toast('✅ 数据已恢复！'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); });
+      }catch(err){ toast('❌ 备份文件格式不对'); }
+    };
+    reader.readAsText(file);
+  };
+  f.click();
+}
 function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;

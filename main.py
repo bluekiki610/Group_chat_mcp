@@ -23,6 +23,90 @@ app.add_middleware(
 )
 
 # ============================================================
+#  数据存储（内存 + 自动保存到文件 + 备份恢复）
+# ============================================================
+DATA_FILE = "data.json"
+
+rooms: Dict[str, Dict] = {"main": {"name": "main", "has_password": False, "password": "", "creator": "system"}}
+messages: Dict[str, List[Dict]] = {"main": []}
+avatars: Dict[str, str] = {}
+online_users: Dict[str, str] = {}
+online_times: Dict[str, float] = {}
+time_settings: Dict[str, Dict] = {}
+active_room: Dict[str, str] = {"current": "main", "password": ""}
+
+regions: Dict[str, Dict] = {}
+buildings: Dict[str, Dict] = {}
+npcs: Dict[str, List[Dict]] = {}
+stories: Dict[str, List[Dict]] = {}
+notes: Dict[str, List[Dict]] = {}
+diaries: Dict[str, List[Dict]] = {}
+room_bg: Dict[str, str] = {}
+building_seq: int = 0
+note_seq: int = 0
+
+
+def log(msg: str):
+    print(f"[SAVE] {msg}", flush=True)
+
+
+def collect_all_data() -> dict:
+    return {
+        "rooms": rooms,
+        "messages": messages,
+        "avatars": avatars,
+        "time_settings": time_settings,
+        "regions": regions,
+        "buildings": buildings,
+        "npcs": npcs,
+        "stories": stories,
+        "notes": notes,
+        "diaries": diaries,
+        "room_bg": room_bg,
+        "building_seq": building_seq,
+        "note_seq": note_seq,
+    }
+
+
+def save_data():
+    """把所有数据保存到 data.json"""
+    try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(collect_all_data(), f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[SAVE] 保存失败: {e}", flush=True)
+
+
+def load_data():
+    """启动时从 data.json 恢复数据"""
+    global building_seq, note_seq
+    try:
+        if not os.path.exists(DATA_FILE):
+            return
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        rooms.update(data.get("rooms", {}))
+        messages.update(data.get("messages", {}))
+        avatars.update(data.get("avatars", {}))
+        time_settings.update(data.get("time_settings", {}))
+        regions.update(data.get("regions", {}))
+        buildings.update(data.get("buildings", {}))
+        npcs.update(data.get("npcs", {}))
+        stories.update(data.get("stories", {}))
+        notes.update(data.get("notes", {}))
+        diaries.update(data.get("diaries", {}))
+        room_bg.update(data.get("room_bg", {}))
+        building_seq = data.get("building_seq", 0)
+        note_seq = data.get("note_seq", 0)
+        print(f"[SAVE] 已从 data.json 恢复数据（房间 {len(rooms)}，消息 {sum(len(v) for v in messages.values())} 条）", flush=True)
+    except Exception as e:
+        print(f"[SAVE] 加载失败: {e}", flush=True)
+
+
+load_data()  # 启动时恢复
+
+
+# ============================================================
 #  根路径返回 HTML 页面
 # ============================================================
 @app.get("/", response_class=HTMLResponse)
@@ -33,28 +117,6 @@ async def get_index():
         return HTMLResponse(content=html_content)
     except FileNotFoundError:
         return HTMLResponse(content="<h1>index.html 未找到，请确保文件已上传</h1>", status_code=404)
-
-# ============================================================
-#  数据存储（内存）
-# ============================================================
-rooms: Dict[str, Dict] = {"main": {"name": "main", "has_password": False, "password": "", "creator": "system"}}
-messages: Dict[str, List[Dict]] = {"main": []}
-avatars: Dict[str, str] = {}
-online_users: Dict[str, str] = {}
-online_times: Dict[str, float] = {}
-time_settings: Dict[str, Dict] = {}
-active_room: Dict[str, str] = {"current": "main", "password": ""}
-
-# ----- 地图/区域/建筑（无预设，全部由用户在地图上添加）-----
-regions: Dict[str, Dict] = {}  # name -> {"label", "x", "y", "image"}
-buildings: Dict[str, Dict] = {}  # bid -> {"name","emoji","type"("home"|"npc"),"region","x","y","owner","rooms":[]}
-npcs: Dict[str, List[Dict]] = {}  # bid -> [{"name","emoji","desc"}]
-stories: Dict[str, List[Dict]] = {}  # bid -> [{"author","text","time"}] 剧情簿
-notes: Dict[str, List[Dict]] = {}  # room -> [{"id","author","text","time","reply":null}]
-diaries: Dict[str, List[Dict]] = {}
-room_bg: Dict[str, str] = {}
-building_seq: int = 0
-note_seq: int = 0
 
 # ============================================================
 #  辅助函数
@@ -100,6 +162,7 @@ def save_entry(sender: str, content: str, role: str, room: str = "main") -> dict
         messages[room] = messages[room][-500:]
     active_room["current"] = room
     active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
+    save_data()
     return entry
 
 
@@ -138,6 +201,7 @@ def add_note_to_room(room: str, author: str, text: str) -> dict:
     notes[room].append(item)
     if len(notes[room]) > 200:
         notes[room] = notes[room][-200:]
+    save_data()
     return item
 
 
@@ -288,6 +352,63 @@ class StoryItem(BaseModel):
     text: str
 
 
+class BackupData(BaseModel):
+    rooms: Optional[Dict] = None
+    messages: Optional[Dict] = None
+    avatars: Optional[Dict] = None
+    time_settings: Optional[Dict] = None
+    regions: Optional[Dict] = None
+    buildings: Optional[Dict] = None
+    npcs: Optional[Dict] = None
+    stories: Optional[Dict] = None
+    notes: Optional[Dict] = None
+    diaries: Optional[Dict] = None
+    room_bg: Optional[Dict] = None
+    building_seq: Optional[int] = 0
+    note_seq: Optional[int] = 0
+
+
+# ============================================================
+#  备份 / 恢复
+# ============================================================
+@app.get("/api/backup")
+async def backup_data():
+    """导出全部数据（换服务器前下载）"""
+    return collect_all_data()
+
+
+@app.post("/api/restore_backup")
+async def restore_backup(data: BackupData):
+    """导入备份数据（新服务器上恢复）"""
+    global building_seq, note_seq
+    if data.rooms is not None:
+        rooms.clear(); rooms.update(data.rooms)
+    if data.messages is not None:
+        messages.clear(); messages.update(data.messages)
+    if data.avatars is not None:
+        avatars.clear(); avatars.update(data.avatars)
+    if data.time_settings is not None:
+        time_settings.clear(); time_settings.update(data.time_settings)
+    if data.regions is not None:
+        regions.clear(); regions.update(data.regions)
+    if data.buildings is not None:
+        buildings.clear(); buildings.update(data.buildings)
+    if data.npcs is not None:
+        npcs.clear(); npcs.update(data.npcs)
+    if data.stories is not None:
+        stories.clear(); stories.update(data.stories)
+    if data.notes is not None:
+        notes.clear(); notes.update(data.notes)
+    if data.diaries is not None:
+        diaries.clear(); diaries.update(data.diaries)
+    if data.room_bg is not None:
+        room_bg.clear(); room_bg.update(data.room_bg)
+    building_seq = data.building_seq or 0
+    note_seq = data.note_seq or 0
+    save_data()
+    return {"ok": True, "msg": "数据已恢复！"}
+
+
 # ============================================================
 #  聊天 API
 # ============================================================
@@ -334,6 +455,7 @@ async def restore_messages(data: RestoreMessages):
         messages[room] = messages[room][-500:]
     active_room["current"] = room
     active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
+    save_data()
     return {"ok": True}
 
 
@@ -351,6 +473,7 @@ async def create_room(data: RoomCreate):
         raise HTTPException(status_code=400, detail="房间已存在")
     rooms[name] = {"name": name, "has_password": bool(data.password), "password": data.password, "creator": data.creator}
     messages[name] = []
+    save_data()
     return {"ok": True, "room": name}
 
 
@@ -382,6 +505,7 @@ async def delete_room(data: RoomDelete):
     if active_room["current"] == name:
         active_room["current"] = "main"
         active_room["password"] = ""
+    save_data()
     return {"ok": True}
 
 
@@ -415,6 +539,7 @@ async def get_online():
 async def upload_avatar(data: AvatarUpload):
     if data.name:
         avatars[data.name] = data.image
+        save_data()
         return {"ok": True}
     return {"ok": False}
 
@@ -438,6 +563,7 @@ async def set_time_settings(data: TimeSettings):
     if data.mode not in ("real", "fixed"):
         raise HTTPException(status_code=400, detail="mode 必须为 real 或 fixed")
     time_settings[room] = {"mode": data.mode, "fixed_time": data.fixed_time}
+    save_data()
     return {"settings": time_settings[room]}
 
 
@@ -452,6 +578,7 @@ async def remove_member(data: RemoveMember):
         messages[room] = [m for m in messages[room] if m["sender"] != data.name]
     if data.name in online_users:
         online_users[data.name] = "main"
+    save_data()
     return {"ok": True}
 
 
@@ -474,6 +601,7 @@ async def create_region(data: RegionCreate):
     if not label:
         raise HTTPException(status_code=400, detail="区域名不能为空")
     regions[label] = {"label": label, "x": max(0, min(100, data.x)), "y": max(0, min(100, data.y)), "image": data.image}
+    save_data()
     return {"ok": True}
 
 
@@ -486,6 +614,7 @@ async def delete_region(data: RegionDelete):
     for bid, b in list(buildings.items()):
         if b.get("region") == label:
             b["region"] = ""
+    save_data()
     return {"ok": True}
 
 
@@ -504,6 +633,7 @@ async def create_building(data: BuildingCreate):
         "region": data.region, "x": max(0, min(100, data.x)), "y": max(0, min(100, data.y)),
         "owner": data.owner, "rooms": []
     }
+    save_data()
     return {"ok": True, "building_id": bid}
 
 
@@ -513,6 +643,7 @@ async def move_building(data: BuildingMove):
         raise HTTPException(status_code=404, detail="建筑不存在")
     buildings[data.building_id]["x"] = max(0, min(100, data.x))
     buildings[data.building_id]["y"] = max(0, min(100, data.y))
+    save_data()
     return {"ok": True}
 
 
@@ -524,6 +655,7 @@ async def rename_building(data: BuildingRename):
         buildings[data.building_id]["name"] = data.name.strip()
     if data.emoji:
         buildings[data.building_id]["emoji"] = data.emoji
+    save_data()
     return {"ok": True}
 
 
@@ -541,6 +673,7 @@ async def delete_building(data: BuildingDelete):
     buildings.pop(bid, None)
     npcs.pop(bid, None)
     stories.pop(bid, None)
+    save_data()
     return {"ok": True}
 
 
@@ -556,6 +689,7 @@ async def create_building_room(data: BuildingRoomCreate):
     rooms[name] = {"name": name, "has_password": False, "password": "", "creator": "home"}
     messages[name] = []
     buildings[data.building_id]["rooms"].append(name)
+    save_data()
     return {"ok": True, "room": name}
 
 
@@ -569,6 +703,7 @@ async def delete_building_room(data: BuildingRoomDelete):
     rooms.pop(room, None)
     messages.pop(room, None)
     room_bg.pop(room, None)
+    save_data()
     return {"ok": True}
 
 
@@ -576,6 +711,7 @@ async def delete_building_room(data: BuildingRoomDelete):
 async def set_room_bg(data: RoomBg):
     room = clean_room_name(data.room)
     room_bg[room] = data.image
+    save_data()
     return {"ok": True}
 
 
@@ -606,6 +742,7 @@ async def reply_note(data: NoteReply):
             if n.get("reply"):
                 raise HTTPException(status_code=400, detail="这条便签已经回复过了")
             n["reply"] = {"author": data.author or "匿名", "text": data.text, "time": get_current_time(room)}
+            save_data()
             return {"ok": True, "note": n}
     raise HTTPException(status_code=404, detail="便签不存在")
 
@@ -627,6 +764,7 @@ async def add_npc(data: NpcCreate):
     if data.building_id not in npcs:
         npcs[data.building_id] = []
     npcs[data.building_id].append({"name": data.name.strip(), "emoji": data.emoji or "👤", "desc": data.desc})
+    save_data()
     return {"ok": True}
 
 
@@ -634,6 +772,7 @@ async def add_npc(data: NpcCreate):
 async def delete_npc(data: NpcDelete):
     if data.building_id in npcs:
         npcs[data.building_id] = [n for n in npcs[data.building_id] if n["name"] != data.name]
+        save_data()
     return {"ok": True}
 
 
@@ -653,32 +792,33 @@ async def add_story(data: StoryItem):
     stories[data.building_id].append({"author": data.author or "神秘人", "text": data.text, "time": get_current_time()})
     if len(stories[data.building_id]) > 200:
         stories[data.building_id] = stories[data.building_id][-200:]
+    save_data()
     return {"ok": True}
 
 
 # ============================================================
 #  MCP 接口
 # ============================================================
-def log(msg: str):
+def mcp_log(msg: str):
     print(f"[MCP] {msg}", flush=True)
 
 
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "20.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "26.1.0"}}})
     try:
         body = await request.json()
     except Exception:
-        log("⚠️ 请求不是合法 JSON")
+        mcp_log("⚠️ 请求不是合法 JSON")
         return JSONResponse(status_code=400, content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}})
     method = body.get("method")
     params = body.get("params", {})
     request_id = body.get("id")
-    log(f"收到请求: method={method}, id={request_id}")
+    mcp_log(f"收到请求: method={method}, id={request_id}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "20.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "26.1.0"}}})
 
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
@@ -687,7 +827,7 @@ async def mcp_endpoint(request: Request):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
 
     if method == "tools/list":
-        log("→ 处理 tools/list")
+        mcp_log("→ 处理 tools/list")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": [
             {"name": "group_send_to_living_room", "description": "发送消息到公共大厅（公共区域）。当用户要求你留在公共大厅招待客人时使用此工具。注意：此工具没有 room 参数，永远发到公共大厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "发送者名字"}, "content": {"type": "string", "description": "要发送的消息内容"}, "role": {"type": "string", "description": "填 'assistant'"}}, "required": ["sender", "content"]}},
             {"name": "group_send_message", "description": "发送消息到真人当前所在的房间（自动跟随）。AI 默认使用此工具，会自动跟随真人切换房间。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "发送者名字"}, "content": {"type": "string", "description": "要发送的消息内容"}, "role": {"type": "string", "description": "填 'assistant'"}, "room": {"type": "string", "description": "可选，指定房间名。不填自动发送到真人当前所在房间"}}, "required": ["sender", "content"]}},
@@ -714,10 +854,10 @@ async def mcp_endpoint(request: Request):
         if tool_name not in KNOWN:
             for k in KNOWN:
                 if tool_name.endswith(k):
-                    log(f"→ 工具名兼容转换: {tool_name} -> {k}")
+                    mcp_log(f"→ 工具名兼容转换: {tool_name} -> {k}")
                     tool_name = k
                     break
-        log(f"→ 处理 tools/call: {tool_name}")
+        mcp_log(f"→ 处理 tools/call: {tool_name}")
 
         if tool_name == "group_send_to_living_room":
             return await mcp_send_to_living_room(arguments, request_id)
@@ -750,7 +890,7 @@ async def mcp_endpoint(request: Request):
         else:
             return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Tool '{tool_name}' not found"}})
 
-    log(f"→ 未知方法: {method}")
+    mcp_log(f"→ 未知方法: {method}")
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
 
@@ -881,6 +1021,7 @@ async def mcp_walk_map(args: dict, request_id):
     stories[bid].append({"author": sender, "text": text, "time": get_current_time()})
     if len(stories[bid]) > 200:
         stories[bid] = stories[bid][-200:]
+    save_data()
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🎬 剧情已记录进「{b['name']}」的剧情簿！真人随时可以回看～"}]}})
 
 
@@ -930,6 +1071,7 @@ async def mcp_reply_note(args: dict, request_id):
             if not content:
                 return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 回复内容不能为空"}]}})
             n["reply"] = {"author": sender, "text": content, "time": get_current_time(room)}
+            save_data()
             return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "💬 回复成功！"}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签不存在"}]}})
 
