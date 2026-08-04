@@ -11,7 +11,6 @@ import os
 
 app = FastAPI()
 
-# 挂载图片静态目录（用户上传的地图/分区图放在 images/ 文件夹）
 if os.path.isdir("images"):
     app.mount("/images", StaticFiles(directory="images"), name="images")
 
@@ -46,8 +45,7 @@ online_times: Dict[str, float] = {}
 time_settings: Dict[str, Dict] = {}
 active_room: Dict[str, str] = {"current": "main", "password": ""}
 
-# ----- 地图/区域/建筑 -----
-map_main_image: str = "/images/map_main.png"
+# ----- 地图/区域/建筑（无预设，全部由用户在地图上添加）-----
 regions: Dict[str, Dict] = {}  # name -> {"label", "x", "y", "image"}
 buildings: Dict[str, Dict] = {}  # bid -> {"name","emoji","type"("home"|"npc"),"region","x","y","owner","rooms":[]}
 npcs: Dict[str, List[Dict]] = {}  # bid -> [{"name","emoji","desc"}]
@@ -57,27 +55,6 @@ diaries: Dict[str, List[Dict]] = {}
 room_bg: Dict[str, str] = {}
 building_seq: int = 0
 note_seq: int = 0
-
-# ----- 预置行政区（总览图上的 xxx区，位置可在地图上拖动调整）-----
-# (区域名, x%, y%, 分区图路径)
-DEFAULT_REGIONS = [
-    ("花浦区", 45, 12, ""),
-    ("环珑区", 72, 15, ""),
-    ("九江", 48, 30, "/images/map_city.png"),
-    ("万恒区", 20, 40, "/images/map_city.png"),
-    ("禁猎区", 12, 12, ""),
-    ("深山", 15, 75, ""),
-    ("菲叶区", 22, 55, ""),
-    ("鎏金区", 30, 68, ""),
-    ("寰飞区", 48, 50, "/images/map_city.png"),
-    ("棠里区", 55, 65, "/images/map_city.png"),
-    ("新港区", 45, 78, ""),
-    ("银湾区", 55, 88, ""),
-    ("帽儿岛", 85, 80, ""),
-    ("N109区", 12, 30, "/images/map_n109.png"),
-]
-for _label, _x, _y, _img in DEFAULT_REGIONS:
-    regions[_label] = {"label": _label, "x": _x, "y": _y, "image": _img}
 
 # ============================================================
 #  辅助函数
@@ -257,6 +234,12 @@ class BuildingMove(BaseModel):
 
 class BuildingDelete(BaseModel):
     building_id: str
+
+
+class BuildingRename(BaseModel):
+    building_id: str
+    name: str
+    emoji: str = ""
 
 
 class BuildingRoomCreate(BaseModel):
@@ -478,7 +461,6 @@ async def remove_member(data: RemoveMember):
 @app.get("/api/map")
 async def get_map():
     return {
-        "main_image": map_main_image,
         "regions": regions,
         "buildings": buildings,
         "npcs": npcs,
@@ -531,6 +513,17 @@ async def move_building(data: BuildingMove):
         raise HTTPException(status_code=404, detail="建筑不存在")
     buildings[data.building_id]["x"] = max(0, min(100, data.x))
     buildings[data.building_id]["y"] = max(0, min(100, data.y))
+    return {"ok": True}
+
+
+@app.post("/api/map/building/rename")
+async def rename_building(data: BuildingRename):
+    if data.building_id not in buildings:
+        raise HTTPException(status_code=404, detail="建筑不存在")
+    if data.name.strip():
+        buildings[data.building_id]["name"] = data.name.strip()
+    if data.emoji:
+        buildings[data.building_id]["emoji"] = data.emoji
     return {"ok": True}
 
 
@@ -673,7 +666,7 @@ def log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "20.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -685,7 +678,7 @@ async def mcp_endpoint(request: Request):
     log(f"收到请求: method={method}, id={request_id}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "19.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "20.0.0"}}})
 
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
@@ -854,12 +847,12 @@ async def mcp_get_members(request_id):
 async def mcp_get_map(request_id):
     result_text = "🗺️ 临空市地图：\n\n📍 区域：\n"
     if not regions:
-        result_text += "  暂无区域\n"
+        result_text += "  暂无区域（真人会在网页上添加）\n"
     for name, r in regions.items():
         result_text += f"  - {name}（位置 {r['x']:.0f}%, {r['y']:.0f}%" + ("，有分区图" if r.get("image") else "") + "）\n"
     result_text += "\n🏗️ 建筑：\n"
     if not buildings:
-        result_text += "  暂无建筑\n"
+        result_text += "  暂无建筑（真人会在网页上添加）\n"
     for bid, b in buildings.items():
         ntype = "🏠住宅" if b["type"] == "home" else "🏥NPC建筑"
         ncount = len(npcs.get(bid, []))
