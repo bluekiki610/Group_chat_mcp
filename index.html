@@ -252,6 +252,7 @@ function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i)
 function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
 function showBuilding(bid){ currentBuilding=bid; ['chatView','mapView','regionView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('buildingView').style.display='flex'; exitModes(); renderBuilding(); }
 function backFromBuilding(){ if(buildingFromRegion) showRegion(currentBuildingRegion()); else showMap(); }
+function openBuilding(bid){ buildingFromRegion=!!(mapData.buildings[bid]&&mapData.buildings[bid].region); showBuilding(bid); }
 function currentBuildingRegion(){ var b=mapData.buildings[currentBuilding]; return b?b.region:''; }
 function exitModes(){ placeType=null; pendingType=null; editMode=false; updateEditBtn(); document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function updateEditBtn(){ var e=document.getElementById('editBtn'), r=document.getElementById('regionEditBtn'); if(e)e.className='bar-btn'+(editMode?' on':''); if(r)r.className='bar-btn'+(editMode?' on':''); }
