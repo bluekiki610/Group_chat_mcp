@@ -78,9 +78,13 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .room-cell { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:14px 6px; text-align:center; cursor:pointer; }
 .room-cell:active { background:#0e7fd4; }
 .room-cell .r-emoji { font-size:26px; display:block; }
-.room-cell .r-name { font-size:12px; margin-top:4px; color:#cfe8ff; }
+.room-cell .r-name { font-size:12px; margin-top:4px; color:#cfe8ff; word-break:break-all; }
+.room-cell.hall { border-color:#ffd16666; background:#1a2a1a; }
+.room-cell.locked { border-color:#ff6b6b66; }
+.room-cell .r-lock { font-size:11px; color:#ff8a80; display:block; margin-top:2px; }
+.room-cell .r-hall { font-size:11px; color:#ffd166; display:block; margin-top:2px; }
 .room-cell.add { border:2px dashed #2a4a75; color:#4a729f; display:flex; align-items:center; justify-content:center; font-size:24px; }
-.section-title { font-size:15px; color:#9fd8ff; font-weight:bold; margin:12px 0 8px; }
+.section-title { font-size:15px; color:#9fd8ff; font-weight:bold; margin:12px 0 8px; display:flex; align-items:center; gap:6px; }
 .npc-card { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
 .npc-card .n-emoji { font-size:28px; }
 .npc-card .n-name { color:#fff; font-weight:bold; }
@@ -93,6 +97,9 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .home-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .act-btn { background:#13233d; border:1px solid rgba(80,180,255,.3); border-radius:10px; padding:9px 10px; font-size:13px; cursor:pointer; color:#cfe8ff; flex:1; text-align:center; min-width:44%; }
 .act-btn:active { background:#0e7fd4; color:#fff; }
+.req-card { background:#14283f; border:1px solid rgba(255,200,80,.3); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
+.req-card .q-name { color:#ffd166; font-weight:bold; flex:1; }
+.req-card .q-time { font-size:11px; color:#6d8bb0; }
 .modal-mask { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:60; }
 .modal-mask.show { display:flex; }
 .modal { background:#101d33; border:1px solid rgba(80,180,255,.3); border-radius:14px; width:88%; max-height:85%; overflow-y:auto; padding:18px; }
@@ -103,6 +110,7 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 textarea.input { color:#e6f1ff; }
 .btn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; cursor:pointer; margin-right:6px; }
 .btn.gray { background:#2a4a75; }
+.btn.green { background:#0e9f6e; }
 .btn:active { opacity:.8; }
 .tip { font-size:12px; color:#6d8bb0; margin-top:4px; }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
@@ -206,6 +214,9 @@ textarea.input { color:#e6f1ff; }
   <div class="modal-mask" id="replyMask" onclick="if(event.target===this)hideReply()">
     <div class="modal"><h3>💬 回复便签</h3><textarea class="input" id="replyInput" rows="2" placeholder="回复内容…"></textarea><button class="btn" onclick="submitReply()">回复</button><button class="btn gray" onclick="hideReply()">取消</button></div>
   </div>
+  <div class="modal-mask" id="permMask" onclick="if(event.target===this)hidePerm()">
+    <div class="modal"><h3 id="permTitle">🔑 访问管理</h3><div id="permList"></div><button class="btn gray" style="width:100%;margin-top:8px" onclick="hidePerm()">关闭</button></div>
+  </div>
 </div>
 
 <script>
@@ -214,16 +225,30 @@ var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
 var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
-var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {} };
+var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
 var editMode = false, placeType = null, pendingEmoji = '🏠', pendingType = null, myHomeBid = null;
-var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
+var noteRoom = null, replyNoteId = null, opTarget = null, opType = null, permRoom = null;
 
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},2200); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
+
+// ===== 权限工具 =====
+function buildingOfRoom(room){ for(var bid in mapData.buildings){ if((mapData.buildings[bid].rooms||[]).indexOf(room)>=0) return mapData.buildings[bid]; } return null; }
+function isHallRoom(room){ var b=buildingOfRoom(room); return b && room.indexOf('·会客厅')>=0; }
+function isPrivateRoom(room){ return buildingOfRoom(room) !== null && !isHallRoom(room); }
+function canEnterRoom(room){
+  if(room==='main') return true;
+  if(isHallRoom(room)) return true;
+  var b=buildingOfRoom(room);
+  if(!b) return true;
+  if(b.owner===userName) return true;
+  var acc = mapData.room_access[room] || [];
+  return acc.indexOf(userName)>=0;
+}
 
 function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); }
 function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); }
@@ -354,7 +379,7 @@ function onStageTap(e, scope){
     var name=prompt('建筑名字（如：AKSO医院、江边大别墅）：',''); if(!name) return;
     var region=currentRegion||'';
     api('/api/map/building',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,emoji:pendingEmoji,type:placeType,region:region,x:pctX,y:pctY,owner:userName})}).then(function(d){
-      toast('✅ 「'+name+'」已建成！'); cancelPlace();
+      toast('✅ 「'+name+'」已建成！自动带了会客厅'); cancelPlace();
       if(currentRegion) renderRegion(); else loadMap();
       openBuilding(d.building_id);
     }).catch(function(err){ toast('❌ '+err.message); });
@@ -458,24 +483,37 @@ function openRegion(name){
   else { toast('📍 「'+name+'」暂无分区图，可在里面点「建造」放建筑'); }
 }
 
+// ===== 建筑内部（含会客厅/权限） =====
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
   document.getElementById('bTitle').textContent=b.name;
+  var isOwner = b.owner === userName;
   var el=document.getElementById('bvBody'); var html='';
+  html+='<div class="section-title">👑 主人：'+esc(b.owner||'?')+'</div>';
   if(b.type==='home'){
     html+='<div class="section-title">🚪 房间</div><div class="room-grid">';
-    (b.rooms||[]).forEach(function(r){ html+='<div class="room-cell" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">🚪</span><span class="r-name">'+esc(r)+'</span></div>'; });
+    (b.rooms||[]).forEach(function(r){
+      var hall = r.indexOf('·会客厅')>=0;
+      var priv = !hall;
+      var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : (priv ? '<span class="r-lock">🔒 私密·需申请</span>' : '');
+      html+='<div class="room-cell '+(hall?'hall':(priv?'locked':''))+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
+    });
     html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div></div>';
     html+='<div class="section-title">💗 互动</div><div class="home-actions">';
     html+='<button class="act-btn" onclick="openNotes()">📌 便签墙</button>';
     html+='<button class="act-btn" onclick="setBgPrompt()">🖼️ 背景</button></div>';
   }
+  // 主人管理：申请 + 已授权
+  if(isOwner){
+    var reqCount = 0;
+    (b.rooms||[]).forEach(function(r){ reqCount += (mapData.room_requests[r]||[]).length; });
+    html+='<div class="section-title">🔑 访问管理（'+reqCount+' 个申请）</div><button class="btn" style="width:100%" onclick="openPerm()">📋 查看申请 / 已授权名单</button>';
+  }
   html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）</div>';
   (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div><span class="n-del" onclick="deleteNpc(\''+esc(n.name)+'\')">✖</span></div>'; });
   html+='<button class="btn" style="width:100%" onclick="addNpcPrompt()">➕ 添加 NPC</button>';
   html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
-  html+='<div class="tip">💡 让 AI 来逛这里：在 RikkaHub 对它说"去逛逛"，它会把剧情写进剧情簿</div>';
   el.innerHTML=html;
 }
 function createBuildingRoom(){
@@ -483,6 +521,51 @@ function createBuildingRoom(){
   api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ toast('✅ 房间「'+name+'」建成！'); loadMapData(); renderBuilding(); loadRooms(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function loadMapData(){ api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
+
+// ===== 权限管理 =====
+function openPerm(){
+  var b=mapData.buildings[currentBuilding];
+  permRoom = null;
+  document.getElementById('permTitle').textContent='🔑 访问管理 · '+b.name;
+  var el=document.getElementById('permList');
+  var rooms = b.rooms||[];
+  var html='';
+  rooms.forEach(function(r){
+    if(r.indexOf('·会客厅')>=0) return;
+    var reqs = mapData.room_requests[r]||[];
+    var acc = mapData.room_access[r]||[];
+    html+='<div class="set-group"><label>🔒 '+esc(r)+'</label>';
+    if(reqs.length){
+      html+='<div class="tip" style="margin-bottom:4px">📨 访问申请：</div>';
+      reqs.forEach(function(q){
+        html+='<div class="req-card"><span class="q-name">👤 '+esc(q.applicant)+'</span><span class="q-time">'+esc(q.time)+'</span><button class="btn green" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',true)">同意</button><button class="btn gray" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',false)">拒绝</button></div>';
+      });
+    } else {
+      html+='<div class="tip">暂无访问申请</div>';
+    }
+    if(acc.length){
+      html+='<div class="tip" style="margin-top:6px">✅ 已授权：</div>';
+      acc.forEach(function(u){ html+='<div class="req-card"><span class="q-name">👤 '+esc(u)+'</span><button class="btn red" style="margin:0" onclick="revokeUser(\''+esc(r)+'\',\''+esc(u)+'\')">移除</button></div>'; });
+    }
+    html+='</div>';
+  });
+  if(!rooms.length) html='<div class="tip">这个建筑还没有私密房间</div>';
+  el.innerHTML=html;
+  document.getElementById('permMask').classList.add('show');
+}
+function hidePerm(){ document.getElementById('permMask').classList.remove('show'); }
+function grantUser(room,user,allow){
+  var b=mapData.buildings[currentBuilding];
+  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData(); openPerm(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function revokeUser(room,user){
+  var b=mapData.buildings[currentBuilding];
+  api('/api/room/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user})}).then(function(){ toast('🗑️ 已移除 '+user); loadMapData(); openPerm(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function applyRoom(room){
+  api('/api/room/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,applicant:userName})}).then(function(d){ toast('📨 '+d.msg); }).catch(function(e){ toast('❌ '+e.message); });
+}
+
 function addNpcPrompt(){
   var name=prompt('NPC 名字（如：护士小暖、管家老李）：',''); if(!name) return;
   var emoji=prompt('头像 emoji（默认 👤）：','👤')||'👤';
@@ -571,15 +654,17 @@ function cacheKey(){ return 'gc_msgs_'+currentRoom; }
 function cachePush(m){ var a=JSON.parse(localStorage.getItem(cacheKey())||'[]'); a.push(m); if(a.length>400)a=a.slice(-400); localStorage.setItem(cacheKey(),JSON.stringify(a)); }
 function restoreCache(){ var a=JSON.parse(localStorage.getItem(cacheKey())||'[]'); if(!a.length) return Promise.resolve(); return api('/api/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:a,room:currentRoom,password:roomPassword})}).catch(function(){}); }
 function loadMessages(silent){
-  api('/api/messages?room='+encodeURIComponent(currentRoom)+'&password='+encodeURIComponent(roomPassword)).then(function(d){
+  api('/api/messages?room='+encodeURIComponent(currentRoom)+'&password='+encodeURIComponent(roomPassword)+'&user='+encodeURIComponent(userName)).then(function(d){
     renderMessages(d.messages||[]); if(!silent&&(d.messages||[]).length) localStorage.setItem(cacheKey(),JSON.stringify(d.messages)); speakNewMessages(d.messages||[]);
   }).catch(function(e){ if(!silent) toast('⚠️ '+e.message); });
 }
 function renderMessages(msgs){
-  var area=document.getElementById('msgArea'); area.innerHTML='';
+  var area=document.getElementById('msgArea');
+  var stickToBottom = area.scrollTop + area.clientHeight >= area.scrollHeight - 50;
+  area.innerHTML='';
   if(!msgs.length){ area.innerHTML='<div class="sys-tip">✨ 欢迎来到 '+esc(roomLabel(currentRoom))+'，说点什么吧~</div>'; return; }
   msgs.forEach(function(m){ if(m.sender==='system') area.appendChild(renderSystem(m.content)); else area.appendChild(renderMsg(m)); });
-  area.scrollTop=area.scrollHeight;
+  if(stickToBottom) area.scrollTop=area.scrollHeight;
 }
 function renderSystem(t){ var d=document.createElement('div'); d.className='msg system'; d.innerHTML='<div class="bubble">'+esc(t)+'</div>'; return d; }
 function renderMsg(m){
@@ -602,6 +687,13 @@ function switchRoom(room,pwd){
 }
 function enterRoom(room){
   if(room===currentRoom){ showChat(); return; }
+  // 权限检查
+  if(isPrivateRoom(room) && !canEnterRoom(room)){
+    if(confirm('🔒 房间「'+room+'」是私密的，需要主人同意才能进入。\n\n要申请访问吗？')){
+      applyRoom(room);
+    }
+    return;
+  }
   api('/api/rooms').then(function(d){ var target=null; (d.rooms||[]).forEach(function(r){if(r.name===room)target=r;});
     if(target&&target.has_password){ var pwd=prompt('房间「'+roomLabel(room)+'」需要密码：',''); if(pwd===null)return; api('/api/rooms/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:room,password:pwd})}).then(function(){ switchRoom(room,pwd); showChat(); }).catch(function(e){ toast('❌ '+e.message); }); }
     else { switchRoom(room,''); showChat(); }
@@ -611,7 +703,7 @@ function loadRooms(){
   api('/api/rooms').then(function(d){
     var tabs=document.getElementById('roomTabs'); tabs.innerHTML='';
     (d.rooms||[]).forEach(function(r){
-      if(r.creator==='home') return; // 家园房间不显示在顶部标签
+      if(r.creator==='home'||r.creator==='hall') return; // 家园/会客厅房间不显示在顶部标签
       var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b);
     });
   }).catch(function(){});
@@ -624,11 +716,13 @@ function uploadAvatar(){ var name=document.getElementById('avatarName').value.tr
 function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; }).catch(function(){}); }
 function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(currentRoom)).then(function(d){ var s=d.settings||{}; document.getElementById('setTimeMode').value=s.mode||'real'; document.getElementById('setFixedTime').value=s.fixed_time||''; }).catch(function(){}); }
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
+function ts(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
 function backupNow(){
   api('/api/backup').then(function(d){
+    var name='linkongbackup_'+ts()+'.json';
     var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='backup.json'; a.click();
-    toast('📦 备份已下载！数据安全了');
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）');
   }).catch(function(e){ toast('❌ 备份失败：'+e.message); });
 }
 function restoreBackup(){
@@ -638,7 +732,7 @@ function restoreBackup(){
     reader.onload=function(e){
       try{
         var data=JSON.parse(e.target.result);
-        api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(){ toast('✅ 数据已恢复！'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); });
+        api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(){ toast('✅ 导入成功！数据已恢复'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); });
       }catch(err){ toast('❌ 备份文件格式不对'); }
     };
     reader.readAsText(file);
