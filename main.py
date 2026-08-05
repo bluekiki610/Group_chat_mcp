@@ -9,6 +9,8 @@ import json
 import time
 import base64
 import uuid
+import shutil
+import threading
 from datetime import datetime, timedelta, timezone
 import os
 
@@ -27,6 +29,8 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 DATA_FILE = "data.json"
+BAK_FILE = DATA_FILE + ".bak"
+BACKUP_DIR = "backups"
 
 rooms: Dict[str, Dict] = {"main": {"name": "main", "has_password": False, "password": "", "creator": "system"}}
 messages: Dict[str, List[Dict]] = {"main": []}
@@ -48,7 +52,7 @@ note_seq: int = 0
 room_access: Dict[str, List[str]] = {}
 room_requests: Dict[str, List[Dict]] = {}
 user_ais: Dict[str, List[str]] = {}
-edit_pwd: str = ""  # 编辑密码（空=未设置，游客可编辑）
+edit_pwd: str = ""
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -84,18 +88,53 @@ def collect_all_data() -> dict:
     }
 
 
+# ===== 三重自动备份 =====
 def save_data():
     try:
+        # ① 先把当前 data.json 保留为 .bak（始终有上一版）
+        if os.path.exists(DATA_FILE):
+            try: shutil.copy(DATA_FILE, BAK_FILE)
+            except: pass
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(collect_all_data(), f, ensure_ascii=False)
     except Exception as e:
         print(f"[SAVE] 保存失败: {e}", flush=True)
 
 
+def do_snapshot():
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+        if os.path.exists(DATA_FILE):
+            shutil.copy(DATA_FILE, os.path.join(BACKUP_DIR, f"data_{ts}.json"))
+        files = sorted(os.listdir(BACKUP_DIR))
+        while len(files) > 20:
+            os.remove(os.path.join(BACKUP_DIR, files[0])); files.pop(0)
+        print(f"[SAVE] 已自动快照 backups/data_{ts}.json", flush=True)
+    except Exception as e:
+        print(f"[SAVE] 快照失败: {e}", flush=True)
+
+
+def snapshot_loop():
+    while True:
+        time.sleep(1800)  # 每 30 分钟自动快照
+        do_snapshot()
+
+
+# ② 启动时：如果 data.json 丢了，尝试从 .bak 恢复
+if not os.path.exists(DATA_FILE) and os.path.exists(BAK_FILE):
+    try:
+        shutil.copy(BAK_FILE, DATA_FILE)
+        print("[SAVE] ⚠️ data.json 丢失，已自动从 data.bak 恢复！", flush=True)
+    except Exception as e:
+        print(f"[SAVE] 从 .bak 恢复失败: {e}", flush=True)
+
+
 def load_data():
     global building_seq, note_seq, edit_pwd
     try:
         if not os.path.exists(DATA_FILE):
+            print("[SAVE] ⚠️ 没有找到 data.json（数据可能丢失）", flush=True)
             return
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -112,6 +151,7 @@ def load_data():
 
 
 load_data()
+threading.Thread(target=snapshot_loop, daemon=True).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -489,6 +529,21 @@ async def backup_data():
     return collect_all_data()
 
 
+@app.get("/api/backup/list")
+async def backup_list():
+    """列出服务器上的自动快照"""
+    files = []
+    try:
+        if os.path.isdir(BACKUP_DIR):
+            for f in sorted(os.listdir(BACKUP_DIR)):
+                files.append({"name": f, "size": os.path.getsize(os.path.join(BACKUP_DIR, f))})
+    except Exception:
+        pass
+    if os.path.exists(BAK_FILE):
+        files.append({"name": "data.bak", "size": os.path.getsize(BAK_FILE)})
+    return {"backups": files}
+
+
 @app.post("/api/restore_backup")
 async def restore_backup(data: BackupData):
     global building_seq, note_seq, edit_pwd
@@ -510,6 +565,7 @@ async def restore_backup(data: BackupData):
     building_seq = data.building_seq or 0
     note_seq = data.note_seq or 0
     save_data()
+    do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
 
 
@@ -756,7 +812,6 @@ async def create_building_room(data: BuildingRoomCreate):
     raw = data.name.strip()
     if not raw: raise HTTPException(status_code=400, detail="房间名不能为空")
     bname = buildings[data.building_id]["name"]
-    # 自动加建筑前缀，避免不同家的房间名冲突
     name = f"{bname}·{raw}"
     if name in rooms: raise HTTPException(status_code=400, detail="这个家已经有同名房间了")
     rooms[name] = {"name": name, "has_password": False, "password": "", "creator": "home", "description": ""}
@@ -808,7 +863,6 @@ async def save_user_ais(data: UserAis):
     return {"ok": True}
 
 
-# ===== 编辑密码（访客只读） =====
 @app.get("/api/edit_status")
 async def edit_status():
     return {"locked": bool(edit_pwd)}
@@ -1000,7 +1054,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "40.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "41.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1010,7 +1064,7 @@ async def mcp_endpoint(request: Request):
     mcp_log(f"收到请求: method={method}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "40.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "41.0.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
@@ -1089,7 +1143,6 @@ async def mcp_query(args: dict, request_id):
                 rd = (rooms.get(rn, {}).get("description") or "").split("\n")[0][:50]
                 text += f"\n🛋️ {rn}：{rd or '（暂无简介）'}"
             else:
-                # 私密房间：无权限者不显示简介
                 if can_access_room(rn, sender):
                     rd = (rooms.get(rn, {}).get("description") or "").split("\n")[0][:50]
                     text += f"\n🚪 {rn}：{rd or '（暂无简介）'}"

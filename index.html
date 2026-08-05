@@ -229,6 +229,7 @@ textarea.input { color:#e6f1ff; }
       <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
       <div class="editset" id="eset6"><div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div></div>
       <div class="editset" id="eset7"><div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div></div></div>
+      <div class="editset" id="eset8"><div class="set-group"><label>🗄️ 自动备份（防丢失）</label><div class="tip" style="margin-bottom:6px">服务器每30分钟自动快照 + 每次保存留上一版；你的手机每30分钟也存一份世界副本。</div><div class="row"><button class="btn" onclick="restoreWorldBackup()">📤 从手机备份恢复</button><button class="btn gray" onclick="loadServerBackups()">🗄️ 查看服务器快照</button></div><div id="srvBackupList" class="tip" style="margin-top:6px"></div></div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
@@ -270,8 +271,8 @@ var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
 var privTab = 'note', privBuildingId = null;
 var colorPairs = JSON.parse(localStorage.getItem('gc_pairs') || '[]');
 var selectedPairColor = 0;
-var editLocked = false;                 // 服务器是否设置了编辑密码
-var editUnlocked = localStorage.getItem('gc_edit') === '1';  // 本机是否已解锁
+var editLocked = false;
+var editUnlocked = localStorage.getItem('gc_edit') === '1';
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -300,6 +301,30 @@ function toast(msg){ var t=document.createElement('div'); t.style.cssText='posit
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
 
+// ===== 自动备份（本机世界副本） =====
+function worldSnapshot(){
+  api('/api/backup').then(function(d){
+    var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, ts:new Date().toLocaleString()};
+    try{ localStorage.setItem('gc_world_backup', JSON.stringify(slim)); }catch(e){}
+  }).catch(function(){});
+}
+function restoreWorldBackup(){
+  var raw = localStorage.getItem('gc_world_backup');
+  if(!raw){ toast('你的手机里还没有备份（会自动存）'); return; }
+  var info = ''; try{ info = '（上次备份：' + JSON.parse(raw).ts + '）'; }catch(e){}
+  if(!confirm('用手机里的备份覆盖服务器数据？'+info)) return;
+  var d = JSON.parse(raw);
+  api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(function(){ toast('✅ 已从手机备份恢复！'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function loadServerBackups(){
+  api('/api/backup/list').then(function(d){
+    var el=document.getElementById('srvBackupList');
+    var files=d.backups||[];
+    if(!files.length){ el.textContent='服务器暂无快照（自动快照会在运行30分钟后出现）'; return; }
+    el.innerHTML='服务器快照：<br>' + files.map(function(f){ return '· '+f.name+'（'+(f.size/1024).toFixed(1)+'KB）'; }).join('<br>') + '<br><span style="color:#7fd0ff;cursor:pointer" onclick="backupNow()">点此下载完整备份</span>';
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
+
 // ===== 编辑权限 =====
 function canEdit(){ return !editLocked || editUnlocked; }
 function unlockEdit(){
@@ -318,7 +343,6 @@ function unlockEdit(){
   }).catch(function(e){ toast('❌ '+e.message); });
 }
 
-// ===== 气泡配色 =====
 function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
 function savePairs(){ localStorage.setItem('gc_pairs', JSON.stringify(colorPairs)); }
 function renderPairColors(){
@@ -347,7 +371,6 @@ function addPair(){
   savePairs(); document.getElementById('pairNames').value=''; renderPairList(); toast('✅ 配对已添加：'+names.join('·')+'（'+c.name+'）');
 }
 function delPair(i){ colorPairs.splice(i,1); savePairs(); renderPairList(); }
-
 function saveMyAis(){
   var ais = (document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
   api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); }).catch(function(e){ toast('❌ '+e.message); });
@@ -947,7 +970,7 @@ function openSettings(){
     lockTip.textContent = '访客只读模式：需要编辑密码才能建造/修改';
   }
   var ce = canEdit();
-  for(var i=1;i<=7;i++){ var es=document.getElementById('eset'+i); if(es) es.style.display = ce ? '' : 'none'; }
+  for(var i=1;i<=8;i++){ var es=document.getElementById('eset'+i); if(es) es.style.display = ce ? '' : 'none'; }
   document.getElementById('settingsMask').classList.add('show');
 }
 function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
@@ -1002,7 +1025,9 @@ function init(){
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
+  worldSnapshot();
   setInterval(function(){ loadMessages(true); heartbeat(); }, 3000);
+  setInterval(worldSnapshot, 1800000);
 }
 init();
 </script>
