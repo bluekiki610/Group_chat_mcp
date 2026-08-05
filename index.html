@@ -20,7 +20,7 @@ header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding
 .room-tabs { display:flex; gap:6px; padding:8px 12px; background:#0d1a2e; overflow-x:auto; flex-shrink:0; }
 .room-tab { background:#13233d; border:1px solid rgba(80,180,255,.15); color:#cfe8ff; padding:6px 14px; border-radius:15px; font-size:13px; cursor:pointer; white-space:nowrap; }
 .room-tab.active { background:#0e7fd4; color:#fff; }
-#msgArea { flex:1; overflow-y:auto; padding:12px; background-color:#0f1a2e; background-size:cover; background-position:center; }
+#msgArea { flex:1; overflow-y:auto; padding:12px; background-color:#0f1a2e; background-size:cover; background-position:center; background-repeat:no-repeat; }
 .msg { display:flex; margin-bottom:14px; }
 .msg .avatar { width:38px; height:38px; border-radius:6px; flex-shrink:0; background:#1d3150; display:flex; align-items:center; justify-content:center; font-size:18px; overflow:hidden; }
 .msg .avatar img { width:100%; height:100%; object-fit:cover; }
@@ -223,7 +223,7 @@ textarea.input { color:#e6f1ff; }
       <div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div>
       <div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div>
       <div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div>
-      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">换服务器前先下载备份，新服务器上传恢复</div></div>
+      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">数据含背景图较大，下载可能需要等一会，请耐心</div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
@@ -238,7 +238,7 @@ textarea.input { color:#e6f1ff; }
     <div class="modal"><h3 id="permTitle">🔑 访问管理</h3><div id="permList"></div><button class="btn gray" style="width:100%;margin-top:8px" onclick="hidePerm()">关闭</button></div>
   </div>
   <div class="modal-mask" id="privateMask" onclick="if(event.target===this)hidePrivate()">
-    <div class="modal" id="privModal" style="background-size:cover;background-position:center;">
+    <div class="modal" id="privModal" style="background-size:cover;background-position:center;background-repeat:no-repeat;">
       <h3>🏠 私人空间 · <span id="privRoomName"></span></h3>
       <div class="priv-tab">
         <button id="ptabNote" class="on" onclick="setPrivTab('note')">💌 纸条</button>
@@ -276,7 +276,7 @@ var PAIR_COLORS = [
 
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
-function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},2200); }
+function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
 
@@ -761,7 +761,7 @@ function setMyHome(){
 
 function applyBg(room){
   var bg=mapData.room_bg[room]; var area=document.getElementById('msgArea');
-  if(bg){ area.style.backgroundImage='url('+bg+')'; area.style.backgroundColor='rgba(15,26,46,.6)'; }
+  if(bg){ area.style.backgroundImage='url('+bg+')'; area.style.backgroundColor='rgba(15,26,46,.6)'; area.style.backgroundSize='cover'; area.style.backgroundPosition='center'; area.style.backgroundRepeat='no-repeat'; }
   else { area.style.backgroundImage='none'; area.style.backgroundColor='#0f1a2e'; }
 }
 function setRoomBgHere(){
@@ -870,18 +870,27 @@ function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(c
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
 function ts(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
 function backupNow(){
-  toast('⏳ 备份中…请稍候');
-  api('/api/backup').then(function(d){
+  toast('⏳ 备份中…数据较大可能需要一会，请稍候');
+  var ctrl = new AbortController();
+  var to = setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 90000);
+  fetch('/api/backup', {signal:ctrl.signal}).then(function(r){
+    if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); });
+    return r.json();
+  }).then(function(d){
+    clearTimeout(to);
     try{
       var name='linkongbackup_'+ts()+'.json';
       var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
       var url=URL.createObjectURL(blob);
       var a=document.createElement('a'); a.href=url; a.download=name;
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 8000);
       toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）');
     }catch(err){ toast('❌ 下载失败：'+err.message); }
-  }).catch(function(e){ toast('❌ 备份失败：'+e.message); });
+  }).catch(function(e){
+    clearTimeout(to);
+    toast('❌ 备份失败：'+(e && e.name==='AbortError' ? '超时（数据太大，请稍后再试）' : ((e&&e.message)||'未知错误')));
+  });
 }
 function restoreBackup(){
   var f=document.createElement('input'); f.type='file'; f.accept='.json';
