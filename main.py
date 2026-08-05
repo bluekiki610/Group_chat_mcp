@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import json
 import time
+import base64
+import uuid
 from datetime import datetime, timedelta, timezone
 import os
 
@@ -22,7 +24,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# gzip 压缩大响应（备份数据很大时传输更快）
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 DATA_FILE = "data.json"
@@ -47,6 +48,30 @@ note_seq: int = 0
 room_access: Dict[str, List[str]] = {}
 room_requests: Dict[str, List[Dict]] = {}
 user_ais: Dict[str, List[str]] = {}
+
+
+def save_base64_image(data: str, prefix: str) -> str:
+    """把 base64 图片存为服务器文件，返回路径；非 base64 原样返回"""
+    try:
+        if not data or not isinstance(data, str) or not data.startswith("data:"):
+            return data
+        meta, b64 = data.split(",", 1)
+        ext = "png"
+        if "jpeg" in meta or "jpg" in meta:
+            ext = "jpg"
+        elif "gif" in meta:
+            ext = "gif"
+        elif "webp" in meta:
+            ext = "webp"
+        os.makedirs("images/uploads", exist_ok=True)
+        fname = f"{prefix}_{uuid.uuid4().hex[:8]}.{ext}"
+        with open(os.path.join("images", "uploads", fname), "wb") as f:
+            f.write(base64.b64decode(b64))
+        print(f"[IMG] 已保存图片: /images/uploads/{fname}", flush=True)
+        return f"/images/uploads/{fname}"
+    except Exception as e:
+        print(f"[IMG] 保存图片失败: {e}", flush=True)
+        return data
 
 
 def collect_all_data() -> dict:
@@ -600,7 +625,8 @@ async def get_online():
 @app.post("/api/avatar")
 async def upload_avatar(data: AvatarUpload):
     if data.name:
-        avatars[data.name] = data.image; save_data(); return {"ok": True}
+        avatars[data.name] = save_base64_image(data.image, "av")
+        save_data(); return {"ok": True}
     return {"ok": False}
 
 
@@ -743,7 +769,8 @@ async def delete_building_room(data: BuildingRoomDelete):
 @app.post("/api/room/bg")
 async def set_room_bg(data: RoomBg):
     room = clean_room_name(data.room)
-    room_bg[room] = data.image; save_data()
+    room_bg[room] = save_base64_image(data.image, "bg")
+    save_data()
     return {"ok": True}
 
 
@@ -942,7 +969,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "37.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "39.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -952,7 +979,7 @@ async def mcp_endpoint(request: Request):
     mcp_log(f"收到请求: method={method}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "37.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "39.0.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":

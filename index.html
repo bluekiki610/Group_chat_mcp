@@ -276,6 +276,20 @@ var PAIR_COLORS = [
 
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
+function compressImage(dataUrl, maxW, quality, cb){
+  var img = new Image();
+  img.onload = function(){
+    try{
+      var w = img.width||600, h = img.height||400;
+      if(w > maxW){ h = h * maxW / w; w = maxW; }
+      var c = document.createElement('canvas'); c.width = Math.round(w); c.height = Math.round(h);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      cb(c.toDataURL('image/jpeg', quality));
+    }catch(err){ cb(dataUrl); }
+  };
+  img.onerror = function(){ cb(dataUrl); };
+  img.src = dataUrl;
+}
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
@@ -351,7 +365,20 @@ var MAIN_CANDIDATES = ['/images/map_main.png','/images/map_main.jpg','/images/ma
 function loadMap(){ api('/api/map').then(function(d){ mapData=d; renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); }); }
 function renderMap(){
   var img=document.getElementById('mapImg');
-  img.onerror=function(){ if(MAIN_CANDIDATES.length>1){ MAIN_CANDIDATES.shift(); img.src=MAIN_CANDIDATES[0]; } else { toast('⚠️ 未找到地图图片 images/map_main.png'); } };
+  img.onerror=function(){
+    if(MAIN_CANDIDATES.length>1){ MAIN_CANDIDATES.shift(); img.src=MAIN_CANDIDATES[0]; }
+    else {
+      img.style.display='none';
+      var cv=document.getElementById('mapCanvas');
+      cv.style.background='#0b1526';
+      cv.style.width='100%'; cv.style.height='100%';
+      cv.dataset.w=document.getElementById('mapStage').clientWidth||360;
+      cv.dataset.h=document.getElementById('mapStage').clientHeight||640;
+      cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0;
+      renderMarkers('mapCanvas','map',null);
+      toast('⚠️ 未找到地图底图，已用暗色背景代替（可正常使用）');
+    }
+  };
   img.onload=function(){ layoutMap('map'); renderMarkers('mapCanvas','map',null); };
   img.src=MAIN_CANDIDATES[0];
   renderMarkers('mapCanvas','map',null);
@@ -379,7 +406,18 @@ function renderRegion(){
   else if(base.indexOf('.jpeg')>=0){ cands.push(base.replace('.jpeg','.png')); cands.push(base.replace('.jpeg','.jpg')); }
   var idx=0;
   function tryLoad(){
-    if(idx>=cands.length){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); toast('⚠️ 分区图未找到：'+base); return; }
+    if(idx>=cands.length){
+      img.style.display='none';
+      var cv=document.getElementById('regionCanvas');
+      cv.style.background='#0b1526';
+      cv.style.width='100%'; cv.style.height='100%';
+      cv.dataset.w=document.getElementById('regionStage').clientWidth||360;
+      cv.dataset.h=document.getElementById('regionStage').clientHeight||640;
+      cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0;
+      renderMarkers('regionCanvas','region',currentRegion);
+      toast('⚠️ 分区图未找到，已用暗色背景代替');
+      return;
+    }
     img.onload=function(){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); };
     img.onerror=function(){ idx++; tryLoad(); };
     img.src=cands[idx];
@@ -767,7 +805,7 @@ function applyBg(room){
 function setRoomBgHere(){
   if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
     var f=document.createElement('input'); f.type='file'; f.accept='image/*';
-    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ saveBg(currentRoom,e.target.result); }; reader.readAsDataURL(file); };
+    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result, 1200, 0.8, function(small){ saveBg(currentRoom, small); }); }; reader.readAsDataURL(file); };
     f.click();
   } else {
     var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(currentRoom,url.trim());
@@ -779,7 +817,7 @@ function setBgPrompt(){
   var room=prompt('给哪个房间设背景？',rooms[0]); if(!room) return;
   if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
     var f=document.createElement('input'); f.type='file'; f.accept='image/*';
-    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ saveBg(room,e.target.result); }; reader.readAsDataURL(file); };
+    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result, 1200, 0.8, function(small){ saveBg(room, small); }); }; reader.readAsDataURL(file); };
     f.click();
   } else {
     var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(room,url.trim());
@@ -864,7 +902,7 @@ function openSettings(){
 function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
 function saveName(){ var n=document.getElementById('setName').value.trim(); if(!n){toast('名字不能为空');return;} userName=n; localStorage.setItem('gc_name',n); toast('✅ 名字已改为 '+n); }
 function saveSpeak(){ speakNames=document.getElementById('setSpeak').value.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); speakAll=document.getElementById('speakAll').checked; localStorage.setItem('gc_speak',speakNames.join(',')); localStorage.setItem('gc_speakAll',speakAll?'1':'0'); toast('✅ 朗读设置已保存'); }
-function uploadAvatar(){ var name=document.getElementById('avatarName').value.trim(); var file=document.getElementById('avatarFile').files[0]; if(!name){toast('请输入成员名字');return;} if(!file){toast('请选择图片');return;} var reader=new FileReader(); reader.onload=function(e){ api('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,image:e.target.result})}).then(function(){ toast('✅ '+name+' 头像已更新'); loadAvatars(); }).catch(function(err){ toast('❌ '+err.message); }); }; reader.readAsDataURL(file); }
+function uploadAvatar(){ var name=document.getElementById('avatarName').value.trim(); var file=document.getElementById('avatarFile').files[0]; if(!name){toast('请输入成员名字');return;} if(!file){toast('请选择图片');return;} var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result, 240, 0.85, function(small){ api('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,image:small})}).then(function(){ toast('✅ '+name+' 头像已更新'); loadAvatars(); }).catch(function(err){ toast('❌ '+err.message); }); }); }; reader.readAsDataURL(file); }
 function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; }).catch(function(){}); }
 function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(currentRoom)).then(function(d){ var s=d.settings||{}; document.getElementById('setTimeMode').value=s.mode||'real'; document.getElementById('setFixedTime').value=s.fixed_time||''; }).catch(function(){}); }
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
