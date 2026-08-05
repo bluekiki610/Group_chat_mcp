@@ -72,14 +72,7 @@ def save_base64_image(data: str, prefix: str) -> str:
 
 
 def collect_all_data() -> dict:
-    return {
-        "rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings,
-        "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories,
-        "notes": notes, "diaries": diaries, "room_bg": room_bg,
-        "building_seq": building_seq, "note_seq": note_seq,
-        "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais,
-        "edit_pwd": edit_pwd,
-    }
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd}
 
 
 def save_data():
@@ -162,17 +155,9 @@ def get_current_time(room: str = "main") -> str:
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
-def get_room_password(room: str) -> str:
-    return rooms.get(room, {}).get("password", "")
-
-
-def room_exists(room: str) -> bool:
-    return room in rooms
-
-
-def is_room_locked(room: str) -> bool:
-    return rooms.get(room, {}).get("has_password", False)
-
+def get_room_password(room: str) -> str: return rooms.get(room, {}).get("password", "")
+def room_exists(room: str) -> bool: return room in rooms
+def is_room_locked(room: str) -> bool: return rooms.get(room, {}).get("has_password", False)
 
 def check_room_access(room: str, password: str) -> bool:
     room = clean_room_name(room)
@@ -181,13 +166,10 @@ def check_room_access(room: str, password: str) -> bool:
     if not is_room_locked(room): return True
     return (password or "") == get_room_password(room)
 
-
 def find_building_of_room(room: str):
     for bid, b in buildings.items():
-        if room in b.get("rooms", []):
-            return bid
+        if room in b.get("rooms", []): return bid
     return None
-
 
 def is_hall_room(room: str) -> bool:
     info = rooms.get(room, {})
@@ -196,10 +178,7 @@ def is_hall_room(room: str) -> bool:
     if bid and room.endswith("·会客厅"): return True
     return False
 
-
-def is_ai_of(user: str, ai_name: str) -> bool:
-    return ai_name in user_ais.get(user, [])
-
+def is_ai_of(user: str, ai_name: str) -> bool: return ai_name in user_ais.get(user, [])
 
 def can_access_room(room: str, user: str) -> bool:
     room = clean_room_name(room)
@@ -211,13 +190,18 @@ def can_access_room(room: str, user: str) -> bool:
     b = buildings[bid]
     if b.get("type") == "npc": return True
     if user and user == b.get("owner"): return True
-    # 主人的 AI 默认可进主人的任何房间
     if user and is_ai_of(b.get("owner"), user): return True
     acc = room_access.get(room, [])
     if user in acc: return True
     if user:
         for granted in acc:
             if is_ai_of(granted, user): return True
+    return False
+
+# AI 跟随真人豁免：真人当前在这个房间，AI 查询/读写也放行
+def can_view_room(room: str, user: str) -> bool:
+    if can_access_room(room, user): return True
+    if active_room.get("current") == clean_room_name(room): return True
     return False
 
 
@@ -232,10 +216,8 @@ def save_entry(sender: str, content: str, role: str, room: str = "main") -> dict
     save_data()
     return entry
 
-
 def get_all_rooms() -> List[Dict]:
     return [{"name": n, "has_password": i.get("has_password", False), "creator": i.get("creator", "system")} for n, i in rooms.items()]
-
 
 def get_online_members() -> List[Dict]:
     now = time.time()
@@ -243,16 +225,11 @@ def get_online_members() -> List[Dict]:
         online_users.pop(n, None); online_times.pop(n, None)
     return [{"name": n, "room": r} for n, r in online_users.items()]
 
-
-def clean_room_name(room: str) -> str:
-    return room.strip() if room else "main"
-
-
+def clean_room_name(room: str) -> str: return room.strip() if room else "main"
 def next_bid() -> str:
     global building_seq
     building_seq += 1
     return f"b{building_seq}"
-
 
 def add_note_to_room(room: str, author: str, text: str) -> dict:
     global note_seq
@@ -264,10 +241,7 @@ def add_note_to_room(room: str, author: str, text: str) -> dict:
     save_data()
     return item
 
-
-def room_label(name: str) -> str:
-    return "公共大厅" if name == "main" else name
-
+def room_label(name: str) -> str: return "公共大厅" if name == "main" else name
 
 def ensure_hall_room(bid: str):
     b = buildings.get(bid)
@@ -277,7 +251,6 @@ def ensure_hall_room(bid: str):
         rooms[hall] = {"name": hall, "has_password": False, "password": "", "creator": "hall", "description": "这里是「" + b['name'] + "」的公共会客区，客人们可以在这里聊天、留言、触发剧情。"}
         messages[hall] = []
     if hall not in b["rooms"]: b["rooms"].insert(0, hall)
-
 
 class Message(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = "匿名"
@@ -314,10 +287,8 @@ class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
 
-
 @app.get("/api/backup")
 async def backup_data(): return collect_all_data()
-
 
 @app.get("/api/backup/list")
 async def backup_list():
@@ -329,7 +300,6 @@ async def backup_list():
     except Exception: pass
     if os.path.exists(BAK_FILE): files.append({"name": "data.bak", "size": os.path.getsize(BAK_FILE)})
     return {"backups": files}
-
 
 @app.post("/api/restore_backup")
 async def restore_backup(data: BackupData):
@@ -353,7 +323,6 @@ async def restore_backup(data: BackupData):
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
 
-
 @app.post("/api/messages")
 async def send_message(msg: Message):
     room = clean_room_name(msg.room)
@@ -364,23 +333,21 @@ async def send_message(msg: Message):
     entry = save_entry(msg.sender, msg.content, msg.role, room)
     return {"ok": True, "time": entry["time"]}
 
-
 @app.get("/api/messages")
 async def get_messages(count: int = 200, room: str = "main", password: str = "", user: str = ""):
     room = clean_room_name(room)
     if not room_exists(room): raise HTTPException(status_code=404, detail="房间不存在")
     if not check_room_access(room, password): raise HTTPException(status_code=403, detail="密码错误")
-    if not can_access_room(room, user): raise HTTPException(status_code=403, detail="🔒 需要主人同意才能进入")
+    if not can_view_room(room, user): raise HTTPException(status_code=403, detail="🔒 需要主人同意才能进入")
     msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))
     return {"messages": msgs[-count:], "room": room}
-
 
 @app.post("/api/restore")
 async def restore_messages(data: RestoreMessages):
     room = clean_room_name(data.room)
     if not room_exists(room): raise HTTPException(status_code=404, detail="房间不存在")
     if not check_room_access(room, data.password): raise HTTPException(status_code=403, detail="密码错误")
-    if not can_access_room(room, data.messages[-1].get("sender", "") if data.messages else ""): raise HTTPException(status_code=403, detail="🔒 需要主人同意才能进入")
+    if not can_view_room(room, data.messages[-1].get("sender", "") if data.messages else ""): raise HTTPException(status_code=403, detail="🔒 需要主人同意才能进入")
     if room not in messages: messages[room] = []
     existing = {f"{m['sender']}|{m['content']}|{m['time']}" for m in messages[room]}
     for m in data.messages:
@@ -391,10 +358,8 @@ async def restore_messages(data: RestoreMessages):
     save_data()
     return {"ok": True}
 
-
 @app.get("/api/rooms")
 async def list_rooms(): return {"rooms": get_all_rooms()}
-
 
 @app.post("/api/rooms")
 async def create_room(data: RoomCreate):
@@ -405,14 +370,12 @@ async def create_room(data: RoomCreate):
     messages[name] = []; save_data()
     return {"ok": True, "room": name}
 
-
 @app.post("/api/rooms/join")
 async def join_room(data: RoomJoin):
     name = data.name.strip()
     if not name or name not in rooms: raise HTTPException(status_code=404, detail="房间不存在")
     if is_room_locked(name) and data.password != get_room_password(name): raise HTTPException(status_code=403, detail="密码错误")
     return {"ok": True, "room": name}
-
 
 @app.post("/api/rooms/delete")
 async def delete_room(data: RoomDelete):
@@ -428,7 +391,6 @@ async def delete_room(data: RoomDelete):
     save_data()
     return {"ok": True}
 
-
 @app.post("/api/current_room")
 async def set_current_room(data: CurrentRoom):
     room = clean_room_name(data.room)
@@ -437,7 +399,6 @@ async def set_current_room(data: CurrentRoom):
     active_room["current"] = room; active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
     return {"ok": True, "room": room}
 
-
 @app.post("/api/heartbeat")
 async def heartbeat(data: Heartbeat):
     if data.name:
@@ -445,10 +406,8 @@ async def heartbeat(data: Heartbeat):
         return {"ok": True}
     return {"ok": False}
 
-
 @app.get("/api/online")
 async def get_online(): return {"online": get_online_members()}
-
 
 @app.post("/api/avatar")
 async def upload_avatar(data: AvatarUpload):
@@ -457,16 +416,13 @@ async def upload_avatar(data: AvatarUpload):
         save_data(); return {"ok": True}
     return {"ok": False}
 
-
 @app.get("/api/avatar")
 async def get_avatars(): return {"avatars": avatars}
-
 
 @app.get("/api/time_settings")
 async def get_time_settings(room: str = "main"):
     room = clean_room_name(room)
     return {"settings": time_settings.get(room, {"mode": "real", "fixed_time": "19:00"})}
-
 
 @app.post("/api/time_settings")
 async def set_time_settings(data: TimeSettings):
@@ -475,7 +431,6 @@ async def set_time_settings(data: TimeSettings):
     if data.mode not in ("real", "fixed"): raise HTTPException(status_code=400, detail="mode 必须为 real 或 fixed")
     time_settings[room] = {"mode": data.mode, "fixed_time": data.fixed_time}; save_data()
     return {"settings": time_settings[room]}
-
 
 @app.post("/api/remove_member")
 async def remove_member(data: RemoveMember):
@@ -487,11 +442,9 @@ async def remove_member(data: RemoveMember):
     save_data()
     return {"ok": True}
 
-
 @app.get("/api/map")
 async def get_map():
     return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "rooms": rooms}
-
 
 @app.post("/api/map/region")
 async def create_region(data: RegionCreate):
@@ -499,7 +452,6 @@ async def create_region(data: RegionCreate):
     if not label: raise HTTPException(status_code=400, detail="区域名不能为空")
     regions[label] = {"label": label, "x": max(0, min(100, data.x)), "y": max(0, min(100, data.y)), "image": data.image}
     save_data(); return {"ok": True}
-
 
 @app.post("/api/map/region/delete")
 async def delete_region(data: RegionDelete):
@@ -509,7 +461,6 @@ async def delete_region(data: RegionDelete):
     for bid, b in list(buildings.items()):
         if b.get("region") == label: b["region"] = ""
     save_data(); return {"ok": True}
-
 
 @app.post("/api/map/building")
 async def create_building(data: BuildingCreate):
@@ -522,13 +473,11 @@ async def create_building(data: BuildingCreate):
     ensure_hall_room(bid); save_data()
     return {"ok": True, "building_id": bid}
 
-
 @app.post("/api/map/building/move")
 async def move_building(data: BuildingMove):
     if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
     buildings[data.building_id]["x"] = max(0, min(100, data.x)); buildings[data.building_id]["y"] = max(0, min(100, data.y))
     save_data(); return {"ok": True}
-
 
 @app.post("/api/map/building/rename")
 async def rename_building(data: BuildingRename):
@@ -539,13 +488,11 @@ async def rename_building(data: BuildingRename):
     ensure_hall_room(data.building_id); save_data()
     return {"ok": True}
 
-
 @app.post("/api/map/building/desc")
 async def set_building_desc(data: BuildingDesc):
     if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
     buildings[data.building_id]["description"] = data.description; save_data()
     return {"ok": True}
-
 
 @app.post("/api/map/building/delete")
 async def delete_building(data: BuildingDelete):
@@ -555,7 +502,6 @@ async def delete_building(data: BuildingDelete):
         rooms.pop(room, None); messages.pop(room, None); room_bg.pop(room, None); notes.pop(room, None); diaries.pop(room, None); room_access.pop(room, None); room_requests.pop(room, None)
     buildings.pop(bid, None); npcs.pop(bid, None); stories.pop(bid, None)
     save_data(); return {"ok": True}
-
 
 @app.post("/api/map/room")
 async def create_building_room(data: BuildingRoomCreate):
@@ -571,7 +517,6 @@ async def create_building_room(data: BuildingRoomCreate):
     save_data()
     return {"ok": True, "room": name}
 
-
 @app.post("/api/map/room/delete")
 async def delete_building_room(data: BuildingRoomDelete):
     bid, room = data.building_id, data.room
@@ -580,13 +525,11 @@ async def delete_building_room(data: BuildingRoomDelete):
     rooms.pop(room, None); messages.pop(room, None); room_bg.pop(room, None); room_access.pop(room, None); room_requests.pop(room, None)
     save_data(); return {"ok": True}
 
-
 @app.post("/api/room/bg")
 async def set_room_bg(data: RoomBg):
     room = clean_room_name(data.room)
     room_bg[room] = save_base64_image(data.image, "bg"); save_data()
     return {"ok": True}
-
 
 @app.post("/api/room/desc")
 async def set_room_desc(data: RoomDesc):
@@ -595,12 +538,10 @@ async def set_room_desc(data: RoomDesc):
     rooms[room]["description"] = data.description; save_data()
     return {"ok": True}
 
-
 @app.get("/api/room/desc")
 async def get_room_desc(room: str = "main"):
     room = clean_room_name(room)
     return {"description": rooms.get(room, {}).get("description", "")}
-
 
 @app.post("/api/user_ais")
 async def save_user_ais(data: UserAis):
@@ -609,10 +550,8 @@ async def save_user_ais(data: UserAis):
     user_ais[user] = [a.strip() for a in data.ais if a.strip()]; save_data()
     return {"ok": True}
 
-
 @app.get("/api/edit_status")
 async def edit_status(): return {"locked": bool(edit_pwd)}
-
 
 @app.post("/api/set_edit_pwd")
 async def set_edit_pwd_api(data: EditPwd):
@@ -620,12 +559,10 @@ async def set_edit_pwd_api(data: EditPwd):
     edit_pwd = data.pwd.strip(); save_data()
     return {"ok": True, "locked": bool(edit_pwd)}
 
-
 @app.post("/api/check_edit_pwd")
 async def check_edit_pwd_api(data: EditPwd):
     if edit_pwd and data.pwd == edit_pwd: return {"ok": True}
     return {"ok": False}
-
 
 @app.post("/api/room/apply")
 async def apply_room(data: RoomApply):
@@ -637,12 +574,10 @@ async def apply_room(data: RoomApply):
     room_requests[room].append({"applicant": applicant, "time": get_current_time(room)})
     save_data(); return {"ok": True, "msg": "申请已提交，等待主人同意"}
 
-
 @app.get("/api/room/requests")
 async def get_room_requests(room: str = ""):
     room = clean_room_name(room)
     return {"requests": room_requests.get(room, [])}
-
 
 @app.post("/api/room/grant")
 async def grant_room(data: RoomGrant):
@@ -661,7 +596,6 @@ async def grant_room(data: RoomGrant):
     save_data()
     return {"ok": True, "msg": "已" + ("同意" if data.allow else "拒绝") + " " + data.user + " 的访问"}
 
-
 @app.post("/api/room/revoke")
 async def revoke_room(data: RoomRevoke):
     room = clean_room_name(data.room)
@@ -672,12 +606,10 @@ async def revoke_room(data: RoomRevoke):
     if room in room_access: room_access[room] = [u for u in room_access[room] if u != data.user]
     save_data(); return {"ok": True, "msg": "已移除 " + data.user + " 的访问权限"}
 
-
 @app.get("/api/notes")
 async def get_notes(room: str = "main"):
     room = clean_room_name(room)
     return {"notes": notes.get(room, [])}
-
 
 @app.post("/api/notes")
 async def add_note(data: NoteItem):
@@ -685,7 +617,6 @@ async def add_note(data: NoteItem):
     if not data.text.strip(): raise HTTPException(status_code=400, detail="内容不能为空")
     item = add_note_to_room(room, data.author or "匿名", data.text)
     return {"ok": True, "note": item}
-
 
 @app.post("/api/notes/reply")
 async def reply_note(data: NoteReply):
@@ -697,12 +628,10 @@ async def reply_note(data: NoteReply):
             save_data(); return {"ok": True, "note": n}
     raise HTTPException(status_code=404, detail="便签不存在")
 
-
 @app.get("/api/diaries")
 async def get_diaries(room: str = "main"):
     room = clean_room_name(room)
     return {"diaries": diaries.get(room, [])}
-
 
 @app.post("/api/diaries")
 async def add_diary(data: NoteItem):
@@ -712,7 +641,6 @@ async def add_diary(data: NoteItem):
     diaries[room].append({"author": data.author or "匿名", "text": data.text, "time": get_current_time(room), "comment": None})
     if len(diaries[room]) > 200: diaries[room] = diaries[room][-200:]
     save_data(); return {"ok": True}
-
 
 @app.post("/api/diaries/comment")
 async def comment_diary(data: DiaryComment):
@@ -724,10 +652,8 @@ async def comment_diary(data: DiaryComment):
     d["comment"] = {"author": data.author or "匿名", "text": data.text, "time": get_current_time(room)}
     save_data(); return {"ok": True}
 
-
 @app.get("/api/npc")
 async def get_npc(building_id: str): return {"npcs": npcs.get(building_id, [])}
-
 
 @app.post("/api/npc")
 async def add_npc(data: NpcCreate):
@@ -737,14 +663,12 @@ async def add_npc(data: NpcCreate):
     npcs[data.building_id].append({"name": data.name.strip(), "emoji": data.emoji or "👤", "desc": data.desc})
     save_data(); return {"ok": True}
 
-
 @app.post("/api/npc/delete")
 async def delete_npc(data: NpcDelete):
     if data.building_id in npcs:
         npcs[data.building_id] = [n for n in npcs[data.building_id] if n["name"] != data.name]
         save_data()
     return {"ok": True}
-
 
 @app.post("/api/npc/edit")
 async def edit_npc(data: NpcEdit):
@@ -757,10 +681,8 @@ async def edit_npc(data: NpcEdit):
             save_data(); return {"ok": True}
     raise HTTPException(status_code=404, detail="NPC 不存在")
 
-
 @app.get("/api/story")
 async def get_story(building_id: str): return {"stories": stories.get(building_id, [])}
-
 
 @app.post("/api/story")
 async def add_story(data: StoryItem):
@@ -771,14 +693,12 @@ async def add_story(data: StoryItem):
     if len(stories[data.building_id]) > 200: stories[data.building_id] = stories[data.building_id][-200:]
     save_data(); return {"ok": True}
 
-
 def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
-
 
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.2.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -786,14 +706,14 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.2.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": [
             {"name": "group_send", "description": "发送消息。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选"}}, "required": ["sender", "content"]}},
-            {"name": "group_query", "description": "查看一切信息。type：map / building(需building_id) / room(需room) / npc(需building_id) / story(需building_id) / notes(需room) / diaries(需room) / messages(需room) / members / current_room / rooms / room_status。sender 填你的名字（用于判断私密房间权限）。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "sender": {"type": "string", "description": "你的名字"}, "count": {"type": "integer"}}, "required": ["type"]}},
-            {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+            {"name": "group_query", "description": "查看一切信息。type：map / building(需building_id) / room(需room) / npc(需building_id) / story(需building_id) / notes(需room) / diaries(需room) / messages(需room) / members / current_room / rooms / room_status。sender 必填你的名字（用于判断私密房间权限）。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（如 黎深），否则私密房间看不到"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+            {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string", "description": "你的名字"}}, "required": ["type", "content", "sender"]}},
             {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}}
         ]}})
     if method == "tools/call":
@@ -810,7 +730,6 @@ async def mcp_endpoint(request: Request):
         else: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Tool '{tool_name}' not found"}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
-
 async def mcp_send(args: dict, request_id):
     sender = args.get("sender", "助手"); content = args.get("content", ""); role = "assistant"
     room = args.get("room"); password = ""
@@ -825,7 +744,6 @@ async def mcp_send(args: dict, request_id):
         if active_room.get("current") != room: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」需要主人同意才能进入。请先调用 group_access 申请。"}]}})
     save_entry(sender, content, role, room)
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到「{room_label(room)}」：{content}"}]}})
-
 
 async def mcp_query(args: dict, request_id):
     t = args.get("type", "map"); room = clean_room_name(args.get("room", "main")); bid = args.get("building_id", ""); count = args.get("count", 10); sender = args.get("sender", "")
@@ -854,7 +772,7 @@ async def mcp_query(args: dict, request_id):
                 rd = (rooms.get(rn, {}).get("description") or "").split("\n")[0][:50]
                 text += f"\n🛋️ {rn}：{rd or '（暂无简介）'}"
             else:
-                if can_access_room(rn, sender):
+                if can_view_room(rn, sender):
                     rd = (rooms.get(rn, {}).get("description") or "").split("\n")[0][:50]
                     text += f"\n🚪 {rn}：{rd or '（暂无简介）'}"
                 else: text += f"\n🔒 {rn}：私密房间（需要主人授权才能进入）"
@@ -862,7 +780,7 @@ async def mcp_query(args: dict, request_id):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "room":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。想进入可调用 group_access 申请。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。想进入可调用 group_access 申请。"}]}})
         desc = rooms.get(room, {}).get("description") or "（暂无简介）"
         msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
         text = f"🚪 房间「{room_label(room)}」\n\n📝 简介：{desc}\n\n💬 最近消息：\n"
@@ -877,18 +795,18 @@ async def mcp_query(args: dict, request_id):
         text = f"🎬 「{bname}」剧情簿（{len(items)} 条）：\n" + "\n".join([f"\n📅 {s['time']} {s['author']}：\n{s['text']}" for s in items]) if items else f"📭 「{bname}」的剧情簿还是空的"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "notes":
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
         items = notes.get(room, [])
         text = f"📌 「{room}」便签墙（{len(items)} 条）：\n" + "\n".join([f"· [{n['id']}] {n['author']}：{n['text']}（{n['time']}）" + (f" ↳ 💬 {n['reply']['author']}：{n['reply']['text']}" if n.get("reply") else "") for n in items]) if items else f"📭 「{room}」的便签墙是空的"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "diaries":
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
         items = diaries.get(room, [])
         text = f"📖 「{room}」的日记（{len(items)} 篇）：\n" + "\n".join([f"· {n['author']}：{n['text']}（{n['time']}）" + (f" ↳ ✍️ {n['comment']['author']}批注：{n['comment']['text']}" if n.get("comment") else "") for n in items]) if items else f"📭 「{room}」的日记本是空白的"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "messages":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。"}]}})
         msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
         text = f"📋 房间「{room_label(room)}」最近 {len(msgs)} 条消息：\n" + "\n".join([f"{m['sender']}: {m['content']} ({m['time']})" for m in msgs]) if msgs else f"📭 房间「{room_label(room)}」暂无消息"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
@@ -912,18 +830,17 @@ async def mcp_query(args: dict, request_id):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type"}]}})
 
-
 async def mcp_write(args: dict, request_id):
     t = args.get("type", "note"); room = clean_room_name(args.get("room", "main")); content = args.get("content", ""); sender = args.get("sender", "神秘人"); bid = args.get("building_id", ""); note_id = args.get("note_id", "")
     if t == "note":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里贴便签。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里贴便签。"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签内容不能为空"}]}})
         item = add_note_to_room(room, sender, content)
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"💌 便签已贴上「{room}」（ID: {item['id']}）！"}]}})
     if t == "diary":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
-        if not can_access_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里写日记。"}]}})
+        if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里写日记。"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 日记内容不能为空"}]}})
         if room not in diaries: diaries[room] = []
         diaries[room].append({"author": sender, "text": content, "time": get_current_time(room), "comment": None})
@@ -951,7 +868,6 @@ async def mcp_write(args: dict, request_id):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签不存在"}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type"}]}})
 
-
 async def mcp_access(args: dict, request_id):
     room = clean_room_name(args.get("room", "")); sender = args.get("sender", "神秘人")
     if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
@@ -961,7 +877,6 @@ async def mcp_access(args: dict, request_id):
     room_requests[room].append({"applicant": sender, "time": get_current_time(room)})
     save_data()
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"📨 已向房间「{room}」的主人提交访问申请，等主人同意后你就能进去了！"}]}})
-
 
 if __name__ == "__main__":
     import uvicorn

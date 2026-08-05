@@ -628,14 +628,25 @@ function renderBuilding(){
     html+='</div>';
   }
   if(ce && isOwner && !isPublic){
-    var reqCount = 0;
-    (b.rooms||[]).forEach(function(r){ reqCount += (mapData.room_requests[r]||[]).length; });
-    html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><span style="cursor:pointer;font-size:22px" onclick="openPerm()" title="访问管理">🔑</span><span class="tip" style="flex:1">访问管理'+(reqCount?'（'+reqCount+' 个申请）':'')+'</span></div>';
+    var reqCount = 0, reqList = [];
+    (b.rooms||[]).forEach(function(r){
+      (mapData.room_requests[r]||[]).forEach(function(q){ reqCount++; reqList.push({room:r, q:q}); });
+    });
+    html+='<div style="cursor:pointer;display:flex;align-items:center;gap:10px;margin:10px 0" onclick="openPerm()"><span style="font-size:22px">🔑</span><span class="tip" style="flex:1">访问管理'+(reqCount?'（'+reqCount+' 个申请）':'')+'</span></div>';
+    if(reqCount){
+      reqList.forEach(function(it){
+        html+='<div class="req-card"><span class="q-name">'+esc(it.room)+' · 👤 '+esc(it.q.applicant)+'</span><span class="q-time">'+esc(it.q.time)+'</span><button class="btn green" style="margin:0" onclick="grantUserDirect(\''+esc(it.room)+'\',\''+esc(it.q.applicant)+'\',true)">✅同意</button><button class="btn gray" style="margin:0" onclick="grantUserDirect(\''+esc(it.room)+'\',\''+esc(it.q.applicant)+'\',false)">❌拒绝</button></div>';
+      });
+    }
   }
   html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）'+(ce?'<span style="cursor:pointer;font-size:16px;margin-left:8px" onclick="addNpcPrompt()">➕</span>':'')+'</div>';
   (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div>'+(ce?'<span style="cursor:pointer;color:#7fd0ff;font-size:14px;margin-left:auto" onclick="editNpc(\''+esc(n.name)+'\')">✏️</span><span style="cursor:pointer;color:#ff6b6b;font-size:14px;margin-left:8px" onclick="deleteNpc(\''+esc(n.name)+'\')">🗑️</span>':'')+'</div>'; });
   html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
   el.innerHTML=html;
+}
+function grantUserDirect(room,user,allow){
+  var b=mapData.buildings[currentBuilding];
+  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function editBuildingDesc(){
   var b=mapData.buildings[currentBuilding];
@@ -765,11 +776,11 @@ function openPerm(){
 function hidePerm(){ document.getElementById('permMask').classList.remove('show'); }
 function grantUser(room,user,allow){
   var b=mapData.buildings[currentBuilding];
-  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData().then(openPerm); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData().then(function(){ openPerm(); renderBuilding(); }); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function revokeUser(room,user){
   var b=mapData.buildings[currentBuilding];
-  api('/api/room/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user})}).then(function(){ toast('🗑️ 已移除 '+user); loadMapData().then(openPerm); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/room/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user})}).then(function(){ toast('🗑️ 已移除 '+user); loadMapData().then(function(){ openPerm(); renderBuilding(); }); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function applyRoom(room){
   api('/api/room/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,applicant:userName})}).then(function(d){ toast('📨 '+d.msg); }).catch(function(e){ toast('❌ '+e.message); });
