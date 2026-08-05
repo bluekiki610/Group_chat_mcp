@@ -14,6 +14,9 @@ header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding
 .online-badge { font-size:11px; background:rgba(80,180,255,.2); padding:3px 8px; border-radius:10px; cursor:pointer; border:1px solid rgba(80,180,255,.3); }
 .header-btns { display:flex; gap:8px; }
 .hbtn { background:rgba(80,180,255,.15); border:1px solid rgba(80,180,255,.3); color:#9fd8ff; padding:5px 10px; border-radius:8px; font-size:13px; cursor:pointer; }
+.room-desc-bar { background:#0a1424; border-bottom:1px solid rgba(80,180,255,.12); padding:6px 14px; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.room-desc-bar .rd-text { flex:1; font-size:12px; color:#7fa8cf; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.room-desc-bar .rd-edit { font-size:11px; color:#7fd0ff; cursor:pointer; flex-shrink:0; }
 .room-tabs { display:flex; gap:6px; padding:8px 12px; background:#0d1a2e; overflow-x:auto; flex-shrink:0; }
 .room-tab { background:#13233d; border:1px solid rgba(80,180,255,.15); color:#cfe8ff; padding:6px 14px; border-radius:15px; font-size:13px; cursor:pointer; white-space:nowrap; }
 .room-tab.active { background:#0e7fd4; color:#fff; }
@@ -26,10 +29,8 @@ header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding
 .msg .bubble { padding:9px 12px; border-radius:10px; font-size:15px; line-height:1.5; word-break:break-word; }
 .msg.me { flex-direction:row-reverse; }
 .msg.me .meta { text-align:right; }
-.msg.me .bubble { background:#0e7fd4; color:#fff; }
-.msg.other .bubble { background:#1c2f4d; color:#e6f1ff; border:1px solid rgba(80,180,255,.15); }
 .msg.system { justify-content:center; }
-.msg.system .bubble { background:transparent; color:#6d8bb0; font-size:12px; }
+.msg.system .bubble { background:transparent; color:#6d8bb0; font-size:12px; box-shadow:none; padding:2px 10px; }
 .sys-tip { text-align:center; color:#6d8bb0; font-size:12px; padding:4px; }
 footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:8px 10px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
 #msgInput { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:9px 12px; font-size:15px; outline:none; background:#13233d; color:#e6f1ff; }
@@ -120,18 +121,39 @@ textarea.input { color:#e6f1ff; }
 .note-card .n-time { font-size:11px; color:#6d8bb0; }
 .note-card .n-reply { background:#12365c; border-radius:8px; padding:6px 8px; margin-top:6px; font-size:13px; color:#9fd8ff; }
 .note-card .n-rep-btn { font-size:11px; color:#7fd0ff; cursor:pointer; margin-left:6px; }
+.pair-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:10px; padding:8px 10px; margin-bottom:6px; display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe8ff; }
+.pair-item .p-color { width:16px; height:16px; border-radius:4px; flex-shrink:0; }
+.pair-item .p-del { color:#ff6b6b; margin-left:auto; cursor:pointer; }
+.color-opt { display:inline-flex; align-items:center; gap:4px; background:#13233d; border:1px solid rgba(80,180,255,.3); border-radius:8px; padding:5px 8px; margin:3px; cursor:pointer; font-size:12px; color:#cfe8ff; }
+.color-opt.sel { border-color:#0e7fd4; background:#0e7fd4; color:#fff; }
+.color-opt .c { width:12px; height:12px; border-radius:3px; }
+.priv-tab { display:flex; gap:8px; margin-bottom:10px; }
+.priv-tab button { flex:1; background:#13233d; border:1px solid rgba(80,180,255,.3); color:#9fd8ff; padding:8px 0; border-radius:10px; font-size:13px; cursor:pointer; }
+.priv-tab button.on { background:#0e7fd4; color:#fff; }
 </style>
 </head>
 <body>
 <div class="app">
   <div id="chatView">
     <header>
-      <div class="header-title"><span>🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
-      <div class="header-btns"><button class="hbtn" onclick="showMap()">🗺️ 地图</button><button class="hbtn" onclick="openSettings()">⚙️</button></div>
+      <div class="header-title"><span id="roomEmoji">🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
+      <div class="header-btns">
+        <button class="hbtn" id="privBtn" onclick="togglePrivate()" style="display:none">🏠 私人空间</button>
+        <button class="hbtn" onclick="showMap()">🗺️ 地图</button>
+        <button class="hbtn" onclick="openSettings()">⚙️</button>
+      </div>
     </header>
+    <div class="room-desc-bar" id="roomDescBar" style="display:none">
+      <span class="rd-text" id="roomDescText"></span>
+      <span class="rd-edit" id="roomDescEdit" onclick="editRoomDesc()" style="display:none">✏️ 编辑</span>
+    </div>
     <div class="room-tabs" id="roomTabs"></div>
     <div id="msgArea"></div>
-    <footer><input id="msgInput" placeholder="说点什么吧…" autocomplete="off"><button id="sendBtn" onclick="sendMessage()">发送</button></footer>
+    <footer>
+      <button class="hbtn" id="privFooterBtn" onclick="togglePrivate()" style="display:none;flex-shrink:0">🏠</button>
+      <input id="msgInput" placeholder="说点什么吧…" autocomplete="off">
+      <button id="sendBtn" onclick="sendMessage()">发送</button>
+    </footer>
   </div>
 
   <div class="map-view" id="mapView">
@@ -200,10 +222,12 @@ textarea.input { color:#e6f1ff; }
     <div class="modal">
       <h3>⚙️ 设置</h3>
       <div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div>
+      <div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔，如：黎深,秦彻）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div>
+      <div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div><div class="tip">同对成员说话用同一色系（真人深色、AI浅色），一眼分辨</div></div>
       <div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div>
-      <div class="set-group"><label>🔊 朗读（名字逗号分隔，如：黎深,秦彻）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div>
+      <div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div>
       <div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div>
-      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">换服务器前先下载备份，新服务器上传恢复；地图/房子/聊天全保留</div></div>
+      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">换服务器前先下载备份，新服务器上传恢复</div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
@@ -217,6 +241,20 @@ textarea.input { color:#e6f1ff; }
   <div class="modal-mask" id="permMask" onclick="if(event.target===this)hidePerm()">
     <div class="modal"><h3 id="permTitle">🔑 访问管理</h3><div id="permList"></div><button class="btn gray" style="width:100%;margin-top:8px" onclick="hidePerm()">关闭</button></div>
   </div>
+  <div class="modal-mask" id="privateMask" onclick="if(event.target===this)hidePrivate()">
+    <div class="modal">
+      <h3>🏠 私人空间 · <span id="privRoomName"></span></h3>
+      <div class="priv-tab">
+        <button id="ptabNote" class="on" onclick="setPrivTab('note')">💌 纸条</button>
+        <button id="ptabDiary" onclick="setPrivTab('diary')">📖 日记</button>
+        <button id="ptabStory" onclick="setPrivTab('story')">🎬 剧情</button>
+      </div>
+      <div id="privList"></div>
+      <textarea class="input" id="privInput" rows="2" placeholder="写点什么…"></textarea>
+      <button class="btn" id="privSend" onclick="submitPriv()">写</button>
+      <button class="btn gray" onclick="hidePrivate()">关闭</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -225,10 +263,20 @@ var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
 var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
-var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {} };
+var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {}, user_ais: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
 var editMode = false, placeType = null, pendingEmoji = '🏠', pendingType = null, myHomeBid = null;
-var noteRoom = null, replyNoteId = null, opTarget = null, opType = null, permRoom = null;
+var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
+var privTab = 'note', privBuildingId = null;
+var colorPairs = JSON.parse(localStorage.getItem('gc_pairs') || '[]');
+var selectedPairColor = 0;
+var PAIR_COLORS = [
+  {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
+  {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
+  {name:'翠绿/浅绿', dark:'#0e9f6e', light:'#a8e6c8'},
+  {name:'金黄/浅黄', dark:'#d9a013', light:'#ffe9a8'},
+  {name:'紫罗兰/浅紫', dark:'#8e5bd0', light:'#d5b8ff'}
+];
 
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
@@ -236,21 +284,64 @@ function toast(msg){ var t=document.createElement('div'); t.style.cssText='posit
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
 
+// ===== 气泡配色 =====
+function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
+function bubbleBg(sender, isMe){
+  var p = pairOf(sender);
+  if(p){ return isMe ? p.dark : (sender===p.owner ? p.dark : p.light); }
+  return isMe ? '#0e7fd4' : '#1c2f4d';
+}
+function savePairs(){ localStorage.setItem('gc_pairs', JSON.stringify(colorPairs)); }
+function renderPairColors(){
+  var el = document.getElementById('pairColors'); el.innerHTML='';
+  for(var i=0;i<PAIR_COLORS.length;i++){
+    var c=PAIR_COLORS[i];
+    var d=document.createElement('span'); d.className='color-opt'+(selectedPairColor===i?' sel':'');
+    d.innerHTML='<span class="c" style="background:'+c.dark+'"></span><span class="c" style="background:'+c.light+'"></span>'+c.name;
+    d.onclick=function(idx){ return function(){ selectedPairColor=idx; renderPairColors(); }; }(i);
+    el.appendChild(d);
+  }
+}
+function renderPairList(){
+  var el=document.getElementById('pairList'); el.innerHTML='';
+  colorPairs.forEach(function(p,i){
+    var d=document.createElement('div'); d.className='pair-item';
+    d.innerHTML='<span class="p-color" style="background:linear-gradient(90deg,'+p.dark+','+p.light+')"></span><span>'+esc(p.names.join(' · '))+'</span><span class="p-del" onclick="delPair('+i+')">✖</span>';
+    el.appendChild(d);
+  });
+}
+function addPair(){
+  var names = (document.getElementById('pairNames').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
+  if(names.length<2){ toast('至少填 2 个名字（真人+AI）'); return; }
+  var c = PAIR_COLORS[selectedPairColor];
+  colorPairs.push({owner:names[0], names:names, dark:c.dark, light:c.light});
+  savePairs(); document.getElementById('pairNames').value=''; renderPairList(); toast('✅ 配对已添加：'+names.join('·')+'（'+c.name+'）');
+}
+function delPair(i){ colorPairs.splice(i,1); savePairs(); renderPairList(); }
+
+// ===== 我的 AI（方案B） =====
+function saveMyAis(){
+  var ais = (document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
+  api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); }).catch(function(e){ toast('❌ '+e.message); });
+}
+
 // ===== 权限工具 =====
 function buildingOfRoom(room){ for(var bid in mapData.buildings){ if((mapData.buildings[bid].rooms||[]).indexOf(room)>=0) return mapData.buildings[bid]; } return null; }
 function isHallRoom(room){ var b=buildingOfRoom(room); return b && room.indexOf('·会客厅')>=0; }
-function isPrivateRoom(room){ return buildingOfRoom(room) !== null && !isHallRoom(room); }
+function isPrivateRoom(room){ var b=buildingOfRoom(room); return b!==null && b.type!=='npc' && !isHallRoom(room); }
 function canEnterRoom(room){
   if(room==='main') return true;
+  var b=buildingOfRoom(room); if(!b) return true;
+  if(b.type==='npc') return true;
   if(isHallRoom(room)) return true;
-  var b=buildingOfRoom(room);
-  if(!b) return true;
   if(b.owner===userName) return true;
   var acc = mapData.room_access[room] || [];
-  return acc.indexOf(userName)>=0;
+  if(acc.indexOf(userName)>=0) return true;
+  for(var i=0;i<acc.length;i++){ if((mapData.user_ais[acc[i]]||[]).indexOf(userName)>=0) return true; }
+  return false;
 }
 
-function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); }
+function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); }
 function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); }
 function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
 function showBuilding(bid){ currentBuilding=bid; ['chatView','mapView','regionView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('buildingView').style.display='flex'; exitModes(); renderBuilding(); }
@@ -271,13 +362,11 @@ function renderMap(){
 }
 function layoutMap(scope){
   var img = scope==='map' ? document.getElementById('mapImg') : document.getElementById('regionImg');
-  var stage = stageOf(scope);
-  var canvas = canvasOf(scope);
+  var stage = stageOf(scope); var canvas = canvasOf(scope);
   var w = stage.clientWidth, h = stage.clientHeight;
   var iw = img.naturalWidth||800, ih = img.naturalHeight||600;
   var base = Math.max(w, h*iw/ih) * 1.25;
-  canvas.style.width = base+'px';
-  canvas.style.height = (base*ih/iw)+'px';
+  canvas.style.width = base+'px'; canvas.style.height = (base*ih/iw)+'px';
   canvas.dataset.w = base; canvas.dataset.h = base*ih/iw;
   canvas.style.transform = 'translate(0px,0px) scale(1)';
   canvas.dataset.x=0; canvas.dataset.y=0; canvas.dataset.s=1;
@@ -294,19 +383,12 @@ function renderRegion(){
   else if(base.indexOf('.jpeg')>=0){ cands.push(base.replace('.jpeg','.png')); cands.push(base.replace('.jpeg','.jpg')); }
   var idx=0;
   function tryLoad(){
-    if(idx>=cands.length){
-      img.style.opacity=1;
-      layoutMap('region');
-      renderMarkers('regionCanvas','region',currentRegion);
-      toast('⚠️ 分区图未找到：'+base+'（请确认 images 文件夹里有这个文件，或重建设置区域时改路径）');
-      return;
-    }
+    if(idx>=cands.length){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); toast('⚠️ 分区图未找到：'+base); return; }
     img.onload=function(){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); };
     img.onerror=function(){ idx++; tryLoad(); };
     img.src=cands[idx];
   }
-  tryLoad();
-  renderMarkers('regionCanvas','region',currentRegion);
+  tryLoad(); renderMarkers('regionCanvas','region',currentRegion);
 }
 function canvasOf(scope){ return scope==='map'?document.getElementById('mapCanvas'):document.getElementById('regionCanvas'); }
 function stageOf(scope){ return scope==='map'?document.getElementById('mapStage'):document.getElementById('regionStage'); }
@@ -345,12 +427,8 @@ function startPlace(type){
   if(type==='region'){
     if(currentRegion){ toast('区域请在地图总览放置'); return; }
     placeType='region'; pendingType=null;
-    document.getElementById('placeHint').style.display='flex';
-    toast('📌 点击地图放置区域');
-  } else {
-    pendingType = type;
-    showStyleSheet();
-  }
+    document.getElementById('placeHint').style.display='flex'; toast('📌 点击地图放置区域');
+  } else { pendingType = type; showStyleSheet(); }
 }
 var STYLES = ['🏠','🏡','🏰','🏯','🏕️','🛖','🏨','🏩','☕','🍜','🍰','🍕','🍷','🍸','🥂','🍺','🏪','🏬','🏦','💐','📚','🖼️','🐱','🐶','🧸','🏥','💊','🏫','🎓','🏋️','🚓','🚒','🚑','🚉','✈️','🚂','⛽','🎬','🎭','🎪','🎡','🎠','🎢','🌳','🏞️','⛰️','🏖️','🗼','🎰','🎲'];
 function showStyleSheet(){
@@ -358,28 +436,27 @@ function showStyleSheet(){
   STYLES.forEach(function(s){ var d=document.createElement('div'); d.className='style-item'; d.textContent=s; d.onclick=function(){ pickStyle(s); }; g.appendChild(d); });
   var c=document.createElement('div'); c.className='style-item'; c.innerHTML='<span>➕</span><span class="st">自定义</span>';
   c.onclick=function(){ var e=prompt('输入任意 emoji 符号：','🏠'); if(e) pickStyle(e.trim()); };
-  g.appendChild(c);
-  document.getElementById('styleMask').classList.add('show');
+  g.appendChild(c); document.getElementById('styleMask').classList.add('show');
 }
 function hideStyleSheet(){ document.getElementById('styleMask').classList.remove('show'); }
 function pickStyle(e){ pendingEmoji=e; hideStyleSheet(); placeType=pendingType; var hint=currentRegion?document.getElementById('regionPlaceHint'):document.getElementById('placeHint'); hint.style.display='flex'; toast('📌 点击地图放置建筑'); }
 function cancelPlace(){ placeType=null; pendingType=null; document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function onStageTap(e, scope){
   if(!placeType) return;
-  var canvas=canvasOf(scope);
-  var rect=canvas.getBoundingClientRect();
+  var canvas=canvasOf(scope); var rect=canvas.getBoundingClientRect();
   if(rect.width<=0) return;
   var pctX=Math.max(0,Math.min(100,((e.clientX-rect.left)/rect.width)*100));
   var pctY=Math.max(0,Math.min(100,((e.clientY-rect.top)/rect.height)*100));
   if(placeType==='region'){
     var label=prompt('区域名字（如：花浦区、商业区）：',''); if(!label) return;
-    var img=prompt('有分区图吗？填路径如 /images/map_n109.png 或 /images/map_city.png，没有直接确定','');
-    api('/api/map/region',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:label,x:pctX,y:pctY,image:img||''})}).then(function(){ toast('📍 区域「'+label+'」已放置'); cancelPlace(); loadMap(); }).catch(function(err){ toast('❌ '+err.message); });
+    var img=prompt('有分区图吗？填路径如 /images/map_n109.png，没有直接确定','');
+    api('/api/map/region',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:label,x:pctX,y:pctY,image:img||''})}).then(function(){ toast('📍 区域已放置'); cancelPlace(); loadMap(); }).catch(function(err){ toast('❌ '+err.message); });
   } else {
-    var name=prompt('建筑名字（如：AKSO医院、江边大别墅）：',''); if(!name) return;
+    var name=prompt('建筑名字：',''); if(!name) return;
+    var desc=prompt('建筑简介（这个建筑是做什么的？AI 逛之前会读）：','')||'';
     var region=currentRegion||'';
-    api('/api/map/building',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,emoji:pendingEmoji,type:placeType,region:region,x:pctX,y:pctY,owner:userName})}).then(function(d){
-      toast('✅ 「'+name+'」已建成！自动带了会客厅'); cancelPlace();
+    api('/api/map/building',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,emoji:pendingEmoji,type:placeType,region:region,x:pctX,y:pctY,owner:userName,description:desc})}).then(function(d){
+      toast('✅ 「'+name+'」已建成！'); cancelPlace();
       if(currentRegion) renderRegion(); else loadMap();
       openBuilding(d.building_id);
     }).catch(function(err){ toast('❌ '+err.message); });
@@ -393,7 +470,7 @@ function openOp(type, key){
   var g=document.getElementById('opGrid'); g.innerHTML='';
   var items = type==='region'
     ? [['进入分区图','openOpEnter()'],['改名','openOpRename()'],['删除','openOpDelete()']]
-    : [['进入建筑','openOpEnter()'],['改名','openOpRename()'],['设为我的家','openOpHome()'],['删除','openOpDelete()']];
+    : [['进入建筑','openOpEnter()'],['改名','openOpRename()'],['改简介','openOpDesc()'],['设为我的家','openOpHome()'],['删除','openOpDelete()']];
   items.forEach(function(it){ var d=document.createElement('div'); d.className='s-item'; d.innerHTML='<span class="nm">'+it[0]+'</span>'; d.onclick=new Function(it[1]); g.appendChild(d); });
   document.getElementById('opMask').classList.add('show');
   if(currentRegion) renderRegion(); else loadMap();
@@ -404,16 +481,18 @@ function openOpRename(){
   if(opType==='region'){
     var nn=prompt('区域新名字：',opTarget); if(!nn) return;
     var r=mapData.regions[opTarget];
-    api('/api/map/region',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:nn,x:r.x,y:r.y,image:r.image||''})}).then(function(){
-      if(nn!==opTarget) api('/api/map/region/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:opTarget})}).then(function(){});
-      toast('✅ 已改名'); loadMap();
-    }).catch(function(e){ toast('❌ '+e.message); });
+    api('/api/map/region',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:nn,x:r.x,y:r.y,image:r.image||''})}).then(function(){ if(nn!==opTarget) api('/api/map/region/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:opTarget})}).then(function(){}); toast('✅ 已改名'); loadMap(); }).catch(function(e){ toast('❌ '+e.message); });
   } else {
     var n2=prompt('建筑新名字：',mapData.buildings[opTarget].name); if(!n2) return;
     api('/api/map/building/rename',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:opTarget,name:n2})}).then(function(){ toast('✅ 已改名'); hideOp(); }).catch(function(e){ toast('❌ '+e.message); });
   }
 }
-function openOpHome(){ myHomeBid=opTarget; toast('💗 已设为我的家：'+mapData.buildings[opTarget].name); hideOp(); }
+function openOpDesc(){
+  var d=prompt('建筑简介：',mapData.buildings[opTarget].description||'');
+  if(d===null) return;
+  api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:opTarget,description:d})}).then(function(){ toast('✅ 简介已更新'); hideOp(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function openOpHome(){ myHomeBid=opTarget; toast('💗 已设为我的家'); hideOp(); }
 function openOpDelete(){
   if(!confirm('确定删除？')) return;
   var p = opType==='region'
@@ -424,22 +503,19 @@ function openOpDelete(){
 
 var gestures = {};
 function initGestures(scope){
-  var stage = stageOf(scope);
-  var canvas = canvasOf(scope);
+  var stage = stageOf(scope); var canvas = canvasOf(scope);
   var g = { pointers:{}, pinch:false, dist:0, moved:false, downX:0, downY:0 };
   gestures[scope]=g;
   stage.addEventListener('pointerdown', function(e){
     if(placeType){ onStageTap(e, scope); return; }
-    g.pointers[e.pointerId]={x:e.clientX,y:e.clientY};
-    g.moved=false; g.downX=e.clientX; g.downY=e.clientY;
+    g.pointers[e.pointerId]={x:e.clientX,y:e.clientY}; g.moved=false; g.downX=e.clientX; g.downY=e.clientY;
     if(Object.keys(g.pointers).length===2){ g.pinch=true; g.dist=dist(g); }
     stage.setPointerCapture && stage.setPointerCapture(e.pointerId);
   });
   stage.addEventListener('pointermove', function(e){
     if(placeType) return;
     if(!(e.pointerId in g.pointers)) return;
-    var prev=g.pointers[e.pointerId];
-    var dx=e.clientX-prev.x, dy=e.clientY-prev.y;
+    var prev=g.pointers[e.pointerId]; var dx=e.clientX-prev.x, dy=e.clientY-prev.y;
     g.pointers[e.pointerId]={x:e.clientX,y:e.clientY};
     if(Math.abs(e.clientX-g.downX)+Math.abs(e.clientY-g.downY)>8) g.moved=true;
     if(g.pinch){
@@ -452,8 +528,7 @@ function initGestures(scope){
       }
     } else {
       var x=parseFloat(canvas.dataset.x||'0'), y=parseFloat(canvas.dataset.y||'0');
-      canvas.dataset.x=x+dx; canvas.dataset.y=y+dy;
-      applyTransform(canvas,scope);
+      canvas.dataset.x=x+dx; canvas.dataset.y=y+dy; applyTransform(canvas,scope);
     }
   });
   stage.addEventListener('pointerup', function(e){ delete g.pointers[e.pointerId]; if(g.pinch && Object.keys(g.pointers).length<2){ g.pinch=false; } });
@@ -465,10 +540,8 @@ function applyTransform(canvas, scope){
   var s=parseFloat(canvas.dataset.s||'1'), x=parseFloat(canvas.dataset.x||'0'), y=parseFloat(canvas.dataset.y||'0');
   var stage=stageOf(scope), cw=parseFloat(canvas.dataset.w||stage.clientWidth), ch=parseFloat(canvas.dataset.h||stage.clientHeight);
   var sw=stage.clientWidth, sh=stage.clientHeight;
-  var maxX=Math.max(0, cw*s - sw);
-  var maxY=Math.max(0, ch*s - sh);
-  x=Math.max(-maxX, Math.min(0, x));
-  y=Math.max(-maxY, Math.min(0, y));
+  var maxX=Math.max(0, cw*s - sw); var maxY=Math.max(0, ch*s - sh);
+  x=Math.max(-maxX, Math.min(0, x)); y=Math.max(-maxY, Math.min(0, y));
   canvas.dataset.x=x; canvas.dataset.y=y;
   canvas.style.transform='translate('+x+'px,'+y+'px) scale('+s+')';
 }
@@ -477,35 +550,30 @@ function zoomRegion(d){ var c=document.getElementById('regionCanvas'); c.dataset
 function zoomAt(scope,d){ var c=canvasOf(scope); c.dataset.s=Math.max(0.5,Math.min(4,(parseFloat(c.dataset.s||'1')+d))); applyTransform(c,scope); }
 initGestures('map'); initGestures('region');
 
-function openRegion(name){
-  var r=mapData.regions[name];
-  if(r&&r.image){ showRegion(name); }
-  else { toast('📍 「'+name+'」暂无分区图，可在里面点「建造」放建筑'); }
-}
+function openRegion(name){ var r=mapData.regions[name]; if(r&&r.image){ showRegion(name); } else { toast('📍 「'+name+'」暂无分区图'); } }
 
-// ===== 建筑内部（含会客厅/权限） =====
+// ===== 建筑内部 =====
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
   document.getElementById('bTitle').textContent=b.name;
   var isOwner = b.owner === userName;
+  var isPublic = b.type==='npc';
   var el=document.getElementById('bvBody'); var html='';
-  html+='<div class="section-title">👑 主人：'+esc(b.owner||'?')+'</div>';
+  html+='<div class="section-title">📝 简介</div><div class="tip" style="margin-bottom:8px">'+(esc(b.description||'（暂无简介，AI 逛之前会读）'))+'</div>';
+  if(isOwner || isPublic){ html+='<button class="btn" style="width:100%" onclick="editBuildingDesc()">✏️ 编辑简介</button>'; }
+  html+='<div class="section-title">'+(isPublic?'🏛️ 创建者：'+esc(b.owner||'?') : '👑 主人：'+esc(b.owner||'?'))+'</div>';
   if(b.type==='home'){
     html+='<div class="section-title">🚪 房间</div><div class="room-grid">';
     (b.rooms||[]).forEach(function(r){
       var hall = r.indexOf('·会客厅')>=0;
-      var priv = !hall;
-      var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : (priv ? '<span class="r-lock">🔒 私密·需申请</span>' : '');
-      html+='<div class="room-cell '+(hall?'hall':(priv?'locked':''))+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
+      var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : '<span class="r-lock">🔒 私密·需申请</span>';
+      html+='<div class="room-cell '+(hall?'hall':'locked')+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
     });
     html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div></div>';
-    html+='<div class="section-title">💗 互动</div><div class="home-actions">';
-    html+='<button class="act-btn" onclick="openNotes()">📌 便签墙</button>';
-    html+='<button class="act-btn" onclick="setBgPrompt()">🖼️ 背景</button></div>';
+    html+='<div class="section-title">💗 互动</div><div class="home-actions"><button class="act-btn" onclick="setBgPrompt()">🖼️ 背景</button></div>';
   }
-  // 主人管理：申请 + 已授权
-  if(isOwner){
+  if(isOwner && !isPublic){
     var reqCount = 0;
     (b.rooms||[]).forEach(function(r){ reqCount += (mapData.room_requests[r]||[]).length; });
     html+='<div class="section-title">🔑 访问管理（'+reqCount+' 个申请）</div><button class="btn" style="width:100%" onclick="openPerm()">📋 查看申请 / 已授权名单</button>';
@@ -516,33 +584,113 @@ function renderBuilding(){
   html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
   el.innerHTML=html;
 }
+function editBuildingDesc(){
+  var b=mapData.buildings[currentBuilding];
+  var d=prompt('建筑简介（这个建筑是做什么的？AI 逛之前会读）：',b.description||'');
+  if(d===null) return;
+  api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
+}
 function createBuildingRoom(){
   var name=prompt('房间名字（如：卧室、书房）：',''); if(!name) return;
-  api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ toast('✅ 房间「'+name+'」建成！'); loadMapData(); renderBuilding(); loadRooms(); }).catch(function(e){ toast('❌ '+e.message); });
+  var desc=prompt('房间简介（AI 进房间会读，知道这房间是干嘛的）：','')||'';
+  api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){
+    if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:name,description:desc})}).then(function(){});
+    toast('✅ 房间「'+name+'」建成！'); loadMapData(); renderBuilding(); loadRooms();
+  }).catch(function(e){ toast('❌ '+e.message); });
 }
 function loadMapData(){ api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
 
-// ===== 权限管理 =====
+// ===== 房间简介/私人空间 =====
+function updateRoomUI(){
+  var b=buildingOfRoom(currentRoom);
+  var isHomeRoom = b!==null;
+  var bar=document.getElementById('roomDescBar');
+  var privBtn=document.getElementById('privBtn');
+  var privFooterBtn=document.getElementById('privFooterBtn');
+  if(isHomeRoom){
+    bar.style.display='flex';
+    var desc = currentRoom==='main' ? '' : (mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description||'');
+    document.getElementById('roomDescText').textContent = desc || '（暂无房间简介）';
+    document.getElementById('roomDescEdit').style.display = (b.owner===userName || b.type==='npc') ? '' : 'none';
+    privBtn.style.display='';
+    privFooterBtn.style.display='';
+    privBuildingId = null;
+    for(var bid in mapData.buildings){ if(mapData.buildings[bid]===b){ privBuildingId=bid; break; } }
+  } else {
+    bar.style.display='none';
+    privBtn.style.display='none';
+    privFooterBtn.style.display='none';
+    privBuildingId=null;
+  }
+  document.getElementById('roomEmoji').textContent = currentRoom==='main' ? '🏠' : '🚪';
+}
+function editRoomDesc(){
+  var d=prompt('房间简介：',(mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description)||'');
+  if(d===null) return;
+  api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData(); updateRoomUI(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function togglePrivate(){
+  if(!privBuildingId){ toast('当前房间不属于房子'); return; }
+  document.getElementById('privRoomName').textContent=roomLabel(currentRoom);
+  document.getElementById('privateMask').classList.add('show');
+  setPrivTab(privTab);
+}
+function hidePrivate(){ document.getElementById('privateMask').classList.remove('show'); }
+function setPrivTab(t){
+  privTab=t;
+  document.getElementById('ptabNote').className = t==='note'?'on':'';
+  document.getElementById('ptabDiary').className = t==='diary'?'on':'';
+  document.getElementById('ptabStory').className = t==='story'?'on':'';
+  document.getElementById('privInput').placeholder = t==='note'?'写一张纸条…':(t==='diary'?'写一篇日记…':(t==='story'?'写一段剧情…':'写点什么…'));
+  loadPriv();
+}
+function loadPriv(){
+  var el=document.getElementById('privList'); el.innerHTML='<div class="tip">加载中…</div>';
+  if(privTab==='note'){
+    api('/api/notes?room='+encodeURIComponent(currentRoom)).then(function(d){
+      var items=d.notes||[]; el.innerHTML='';
+      if(!items.length){ el.innerHTML='<div class="tip">💌 便签墙空空，等 AI 来留言吧</div>'; return; }
+      items.slice().reverse().forEach(function(n){
+        el.innerHTML+='<div class="note-card"><div class="n-author">✍️ '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.reply?'<div class="n-reply">💬 '+esc(n.reply.author)+'：'+esc(n.reply.text)+'</div>':'')+'</div>';
+      });
+    }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
+  } else if(privTab==='diary'){
+    api('/api/diaries?room='+encodeURIComponent(currentRoom)).then(function(d){
+      var items=d.diaries||[]; el.innerHTML='';
+      if(!items.length){ el.innerHTML='<div class="tip">📖 日记本空白，等 AI 来写心事吧</div>'; return; }
+      items.slice().reverse().forEach(function(n){ el.innerHTML+='<div class="note-card"><div class="n-author">📖 '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div></div>'; });
+    }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
+  } else {
+    api('/api/story?building_id='+encodeURIComponent(privBuildingId)).then(function(d){
+      var items=d.stories||[]; el.innerHTML='';
+      if(!items.length){ el.innerHTML='<div class="tip">🎬 剧情簿空空，等 AI 来逛触发剧情吧</div>'; return; }
+      items.slice().reverse().forEach(function(s){ el.innerHTML+='<div class="story-card"><div class="s-time">'+esc(s.time)+'</div><div class="s-author">'+esc(s.author)+'</div><div class="s-text">'+esc(s.text)+'</div></div>'; });
+    }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
+  }
+}
+function submitPriv(){
+  var text=document.getElementById('privInput').value.trim(); if(!text){ toast('写点什么吧'); return; }
+  if(privTab==='note'){
+    api('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('💌 纸条已贴'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
+  } else if(privTab==='diary'){
+    api('/api/diaries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('📖 日记已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
+  } else {
+    api('/api/story',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:privBuildingId,author:userName,text:text})}).then(function(){ toast('🎬 剧情已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
+  }
+}
+
 function openPerm(){
   var b=mapData.buildings[currentBuilding];
-  permRoom = null;
   document.getElementById('permTitle').textContent='🔑 访问管理 · '+b.name;
-  var el=document.getElementById('permList');
-  var rooms = b.rooms||[];
-  var html='';
+  var el=document.getElementById('permList'); var rooms=b.rooms||[]; var html='';
   rooms.forEach(function(r){
     if(r.indexOf('·会客厅')>=0) return;
-    var reqs = mapData.room_requests[r]||[];
-    var acc = mapData.room_access[r]||[];
+    var reqs = mapData.room_requests[r]||[]; var acc = mapData.room_access[r]||[];
     html+='<div class="set-group"><label>🔒 '+esc(r)+'</label>';
     if(reqs.length){
       html+='<div class="tip" style="margin-bottom:4px">📨 访问申请：</div>';
-      reqs.forEach(function(q){
-        html+='<div class="req-card"><span class="q-name">👤 '+esc(q.applicant)+'</span><span class="q-time">'+esc(q.time)+'</span><button class="btn green" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',true)">同意</button><button class="btn gray" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',false)">拒绝</button></div>';
-      });
-    } else {
-      html+='<div class="tip">暂无访问申请</div>';
-    }
+      reqs.forEach(function(q){ html+='<div class="req-card"><span class="q-name">👤 '+esc(q.applicant)+'</span><span class="q-time">'+esc(q.time)+'</span><button class="btn green" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',true)">同意</button><button class="btn gray" style="margin:0" onclick="grantUser(\''+esc(r)+'\',\''+esc(q.applicant)+'\',false)">拒绝</button></div>'; });
+    } else { html+='<div class="tip">暂无访问申请</div>'; }
     if(acc.length){
       html+='<div class="tip" style="margin-top:6px">✅ 已授权：</div>';
       acc.forEach(function(u){ html+='<div class="req-card"><span class="q-name">👤 '+esc(u)+'</span><button class="btn red" style="margin:0" onclick="revokeUser(\''+esc(r)+'\',\''+esc(u)+'\')">移除</button></div>'; });
@@ -550,8 +698,7 @@ function openPerm(){
     html+='</div>';
   });
   if(!rooms.length) html='<div class="tip">这个建筑还没有私密房间</div>';
-  el.innerHTML=html;
-  document.getElementById('permMask').classList.add('show');
+  el.innerHTML=html; document.getElementById('permMask').classList.add('show');
 }
 function hidePerm(){ document.getElementById('permMask').classList.remove('show'); }
 function grantUser(room,user,allow){
@@ -567,9 +714,9 @@ function applyRoom(room){
 }
 
 function addNpcPrompt(){
-  var name=prompt('NPC 名字（如：护士小暖、管家老李）：',''); if(!name) return;
-  var emoji=prompt('头像 emoji（默认 👤）：','👤')||'👤';
-  var desc=prompt('人设/介绍（如：温柔细心的护士长）：','')||'';
+  var name=prompt('NPC 名字：',''); if(!name) return;
+  var emoji=prompt('头像 emoji：','👤')||'👤';
+  var desc=prompt('人设：','')||'';
   api('/api/npc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,emoji:emoji,desc:desc})}).then(function(){ toast('✅ NPC 已加入'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function deleteNpc(name){ api('/api/npc/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); }); }
@@ -584,15 +731,13 @@ function loadStory(){
   }).catch(function(e){ toast('❌ '+e.message); });
 }
 function setMyHome(){
-  hideBuildSheet();
-  var list=Object.keys(mapData.buildings||{});
+  hideBuildSheet(); var list=Object.keys(mapData.buildings||{});
   if(!list.length){ toast('还没有建筑，先建一个'); return; }
   var names=list.map(function(bid){ return bid+'·'+mapData.buildings[bid].name; });
   var pick=prompt('选择你的家：\n'+names.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
   var idx=parseInt(pick||'1',10)-1;
   if(isNaN(idx)||!list[idx]){ toast('无效'); return; }
-  myHomeBid=list[idx];
-  toast('💗 已设置：'+mapData.buildings[list[idx]].name+' 就是你的家！');
+  myHomeBid=list[idx]; toast('💗 已设置：'+mapData.buildings[list[idx]].name+' 就是你的家！');
   if(currentRegion) renderRegion(); else loadMap();
 }
 
@@ -605,44 +750,15 @@ function setBgPrompt(){
   var rooms=(mapData.buildings[currentBuilding]||{}).rooms||[];
   if(!rooms.length){ toast('先建一个房间'); return; }
   var room=prompt('给哪个房间设背景？',rooms[0]); if(!room) return;
-  var url=prompt('背景图片网址（或确定后上传本地图）：','');
-  if(url&&url.trim()){ saveBg(room,url.trim()); }
-  else { var f=document.createElement('input'); f.type='file'; f.accept='image/*'; f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ saveBg(room,e.target.result); }; reader.readAsDataURL(file); }; f.click(); }
+  if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
+    var f=document.createElement('input'); f.type='file'; f.accept='image/*';
+    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ saveBg(room,e.target.result); }; reader.readAsDataURL(file); };
+    f.click();
+  } else {
+    var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(room,url.trim());
+  }
 }
 function saveBg(room,image){ api('/api/room/bg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,image:image})}).then(function(){ toast('🖼️ 背景已设置！'); loadMapData(); if(currentRoom===room) applyBg(room); }).catch(function(e){ toast('❌ '+e.message); }); }
-
-function openNotes(){
-  var rooms=(mapData.buildings[currentBuilding]||{}).rooms||[];
-  if(!rooms.length){ toast('先建一个房间'); return; }
-  var room=prompt('打开哪个房间的便签墙？',rooms[0]); if(!room) return;
-  noteRoom=room; document.getElementById('noteTitle').textContent='📌 便签墙 · '+room;
-  document.getElementById('noteMask').classList.add('show'); loadNotes();
-}
-function hideNote(){ document.getElementById('noteMask').classList.remove('show'); }
-function loadNotes(){
-  api('/api/notes?room='+encodeURIComponent(noteRoom)).then(function(d){
-    var items=d.notes||[]; var el=document.getElementById('noteList');
-    if(!items.length){ el.innerHTML='<div class="tip">便签墙是空的，贴第一张吧～</div>'; return; }
-    el.innerHTML='';
-    items.slice().reverse().forEach(function(n){
-      var card=document.createElement('div'); card.className='note-card';
-      var html='<div class="n-author">✍️ '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>';
-      if(n.reply){ html+='<div class="n-reply">💬 '+esc(n.reply.author)+'：'+esc(n.reply.text)+' <span class="n-time">('+esc(n.reply.time)+')</span></div>'; }
-      else { html+='<span class="n-rep-btn" onclick="openReply(\''+esc(n.id)+'\')">💬 回复</span>'; }
-      card.innerHTML=html; el.appendChild(card);
-    });
-  }).catch(function(e){ toast('❌ '+e.message); });
-}
-function submitNote(){
-  var text=document.getElementById('noteInput').value.trim(); if(!text){ toast('写点什么吧'); return; }
-  api('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:noteRoom,author:userName,text:text})}).then(function(){ toast('✅ 贴好啦！'); document.getElementById('noteInput').value=''; loadNotes(); }).catch(function(e){ toast('❌ '+e.message); });
-}
-function openReply(noteId){ replyNoteId=noteId; document.getElementById('replyMask').classList.add('show'); }
-function hideReply(){ document.getElementById('replyMask').classList.remove('show'); }
-function submitReply(){
-  var text=document.getElementById('replyInput').value.trim(); if(!text){ toast('写点内容'); return; }
-  api('/api/notes/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:noteRoom,note_id:replyNoteId,author:userName,text:text})}).then(function(){ toast('💬 回复成功'); document.getElementById('replyInput').value=''; hideReply(); loadNotes(); }).catch(function(e){ toast('❌ '+e.message); });
-}
 
 function sendMessage(){
   var input=document.getElementById('msgInput'); var content=input.value.trim(); if(!content) return;
@@ -670,8 +786,10 @@ function renderSystem(t){ var d=document.createElement('div'); d.className='msg 
 function renderMsg(m){
   var d=document.createElement('div'); var isMe=m.sender===userName; d.className='msg '+(isMe?'me':'other');
   var av=avatars[m.sender]; var avHtml=av?'<img src="'+av+'">':esc((m.sender||'?').charAt(0));
+  var bg=bubbleBg(m.sender,isMe);
+  var border = isMe ? '' : 'border:1px solid rgba(255,255,255,.1);';
   var nameTag=isMe?'':'<span style="color:#7fd0ff;font-weight:bold">'+esc(m.sender)+'</span> ';
-  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span></div><div class="bubble">'+esc(m.content)+'</div></div>';
+  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span></div><div class="bubble" style="background:'+bg+';color:'+(isMe?'#fff':'#e6f1ff')+';'+border+'">'+esc(m.content)+'</div></div>';
   return d;
 }
 function speakNewMessages(msgs){ if(!('speechSynthesis' in window)||(!speakAll&&!speakNames.length)||!msgs.length) return; var last=msgs[msgs.length-1]; var key=last.sender+'|'+last.content; if(key===lastMsgKey) return; lastMsgKey=key; var ok=(speakAll&&last.sender!==userName)||(!speakAll&&speakNames.indexOf(last.sender)>=0); if(!ok) return; try{ speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance((last.sender==='system'?'':last.sender+'说：')+last.content); u.lang='zh-CN'; speechSynthesis.speak(u);}catch(e){} }
@@ -683,15 +801,12 @@ function switchRoom(room,pwd){
   currentRoom=room; roomPassword=pwd||''; localStorage.setItem('gc_room',room); localStorage.setItem('gc_pwd_'+room,roomPassword); lastMsgKey='';
   document.getElementById('roomName').textContent=roomLabel(room);
   var tabs=document.querySelectorAll('.room-tab'); tabs.forEach(function(t){t.classList.remove('active');}); var cur=document.getElementById('tab_'+room); if(cur)cur.classList.add('active');
-  applyBg(room); reportRoom(); restoreCache().then(function(){ loadMessages(false); }); refreshOnline();
+  applyBg(room); reportRoom(); updateRoomUI(); restoreCache().then(function(){ loadMessages(false); }); refreshOnline();
 }
 function enterRoom(room){
   if(room===currentRoom){ showChat(); return; }
-  // 权限检查
   if(isPrivateRoom(room) && !canEnterRoom(room)){
-    if(confirm('🔒 房间「'+room+'」是私密的，需要主人同意才能进入。\n\n要申请访问吗？')){
-      applyRoom(room);
-    }
+    if(confirm('🔒 房间「'+room+'」是私密的，需要主人同意才能进入。\n\n要申请访问吗？')){ applyRoom(room); }
     return;
   }
   api('/api/rooms').then(function(d){ var target=null; (d.rooms||[]).forEach(function(r){if(r.name===room)target=r;});
@@ -703,12 +818,18 @@ function loadRooms(){
   api('/api/rooms').then(function(d){
     var tabs=document.getElementById('roomTabs'); tabs.innerHTML='';
     (d.rooms||[]).forEach(function(r){
-      if(r.creator==='home'||r.creator==='hall') return; // 家园/会客厅房间不显示在顶部标签
+      if(r.creator==='home'||r.creator==='hall') return;
       var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b);
     });
   }).catch(function(){});
 }
-function openSettings(){ document.getElementById('setName').value=userName; document.getElementById('settingsMask').classList.add('show'); document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll; loadTimeSettings(); }
+function openSettings(){
+  document.getElementById('setName').value=userName;
+  document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
+  document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
+  renderPairColors(); renderPairList(); loadTimeSettings();
+  document.getElementById('settingsMask').classList.add('show');
+}
 function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
 function saveName(){ var n=document.getElementById('setName').value.trim(); if(!n){toast('名字不能为空');return;} userName=n; localStorage.setItem('gc_name',n); toast('✅ 名字已改为 '+n); }
 function saveSpeak(){ speakNames=document.getElementById('setSpeak').value.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); speakAll=document.getElementById('speakAll').checked; localStorage.setItem('gc_speak',speakNames.join(',')); localStorage.setItem('gc_speakAll',speakAll?'1':'0'); toast('✅ 朗读设置已保存'); }
@@ -743,7 +864,7 @@ function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
   loadRooms(); loadAvatars(); reportRoom();
-  api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); }).catch(function(){});
+  api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
   setInterval(function(){ loadMessages(true); heartbeat(); }, 3000);
 }
