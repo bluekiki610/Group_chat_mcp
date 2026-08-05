@@ -217,13 +217,18 @@ textarea.input { color:#e6f1ff; }
   <div class="modal-mask" id="settingsMask" onclick="if(event.target===this)closeSettings()">
     <div class="modal">
       <h3>⚙️ 设置</h3>
-      <div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div>
-      <div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔，如：黎深,秦彻）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div>
-      <div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div><div class="tip">同对成员说话用同一色系（真人深色、AI浅色），一眼分辨</div></div>
-      <div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div>
-      <div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div>
-      <div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div>
-      <div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div><div class="tip">数据含背景图较大，下载可能需要等一会，请耐心</div></div>
+      <div class="set-group" id="editLockGroup" style="display:none">
+        <label>🔒 编辑权限</label>
+        <div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁</button></div>
+        <div class="tip" id="editLockTip"></div>
+      </div>
+      <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
+      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
+      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
+      <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
+      <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
+      <div class="editset" id="eset6"><div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div></div>
+      <div class="editset" id="eset7"><div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div></div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
@@ -246,8 +251,7 @@ textarea.input { color:#e6f1ff; }
         <button id="ptabStory" onclick="setPrivTab('story')">🎬 剧情</button>
       </div>
       <div id="privList"></div>
-      <textarea class="input" id="privInput" rows="2" placeholder="写点什么…"></textarea>
-      <button class="btn" id="privSend" onclick="submitPriv()">写</button>
+      <div id="privWrite"><textarea class="input" id="privInput" rows="2" placeholder="写点什么…"></textarea><button class="btn" id="privSend" onclick="submitPriv()">写</button></div>
       <button class="btn gray" onclick="hidePrivate()">关闭</button>
     </div>
   </div>
@@ -266,6 +270,8 @@ var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
 var privTab = 'note', privBuildingId = null;
 var colorPairs = JSON.parse(localStorage.getItem('gc_pairs') || '[]');
 var selectedPairColor = 0;
+var editLocked = false;                 // 服务器是否设置了编辑密码
+var editUnlocked = localStorage.getItem('gc_edit') === '1';  // 本机是否已解锁
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -293,6 +299,24 @@ function compressImage(dataUrl, maxW, quality, cb){
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
+
+// ===== 编辑权限 =====
+function canEdit(){ return !editLocked || editUnlocked; }
+function unlockEdit(){
+  var p = document.getElementById('editPwdInput').value;
+  if(!p){ toast('请输入密码'); return; }
+  if(!editLocked){
+    api('/api/set_edit_pwd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pwd:p})}).then(function(d){
+      editLocked=!!d.locked; localStorage.setItem('gc_edit','1'); editUnlocked=true;
+      toast('✅ 编辑密码已设置，现在开始访客只读'); closeSettings(); location.reload();
+    }).catch(function(e){ toast('❌ '+e.message); });
+    return;
+  }
+  api('/api/check_edit_pwd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pwd:p})}).then(function(d){
+    if(d.ok){ editUnlocked=true; localStorage.setItem('gc_edit','1'); toast('✅ 解锁成功！可以编辑了'); closeSettings(); location.reload(); }
+    else toast('❌ 密码错误');
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
 
 // ===== 气泡配色 =====
 function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
@@ -324,13 +348,11 @@ function addPair(){
 }
 function delPair(i){ colorPairs.splice(i,1); savePairs(); renderPairList(); }
 
-// ===== 我的 AI（方案B） =====
 function saveMyAis(){
   var ais = (document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
   api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); }).catch(function(e){ toast('❌ '+e.message); });
 }
 
-// ===== 权限工具 =====
 function buildingOfRoom(room){ for(var bid in mapData.buildings){ if((mapData.buildings[bid].rooms||[]).indexOf(room)>=0) return mapData.buildings[bid]; } return null; }
 function isHallRoom(room){ var b=buildingOfRoom(room); return b && room.indexOf('·会客厅')>=0; }
 function isPrivateRoom(room){ var b=buildingOfRoom(room); return b!==null && b.type!=='npc' && !isHallRoom(room); }
@@ -436,7 +458,7 @@ function renderMarkers(canvasId, scope, regionName){
       var m=document.createElement('div'); m.className='holo region'+(opType==='region'&&opTarget===name?' selected':'');
       m.style.left=r.x+'%'; m.style.top=r.y+'%';
       m.innerHTML='<span class="core">📍</span><span class="lbl">'+esc(name)+'</span>';
-      m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode){openOp('region',name);} else { openRegion(name); } };
+      m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode&&canEdit()){openOp('region',name);} else { openRegion(name); } };
       canvas.appendChild(m);
     });
   }
@@ -449,12 +471,13 @@ function renderMarkers(canvasId, scope, regionName){
     var m=document.createElement('div'); m.className=cls;
     m.style.left=b.x+'%'; m.style.top=b.y+'%';
     m.innerHTML='<span class="core">'+(isHome?'💗':b.emoji)+'</span><span class="lbl">'+esc(b.name)+'</span>';
-    m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode){openOp('building',bid);} else { openBuilding(bid); } };
+    m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode&&canEdit()){openOp('building',bid);} else { openBuilding(bid); } };
     canvas.appendChild(m);
   });
 }
 
 function showBuildSheet(){
+  if(!canEdit()){ toast('🔒 访客只读模式，无法建造。请找房主要编辑密码解锁'); return; }
   var g=document.getElementById('buildGrid');
   if(!currentRegion){
     g.innerHTML='<div class="s-item" onclick="startPlace(\'region\')"><span class="ic">📍</span><span class="nm">区域</span></div>';
@@ -505,7 +528,7 @@ function onStageTap(e, scope){
   }
 }
 
-function toggleEditMode(){ editMode=!editMode; updateEditBtn(); toast(editMode?'✋ 整理模式：点标记可编辑':'已退出整理模式'); if(currentRegion) renderRegion(); else loadMap(); }
+function toggleEditMode(){ if(!canEdit()){ toast('🔒 访客只读模式'); return; } editMode=!editMode; updateEditBtn(); toast(editMode?'✋ 整理模式：点标记可编辑':'已退出整理模式'); if(currentRegion) renderRegion(); else loadMap(); }
 function openOp(type, key){
   opType=type; opTarget=key;
   document.getElementById('opTitle').textContent = type==='region' ? '📍 '+key : '🏗️ '+mapData.buildings[key].name;
@@ -594,15 +617,15 @@ initGestures('map'); initGestures('region');
 
 function openRegion(name){ var r=mapData.regions[name]; if(r&&r.image){ showRegion(name); } else { toast('📍 「'+name+'」暂无分区图'); } }
 
-// ===== 建筑内部 =====
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
   document.getElementById('bTitle').textContent=b.name;
   var isOwner = b.owner === userName;
   var isPublic = b.type==='npc';
+  var ce = canEdit();
   var el=document.getElementById('bvBody'); var html='';
-  html+='<div class="section-title">📝 简介</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="tip" style="flex:1">'+esc(b.description||'（暂无简介，AI 逛之前会读）')+'</span>'+(isOwner||isPublic?'<span style="cursor:pointer;font-size:16px" onclick="editBuildingDesc()">✏️</span>':'')+'</div>';
+  html+='<div class="section-title">📝 简介</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="tip" style="flex:1">'+esc(b.description||'（暂无简介，AI 逛之前会读）')+'</span>'+(ce&&(isOwner||isPublic)?'<span style="cursor:pointer;font-size:16px" onclick="editBuildingDesc()">✏️</span>':'')+'</div>';
   html+='<div class="section-title">'+(isPublic?'🏛️ 创建者：'+esc(b.owner||'?') : '👑 主人：'+esc(b.owner||'?'))+'</div>';
   if(b.type==='home'){
     html+='<div class="section-title">🚪 房间</div><div class="room-grid">';
@@ -611,15 +634,16 @@ function renderBuilding(){
       var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : '<span class="r-lock">🔒 私密·需申请</span>';
       html+='<div class="room-cell '+(hall?'hall':'locked')+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
     });
-    html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div></div>';
+    if(ce) html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div>';
+    html+='</div>';
   }
-  if(isOwner && !isPublic){
+  if(ce && isOwner && !isPublic){
     var reqCount = 0;
     (b.rooms||[]).forEach(function(r){ reqCount += (mapData.room_requests[r]||[]).length; });
     html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><span style="cursor:pointer;font-size:22px" onclick="openPerm()" title="访问管理">🔑</span><span class="tip" style="flex:1">访问管理'+(reqCount?'（'+reqCount+' 个申请）':'')+'</span></div>';
   }
-  html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）<span style="cursor:pointer;font-size:16px;margin-left:8px" onclick="addNpcPrompt()">➕</span></div>';
-  (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div><span style="cursor:pointer;color:#7fd0ff;font-size:14px;margin-left:auto" onclick="editNpc(\''+esc(n.name)+'\')">✏️</span><span style="cursor:pointer;color:#ff6b6b;font-size:14px;margin-left:8px" onclick="deleteNpc(\''+esc(n.name)+'\')">🗑️</span></div>'; });
+  html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）'+(ce?'<span style="cursor:pointer;font-size:16px;margin-left:8px" onclick="addNpcPrompt()">➕</span>':'')+'</div>';
+  (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div>'+(ce?'<span style="cursor:pointer;color:#7fd0ff;font-size:14px;margin-left:auto" onclick="editNpc(\''+esc(n.name)+'\')">✏️</span><span style="cursor:pointer;color:#ff6b6b;font-size:14px;margin-left:8px" onclick="deleteNpc(\''+esc(n.name)+'\')">🗑️</span>':'')+'</div>'; });
   html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
   el.innerHTML=html;
 }
@@ -641,14 +665,13 @@ function editNpc(name){
 function createBuildingRoom(){
   var name=prompt('房间名字（如：卧室、书房）：',''); if(!name) return;
   var desc=prompt('房间简介（AI 进房间会读，知道这房间是干嘛的）：','')||'';
-  api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){
-    if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:name,description:desc})}).then(function(){});
-    toast('✅ 房间「'+name+'」建成！'); loadMapData(); renderBuilding(); loadRooms();
+  api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(d){
+    if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:d.room,description:desc})}).then(function(){});
+    toast('✅ 房间「'+d.room+'」建成！'); loadMapData(); renderBuilding(); loadRooms();
   }).catch(function(e){ toast('❌ '+e.message); });
 }
 function loadMapData(){ api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
 
-// ===== 房间简介/私人空间 =====
 function updateRoomUI(){
   var b=buildingOfRoom(currentRoom);
   var isHomeRoom = b!==null;
@@ -659,7 +682,7 @@ function updateRoomUI(){
     bar.style.display='flex';
     var desc = currentRoom==='main' ? '' : (mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description||'');
     document.getElementById('roomDescText').textContent = desc || '（暂无房间简介）';
-    document.getElementById('roomDescEdit').style.display = (b.owner===userName || b.type==='npc') ? '' : 'none';
+    document.getElementById('roomDescEdit').style.display = (canEdit()&&(b.owner===userName||b.type==='npc')) ? '' : 'none';
     privBtn.style.display='';
     privFooterBtn.style.display='';
     privBuildingId = null;
@@ -684,6 +707,7 @@ function togglePrivate(){
   var pm=document.getElementById('privModal');
   if(bg){ pm.style.backgroundImage='url('+bg+')'; pm.style.backgroundColor='rgba(16,29,51,.85)'; }
   else { pm.style.backgroundImage='none'; pm.style.backgroundColor='#101d33'; }
+  document.getElementById('privWrite').style.display = canEdit() ? '' : 'none';
   document.getElementById('privateMask').classList.add('show');
   setPrivTab(privTab);
 }
@@ -710,7 +734,7 @@ function loadPriv(){
     api('/api/diaries?room='+encodeURIComponent(currentRoom)).then(function(d){
       var items=d.diaries||[]; el.innerHTML='';
       if(!items.length){ el.innerHTML='<div class="tip">📖 日记本空白，等 AI 来写心事吧</div>'; return; }
-      items.slice().reverse().forEach(function(n,i){ var idx=items.length-1-i; el.innerHTML+='<div class="note-card"><div class="n-author">📖 '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.comment?'<div class="n-reply">✍️ '+esc(n.comment.author)+'批注：'+esc(n.comment.text)+'</div>':'<span class="n-rep-btn" onclick="commentDiary('+idx+')">✍️ 批注</span>')+'</div>'; });
+      items.slice().reverse().forEach(function(n,i){ var idx=items.length-1-i; el.innerHTML+='<div class="note-card"><div class="n-author">📖 '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.comment?'<div class="n-reply">✍️ '+esc(n.comment.author)+'批注：'+esc(n.comment.text)+'</div>':(canEdit()?'<span class="n-rep-btn" onclick="commentDiary('+idx+')">✍️ 批注</span>':''))+'</div>'; });
     }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
   } else {
     api('/api/story?building_id='+encodeURIComponent(privBuildingId)).then(function(d){
@@ -803,6 +827,7 @@ function applyBg(room){
   else { area.style.backgroundImage='none'; area.style.backgroundColor='#0f1a2e'; }
 }
 function setRoomBgHere(){
+  if(!canEdit()){ toast('🔒 访客只读模式，无法设置背景'); return; }
   if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
     var f=document.createElement('input'); f.type='file'; f.accept='image/*';
     f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result, 1200, 0.8, function(small){ saveBg(currentRoom, small); }); }; reader.readAsDataURL(file); };
@@ -897,6 +922,32 @@ function openSettings(){
   document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
   renderPairColors(); renderPairList(); loadTimeSettings();
+  var lockGroup=document.getElementById('editLockGroup');
+  var lockLabel = lockGroup.querySelector('label');
+  var lockBtn = lockGroup.querySelector('button');
+  var lockInput = document.getElementById('editPwdInput');
+  var lockTip = document.getElementById('editLockTip');
+  if(!editLocked){
+    lockGroup.style.display = '';
+    lockLabel.textContent = '🔒 设置编辑密码（设置后游客只能看，不能改）';
+    lockBtn.textContent = '设置';
+    lockInput.placeholder = '设置一个编辑密码';
+    lockTip.textContent = '注意：设置后你自己也要输密码才能编辑，请记好！';
+  } else if(editUnlocked){
+    lockGroup.style.display = '';
+    lockLabel.textContent = '🔒 编辑权限：已解锁 ✅';
+    lockBtn.textContent = '锁定';
+    lockInput.placeholder = '再次输入密码可重新锁定';
+    lockTip.textContent = '你是编辑者。清空密码后刷新可回到访客模式。';
+  } else {
+    lockGroup.style.display = '';
+    lockLabel.textContent = '🔒 编辑权限';
+    lockBtn.textContent = '解锁';
+    lockInput.placeholder = '输入编辑密码';
+    lockTip.textContent = '访客只读模式：需要编辑密码才能建造/修改';
+  }
+  var ce = canEdit();
+  for(var i=1;i<=7;i++){ var es=document.getElementById('eset'+i); if(es) es.style.display = ce ? '' : 'none'; }
   document.getElementById('settingsMask').classList.add('show');
 }
 function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
@@ -948,6 +999,7 @@ function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
   loadRooms(); loadAvatars(); reportRoom();
+  api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
   setInterval(function(){ loadMessages(true); heartbeat(); }, 3000);
