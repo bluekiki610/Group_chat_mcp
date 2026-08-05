@@ -156,7 +156,6 @@ textarea.input { color:#e6f1ff; }
       <button id="sendBtn" onclick="sendMessage()">发送</button>
     </footer>
   </div>
-
   <div class="map-view" id="mapView">
     <div class="map-top"><div class="title"><span>🗺️</span> <span>临空市</span></div><div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div></div>
     <div class="map-stage" id="mapStage">
@@ -170,7 +169,6 @@ textarea.input { color:#e6f1ff; }
       <button class="bar-btn" onclick="zoomMap(-0.4)">－</button>
     </div>
   </div>
-
   <div class="map-view" id="regionView">
     <div class="map-top"><div class="title"><span>📍</span> <span id="regionTitle">区域</span></div><div class="header-btns"><button class="hbtn" onclick="showMap()">← 总览</button></div></div>
     <div class="map-stage" id="regionStage">
@@ -184,12 +182,10 @@ textarea.input { color:#e6f1ff; }
       <button class="bar-btn" onclick="zoomRegion(-0.4)">－</button>
     </div>
   </div>
-
   <div class="building-view" id="buildingView">
     <div class="map-top"><div class="title"><span id="bEmoji">🏠</span> <span id="bTitle">建筑</span></div><div class="header-btns"><button class="hbtn" onclick="backFromBuilding()">← 返回</button></div></div>
     <div class="bv-body" id="bvBody"></div>
   </div>
-
   <div class="sheet-mask" id="buildMask" onclick="hideBuildSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title">🏗️ 建造</div>
@@ -197,7 +193,6 @@ textarea.input { color:#e6f1ff; }
       <button class="s-close" onclick="hideBuildSheet()">关闭</button>
     </div>
   </div>
-
   <div class="sheet-mask" id="styleMask" onclick="hideStyleSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title">🎨 选择建筑样式</div>
@@ -205,7 +200,6 @@ textarea.input { color:#e6f1ff; }
       <button class="s-close" onclick="hideStyleSheet()">关闭</button>
     </div>
   </div>
-
   <div class="sheet-mask" id="opMask" onclick="hideOp()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title" id="opTitle">操作</div>
@@ -213,7 +207,6 @@ textarea.input { color:#e6f1ff; }
       <button class="s-close" onclick="hideOp()">关闭</button>
     </div>
   </div>
-
   <div class="modal-mask" id="settingsMask" onclick="if(event.target===this)closeSettings()">
     <div class="modal">
       <h3>⚙️ 设置</h3>
@@ -223,7 +216,7 @@ textarea.input { color:#e6f1ff; }
         <div class="tip" id="editLockTip"></div>
       </div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
-      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限；你的 AI 也能进你自己的家</div></div></div>
+      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
       <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
       <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
       <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
@@ -232,16 +225,6 @@ textarea.input { color:#e6f1ff; }
       <div class="editset" id="eset8"><div class="set-group"><label>🗄️ 自动备份（防丢失）</label><div class="tip" style="margin-bottom:6px">服务器每30分钟自动快照 + 每次保存留上一版；你的手机每30分钟也存一份世界副本。</div><div class="row"><button class="btn" onclick="restoreWorldBackup()">📤 从手机备份恢复</button><button class="btn gray" onclick="loadServerBackups()">🗄️ 查看服务器快照</button></div><div id="srvBackupList" class="tip" style="margin-top:6px"></div></div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
-  </div>
-
-  <div class="modal-mask" id="noteMask" onclick="if(event.target===this)hideNote()">
-    <div class="modal"><h3 id="noteTitle">📌 便签墙</h3><div id="noteList"></div><textarea class="input" id="noteInput" rows="2" placeholder="写一张便签…"></textarea><button class="btn" onclick="submitNote()">贴上去</button><button class="btn gray" onclick="hideNote()">关闭</button></div>
-  </div>
-  <div class="modal-mask" id="replyMask" onclick="if(event.target===this)hideReply()">
-    <div class="modal"><h3>💬 回复便签</h3><textarea class="input" id="replyInput" rows="2" placeholder="回复内容…"></textarea><button class="btn" onclick="submitReply()">回复</button><button class="btn gray" onclick="hideReply()">取消</button></div>
-  </div>
-  <div class="modal-mask" id="permMask" onclick="if(event.target===this)hidePerm()">
-    <div class="modal"><h3 id="permTitle">🔑 访问管理</h3><div id="permList"></div><button class="btn gray" style="width:100%;margin-top:8px" onclick="hidePerm()">关闭</button></div>
   </div>
   <div class="modal-mask" id="privateMask" onclick="if(event.target===this)hidePrivate()">
     <div class="modal" id="privModal" style="background-size:cover;background-position:center;background-repeat:no-repeat;">
@@ -257,14 +240,13 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
 </div>
-
 <script>
 var userName = localStorage.getItem('gc_name') || '';
 var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
 var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
-var mapData = { rooms: {}, regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {}, user_ais: {} };
+var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, rooms: {}, room_access: {}, room_requests: {}, user_ais: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
 var editMode = false, placeType = null, pendingEmoji = '🏠', pendingType = null, myHomeBid = null;
 var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
@@ -280,7 +262,6 @@ var PAIR_COLORS = [
   {name:'金黄/浅黄', dark:'#d9a013', light:'#ffe9a8'},
   {name:'紫罗兰/浅紫', dark:'#8e5bd0', light:'#d5b8ff'}
 ];
-
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
 function compressImage(dataUrl, maxW, quality, cb){
@@ -300,8 +281,6 @@ function compressImage(dataUrl, maxW, quality, cb){
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
-
-// ===== 自动备份（本机世界副本） =====
 function worldSnapshot(){
   api('/api/backup').then(function(d){
     var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, ts:new Date().toLocaleString()};
@@ -324,8 +303,6 @@ function loadServerBackups(){
     el.innerHTML='服务器快照：<br>' + files.map(function(f){ return '· '+f.name+'（'+(f.size/1024).toFixed(1)+'KB）'; }).join('<br>') + '<br><span style="color:#7fd0ff;cursor:pointer" onclick="backupNow()">点此下载完整备份</span>';
   }).catch(function(e){ toast('❌ '+e.message); });
 }
-
-// ===== 编辑权限 =====
 function canEdit(){ return !editLocked || editUnlocked; }
 function unlockEdit(){
   var p = document.getElementById('editPwdInput').value;
@@ -342,7 +319,6 @@ function unlockEdit(){
     else toast('❌ 密码错误');
   }).catch(function(e){ toast('❌ '+e.message); });
 }
-
 function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
 function savePairs(){ localStorage.setItem('gc_pairs', JSON.stringify(colorPairs)); }
 function renderPairColors(){
@@ -375,7 +351,6 @@ function saveMyAis(){
   var ais = (document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
   api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); }).catch(function(e){ toast('❌ '+e.message); });
 }
-
 function buildingOfRoom(room){ for(var bid in mapData.buildings){ if((mapData.buildings[bid].rooms||[]).indexOf(room)>=0) return mapData.buildings[bid]; } return null; }
 function isHallRoom(room){ var b=buildingOfRoom(room); return b && room.indexOf('·会客厅')>=0; }
 function isPrivateRoom(room){ var b=buildingOfRoom(room); return b!==null && b.type!=='npc' && !isHallRoom(room); }
@@ -390,7 +365,6 @@ function canEnterRoom(room){
   for(var i=0;i<acc.length;i++){ if((mapData.user_ais[acc[i]]||[]).indexOf(userName)>=0) return true; }
   return false;
 }
-
 function goBackFromChat(){
   var b=buildingOfRoom(currentRoom);
   if(b){ for(var k in mapData.buildings){ if(mapData.buildings[k]===b){ openBuilding(k); return; } } }
@@ -405,7 +379,6 @@ function openBuilding(bid){ buildingFromRegion=!!(mapData.buildings[bid]&&mapDat
 function currentBuildingRegion(){ var b=mapData.buildings[currentBuilding]; return b?b.region:''; }
 function exitModes(){ placeType=null; pendingType=null; editMode=false; updateEditBtn(); document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function updateEditBtn(){ var e=document.getElementById('editBtn'), r=document.getElementById('regionEditBtn'); if(e)e.className='bar-btn'+(editMode?' on':''); if(r)r.className='bar-btn'+(editMode?' on':''); }
-
 var MAIN_CANDIDATES = ['/images/map_main.png','/images/map_main.jpg','/images/map_main.jpeg'];
 function loadMap(){ api('/api/map').then(function(d){ mapData=d; renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); }); }
 function renderMap(){
@@ -471,7 +444,6 @@ function renderRegion(){
 }
 function canvasOf(scope){ return scope==='map'?document.getElementById('mapCanvas'):document.getElementById('regionCanvas'); }
 function stageOf(scope){ return scope==='map'?document.getElementById('mapStage'):document.getElementById('regionStage'); }
-
 function renderMarkers(canvasId, scope, regionName){
   var canvas=document.getElementById(canvasId);
   canvas.querySelectorAll('.holo').forEach(function(m){m.remove();});
@@ -498,7 +470,6 @@ function renderMarkers(canvasId, scope, regionName){
     canvas.appendChild(m);
   });
 }
-
 function showBuildSheet(){
   if(!canEdit()){ toast('🔒 访客只读模式，无法建造。请找房主要编辑密码解锁'); return; }
   var g=document.getElementById('buildGrid');
@@ -550,7 +521,6 @@ function onStageTap(e, scope){
     }).catch(function(err){ toast('❌ '+err.message); });
   }
 }
-
 function toggleEditMode(){ if(!canEdit()){ toast('🔒 访客只读模式'); return; } editMode=!editMode; updateEditBtn(); toast(editMode?'✋ 整理模式：点标记可编辑':'已退出整理模式'); if(currentRegion) renderRegion(); else loadMap(); }
 function openOp(type, key){
   opType=type; opTarget=key;
@@ -588,7 +558,6 @@ function openOpDelete(){
     : api('/api/map/building/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:opTarget})});
   p.then(function(){ toast('🗑️ 已删除'); hideOp(); if(currentRegion) renderRegion(); else loadMap(); }).catch(function(e){ toast('❌ '+e.message); });
 }
-
 var gestures = {};
 function initGestures(scope){
   var stage = stageOf(scope); var canvas = canvasOf(scope);
@@ -637,9 +606,7 @@ function zoomMap(d){ var c=document.getElementById('mapCanvas'); c.dataset.s=Mat
 function zoomRegion(d){ var c=document.getElementById('regionCanvas'); c.dataset.s=Math.max(0.5,Math.min(4,(parseFloat(c.dataset.s||'1')+d))); applyTransform(c,'region'); }
 function zoomAt(scope,d){ var c=canvasOf(scope); c.dataset.s=Math.max(0.5,Math.min(4,(parseFloat(c.dataset.s||'1')+d))); applyTransform(c,scope); }
 initGestures('map'); initGestures('region');
-
 function openRegion(name){ var r=mapData.regions[name]; if(r&&r.image){ showRegion(name); } else { toast('📍 「'+name+'」暂无分区图'); } }
-
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
@@ -674,7 +641,7 @@ function editBuildingDesc(){
   var b=mapData.buildings[currentBuilding];
   var d=prompt('建筑简介（这个建筑是做什么的？AI 逛之前会读）：',b.description||'');
   if(d===null) return;
-  api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function editNpc(name){
   var list=mapData.npcs[currentBuilding]||[];
@@ -683,18 +650,17 @@ function editNpc(name){
   var nn=prompt('NPC 名字：',n.name); if(!nn) return;
   var em=prompt('头像 emoji：',n.emoji||'👤')||'👤';
   var dd=prompt('人设：',n.desc||'')||'';
-  api('/api/npc/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,new_name:nn,emoji:em,desc:dd})}).then(function(){ toast('✅ NPC 已更新'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/npc/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,new_name:nn,emoji:em,desc:dd})}).then(function(){ toast('✅ NPC 已更新'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function createBuildingRoom(){
   var name=prompt('房间名字（如：卧室、书房）：',''); if(!name) return;
   var desc=prompt('房间简介（AI 进房间会读，知道这房间是干嘛的）：','')||'';
   api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(d){
     if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:d.room,description:desc})}).then(function(){});
-    toast('✅ 房间「'+d.room+'」建成！'); loadMapData(); renderBuilding(); loadRooms();
+    toast('✅ 房间「'+d.room+'」建成！'); loadMapData().then(function(){ renderBuilding(); loadRooms(); });
   }).catch(function(e){ toast('❌ '+e.message); });
 }
-function loadMapData(){ api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
-
+function loadMapData(){ return api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
 function updateRoomUI(){
   var b=buildingOfRoom(currentRoom);
   var isHomeRoom = b!==null;
@@ -721,7 +687,7 @@ function updateRoomUI(){
 function editRoomDesc(){
   var d=prompt('房间简介：',(mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description)||'');
   if(d===null) return;
-  api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData(); updateRoomUI(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData().then(updateRoomUI); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function togglePrivate(){
   if(!privBuildingId){ toast('当前房间不属于房子'); return; }
@@ -749,9 +715,7 @@ function loadPriv(){
     api('/api/notes?room='+encodeURIComponent(currentRoom)).then(function(d){
       var items=d.notes||[]; el.innerHTML='';
       if(!items.length){ el.innerHTML='<div class="tip">💌 便签墙空空，等 AI 来留言吧</div>'; return; }
-      items.slice().reverse().forEach(function(n){
-        el.innerHTML+='<div class="note-card"><div class="n-author">✍️ '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.reply?'<div class="n-reply">💬 '+esc(n.reply.author)+'：'+esc(n.reply.text)+'</div>':'')+'</div>';
-      });
+      items.slice().reverse().forEach(function(n){ el.innerHTML+='<div class="note-card"><div class="n-author">✍️ '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.reply?'<div class="n-reply">💬 '+esc(n.reply.author)+'：'+esc(n.reply.text)+'</div>':'')+'</div>'; });
     }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
   } else if(privTab==='diary'){
     api('/api/diaries?room='+encodeURIComponent(currentRoom)).then(function(d){
@@ -773,15 +737,10 @@ function commentDiary(idx){
 }
 function submitPriv(){
   var text=document.getElementById('privInput').value.trim(); if(!text){ toast('写点什么吧'); return; }
-  if(privTab==='note'){
-    api('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('💌 纸条已贴'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
-  } else if(privTab==='diary'){
-    api('/api/diaries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('📖 日记已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
-  } else {
-    api('/api/story',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:privBuildingId,author:userName,text:text})}).then(function(){ toast('🎬 剧情已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
-  }
+  if(privTab==='note'){ api('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('💌 纸条已贴'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); }); }
+  else if(privTab==='diary'){ api('/api/diaries',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,author:userName,text:text})}).then(function(){ toast('📖 日记已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); }); }
+  else { api('/api/story',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:privBuildingId,author:userName,text:text})}).then(function(){ toast('🎬 剧情已写'); document.getElementById('privInput').value=''; loadPriv(); }).catch(function(e){ toast('❌ '+e.message); }); }
 }
-
 function openPerm(){
   var b=mapData.buildings[currentBuilding];
   document.getElementById('permTitle').textContent='🔑 访问管理 · '+b.name;
@@ -806,23 +765,22 @@ function openPerm(){
 function hidePerm(){ document.getElementById('permMask').classList.remove('show'); }
 function grantUser(room,user,allow){
   var b=mapData.buildings[currentBuilding];
-  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData(); openPerm(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData().then(openPerm); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function revokeUser(room,user){
   var b=mapData.buildings[currentBuilding];
-  api('/api/room/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user})}).then(function(){ toast('🗑️ 已移除 '+user); loadMapData(); openPerm(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/room/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user})}).then(function(){ toast('🗑️ 已移除 '+user); loadMapData().then(openPerm); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function applyRoom(room){
   api('/api/room/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,applicant:userName})}).then(function(d){ toast('📨 '+d.msg); }).catch(function(e){ toast('❌ '+e.message); });
 }
-
 function addNpcPrompt(){
   var name=prompt('NPC 名字：',''); if(!name) return;
   var emoji=prompt('头像 emoji：','👤')||'👤';
   var desc=prompt('人设：','')||'';
-  api('/api/npc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,emoji:emoji,desc:desc})}).then(function(){ toast('✅ NPC 已加入'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/npc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,emoji:emoji,desc:desc})}).then(function(){ toast('✅ NPC 已加入'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
-function deleteNpc(name){ api('/api/npc/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function deleteNpc(name){ api('/api/npc/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); }); }
 function loadStory(){
   api('/api/story?building_id='+encodeURIComponent(currentBuilding)).then(function(d){
     var sts=d.stories||[]; var el=document.getElementById('bvBody');
@@ -843,7 +801,6 @@ function setMyHome(){
   myHomeBid=list[idx]; toast('💗 已设置：'+mapData.buildings[list[idx]].name+' 就是你的家！');
   if(currentRegion) renderRegion(); else loadMap();
 }
-
 function applyBg(room){
   var bg=mapData.room_bg[room]; var area=document.getElementById('msgArea');
   if(bg){ area.style.backgroundImage='url('+bg+')'; area.style.backgroundColor='rgba(15,26,46,.6)'; area.style.backgroundSize='cover'; area.style.backgroundPosition='center'; area.style.backgroundRepeat='no-repeat'; }
@@ -872,7 +829,6 @@ function setBgPrompt(){
   }
 }
 function saveBg(room,image){ api('/api/room/bg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,image:image})}).then(function(){ toast('🖼️ 背景已设置！'); loadMapData(); if(currentRoom===room) applyBg(room); }).catch(function(e){ toast('❌ '+e.message); }); }
-
 function sendMessage(){
   var input=document.getElementById('msgInput'); var content=input.value.trim(); if(!content) return;
   input.value='';
