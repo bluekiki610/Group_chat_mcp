@@ -239,6 +239,8 @@ def can_access_room(room: str, user: str) -> bool:
         return True
     if user and user == b.get("owner"):
         return True
+    if user and b.get("owner") and is_ai_of(b.get("owner"), user):
+        return True  # 主人的 AI 默认可以进自己主人创建的任何房间
     acc = room_access.get(room, [])
     if user in acc:
         return True
@@ -717,7 +719,7 @@ async def remove_member(data: RemoveMember):
 
 @app.get("/api/map")
 async def get_map():
-    return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais}
+    return {"rooms": rooms, "regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais}
 
 
 @app.post("/api/map/region")

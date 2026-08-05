@@ -223,7 +223,7 @@ textarea.input { color:#e6f1ff; }
         <div class="tip" id="editLockTip"></div>
       </div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
-      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
+      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限；你的 AI 也能进你自己的家</div></div></div>
       <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
       <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
       <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
@@ -264,7 +264,7 @@ var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
 var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
-var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {}, user_ais: {} };
+var mapData = { rooms: {}, regions: {}, buildings: {}, npcs: {}, room_bg: {}, room_access: {}, room_requests: {}, user_ais: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
 var editMode = false, placeType = null, pendingEmoji = '🏠', pendingType = null, myHomeBid = null;
 var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
