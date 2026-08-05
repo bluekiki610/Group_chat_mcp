@@ -381,6 +381,13 @@ class NoteReply(BaseModel):
     text: str
 
 
+class DiaryComment(BaseModel):
+    room: str
+    index: int
+    author: str
+    text: str
+
+
 class NpcCreate(BaseModel):
     building_id: str
     name: str
@@ -391,6 +398,14 @@ class NpcCreate(BaseModel):
 class NpcDelete(BaseModel):
     building_id: str
     name: str
+
+
+class NpcEdit(BaseModel):
+    building_id: str
+    name: str
+    new_name: str = ""
+    emoji: str = ""
+    desc: str = ""
 
 
 class StoryItem(BaseModel):
@@ -842,8 +857,22 @@ async def add_diary(data: NoteItem):
     room = clean_room_name(data.room)
     if not data.text.strip(): raise HTTPException(status_code=400, detail="内容不能为空")
     if room not in diaries: diaries[room] = []
-    diaries[room].append({"author": data.author or "匿名", "text": data.text, "time": get_current_time(room)})
+    diaries[room].append({"author": data.author or "匿名", "text": data.text, "time": get_current_time(room), "comment": None})
     if len(diaries[room]) > 200: diaries[room] = diaries[room][-200:]
+    save_data()
+    return {"ok": True}
+
+
+@app.post("/api/diaries/comment")
+async def comment_diary(data: DiaryComment):
+    room = clean_room_name(data.room)
+    items = diaries.get(room, [])
+    if data.index < 0 or data.index >= len(items):
+        raise HTTPException(status_code=404, detail="日记不存在")
+    d = items[data.index]
+    if d.get("comment"):
+        raise HTTPException(status_code=400, detail="这篇日记已经批注过了")
+    d["comment"] = {"author": data.author or "匿名", "text": data.text, "time": get_current_time(room)}
     save_data()
     return {"ok": True}
 
@@ -871,6 +900,22 @@ async def delete_npc(data: NpcDelete):
     return {"ok": True}
 
 
+@app.post("/api/npc/edit")
+async def edit_npc(data: NpcEdit):
+    if data.building_id not in npcs:
+        raise HTTPException(status_code=404, detail="建筑不存在")
+    for n in npcs[data.building_id]:
+        if n["name"] == data.name:
+            if data.new_name:
+                n["name"] = data.new_name
+            if data.emoji:
+                n["emoji"] = data.emoji
+            n["desc"] = data.desc
+            save_data()
+            return {"ok": True}
+    raise HTTPException(status_code=404, detail="NPC 不存在")
+
+
 @app.get("/api/story")
 async def get_story(building_id: str):
     return {"stories": stories.get(building_id, [])}
@@ -894,7 +939,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "32.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "36.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -904,7 +949,7 @@ async def mcp_endpoint(request: Request):
     mcp_log(f"收到请求: method={method}")
 
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "32.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "36.0.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
@@ -913,10 +958,10 @@ async def mcp_endpoint(request: Request):
     if method == "tools/list":
         mcp_log("→ 处理 tools/list")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": [
-            {"name": "group_send", "description": "发送消息。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string", "description": "消息内容"}, "room": {"type": "string", "description": "可选，房间名；不填自动跟随真人"}}, "required": ["sender", "content"]}},
-            {"name": "group_query", "description": "查看一切信息。type 决定看什么：map(地图和所有建筑简介) / building(某建筑详情，需 building_id) / room(某房间简介和消息，需 room) / npc(某建筑NPC，需 building_id) / story(剧情簿，需 building_id) / notes(便签墙，需 room) / diaries(日记，需 room) / messages(某房间消息，需 room) / members(在线成员) / current_room(真人在哪) / rooms(房间列表) / room_status(房间活跃状态)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string", "description": "map/building/room/npc/story/notes/diaries/messages/members/current_room/rooms/room_status"}, "room": {"type": "string", "description": "看房间相关时填房间名"}, "building_id": {"type": "string", "description": "看建筑相关时填建筑 ID"}, "count": {"type": "integer", "description": "消息数量，默认 10"}}, "required": ["type"]}},
-            {"name": "group_write", "description": "写内容。type 决定写什么：note(贴便签/小纸条，需 room) / diary(写日记，需 room) / story(触发剧情存入剧情簿，需 building_id) / reply(回复便签，需 room 和 note_id)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string", "description": "note/diary/story/reply"}, "room": {"type": "string", "description": "房间名"}, "building_id": {"type": "string", "description": "写剧情时填建筑 ID"}, "note_id": {"type": "string", "description": "回复便签时填便签 ID"}, "content": {"type": "string", "description": "内容"}, "sender": {"type": "string", "description": "你的名字"}}, "required": ["type", "content", "sender"]}},
-            {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。提交后等主人同意。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}}
+            {"name": "group_send", "description": "发送消息。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选"}}, "required": ["sender", "content"]}},
+            {"name": "group_query", "description": "查看一切信息。type：map / building(需building_id) / room(需room) / npc(需building_id) / story(需building_id) / notes(需room) / diaries(需room) / messages(需room) / members / current_room / rooms / room_status", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type"]}},
+            {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+            {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}}
         ]}})
 
     if method == "tools/call":
@@ -936,7 +981,6 @@ async def mcp_endpoint(request: Request):
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
 
-# ===== 合并后的 4 个工具实现 =====
 async def mcp_send(args: dict, request_id):
     sender = args.get("sender", "助手"); content = args.get("content", ""); role = "assistant"
     room = args.get("room"); password = ""
@@ -957,10 +1001,7 @@ async def mcp_send(args: dict, request_id):
 
 
 async def mcp_query(args: dict, request_id):
-    t = args.get("type", "map")
-    room = clean_room_name(args.get("room", "main"))
-    bid = args.get("building_id", "")
-    count = args.get("count", 10)
+    t = args.get("type", "map"); room = clean_room_name(args.get("room", "main")); bid = args.get("building_id", ""); count = args.get("count", 10)
     if t == "map":
         text = "🗺️ 临空市地图：\n\n📍 区域：\n"
         if not regions: text += "  暂无区域\n"
@@ -972,11 +1013,10 @@ async def mcp_query(args: dict, request_id):
             ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
             owner = b.get("owner") or "?"
             desc = (b.get("description") or "").split("\n")[0][:40]
-            ncount = len(npcs.get(bid2, []))
             text += f"\n  [{bid2}] {b['emoji']} {b['name']}（{ntype}，创建者：{owner}）\n      📝 {desc or '（暂无简介）'}\n"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "building":
-        if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在，先查 map 看建筑 ID"}]}})
+        if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
         b = buildings[bid]
         ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
         text = f"🏛️ {b['emoji']} {b['name']}（{ntype}）\n\n📝 简介：{b.get('description') or '（暂无简介）'}\n\n👑 创建者：{b.get('owner') or '?'}\n"
@@ -1009,7 +1049,7 @@ async def mcp_query(args: dict, request_id):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "diaries":
         items = diaries.get(room, [])
-        text = f"📖 「{room}」的日记（{len(items)} 篇）：\n" + "\n".join([f"· {n['author']}：{n['text']}（{n['time']}）" for n in items]) if items else f"📭 「{room}」的日记本是空白的"
+        text = f"📖 「{room}」的日记（{len(items)} 篇）：\n" + "\n".join([f"· {n['author']}：{n['text']}（{n['time']}）" + (f" ↳ ✍️ {n['comment']['author']}批注：{n['comment']['text']}" if n.get("comment") else "") for n in items]) if items else f"📭 「{room}」的日记本是空白的"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "messages":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
@@ -1021,8 +1061,7 @@ async def mcp_query(args: dict, request_id):
         text = "🟢 在线成员：\n" + "\n".join([f"👤 {m['name']}（在 {room_label(m['room'])}）" for m in online]) if online else "🟢 当前没有在线成员"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "current_room":
-        current = active_room.get("current", "main")
-        text = f"📍 真人当前在：{room_label(current)}"
+        text = f"📍 真人当前在：{room_label(active_room.get('current', 'main'))}"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "rooms":
         text = "📋 房间列表：\n"
@@ -1033,20 +1072,14 @@ async def mcp_query(args: dict, request_id):
         online = get_online_members()
         text = "📊 房间活跃状态：\n"
         for rn in rooms.keys():
-            oc = len([u for u in online if u["room"] == rn])
-            mc = len(messages.get(rn, []))
+            oc = len([u for u in online if u["room"] == rn]); mc = len(messages.get(rn, []))
             text += f"\n🏠 {room_label(rn)}：👤 {oc} 人 / 💬 {mc} 条"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
-    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type，请用 map/building/room/npc/story/notes/diaries/messages/members/current_room/rooms/room_status"}]}})
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type"}]}})
 
 
 async def mcp_write(args: dict, request_id):
-    t = args.get("type", "note")
-    room = clean_room_name(args.get("room", "main"))
-    content = args.get("content", "")
-    sender = args.get("sender", "神秘人")
-    bid = args.get("building_id", "")
-    note_id = args.get("note_id", "")
+    t = args.get("type", "note"); room = clean_room_name(args.get("room", "main")); content = args.get("content", ""); sender = args.get("sender", "神秘人"); bid = args.get("building_id", ""); note_id = args.get("note_id", "")
     if t == "note":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签内容不能为空"}]}})
@@ -1056,13 +1089,12 @@ async def mcp_write(args: dict, request_id):
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 日记内容不能为空"}]}})
         if room not in diaries: diaries[room] = []
-        diaries[room].append({"author": sender, "text": content, "time": get_current_time(room)})
+        diaries[room].append({"author": sender, "text": content, "time": get_current_time(room), "comment": None})
         if len(diaries[room]) > 200: diaries[room] = diaries[room][-200:]
         save_data()
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"📖 日记已写进「{room}」的日记本！"}]}})
     if t == "story":
-        if bid not in buildings:
-            return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在，先 group_query type=building 看建筑 ID"}]}})
+        if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 剧情内容不能为空"}]}})
         b = buildings[bid]
         npc_names = "、".join([n["name"] for n in npcs.get(bid, [])])
@@ -1080,7 +1112,7 @@ async def mcp_write(args: dict, request_id):
                 n["reply"] = {"author": sender, "text": content, "time": get_current_time(room)}; save_data()
                 return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "💬 回复成功！"}]}})
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签不存在"}]}})
-    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type，请用 note/diary/story/reply"}]}})
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type"}]}})
 
 
 async def mcp_access(args: dict, request_id):

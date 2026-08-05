@@ -136,7 +136,7 @@ textarea.input { color:#e6f1ff; }
 <div class="app">
   <div id="chatView">
     <header>
-      <div class="header-title"><span id="roomEmoji">🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
+      <div class="header-title"><button class="hbtn" onclick="goBackFromChat()" style="margin-right:6px;padding:3px 9px">←</button> <span id="roomEmoji">🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
       <div class="header-btns">
         <button class="hbtn" id="privBtn" onclick="togglePrivate()" style="display:none">🏠 私人空间</button>
         <button class="hbtn" onclick="showMap()">🗺️ 地图</button>
@@ -145,7 +145,8 @@ textarea.input { color:#e6f1ff; }
     </header>
     <div class="room-desc-bar" id="roomDescBar" style="display:none">
       <span class="rd-text" id="roomDescText"></span>
-      <span class="rd-edit" id="roomDescEdit" onclick="editRoomDesc()" style="display:none">✏️ 编辑</span>
+      <span class="rd-edit" id="roomDescEdit" onclick="editRoomDesc()" style="display:none">✏️</span>
+      <span style="cursor:pointer;flex-shrink:0;margin-left:8px" onclick="setRoomBgHere()" title="设置房间背景">🖼️</span>
     </div>
     <div class="room-tabs" id="roomTabs"></div>
     <div id="msgArea"></div>
@@ -192,12 +193,7 @@ textarea.input { color:#e6f1ff; }
   <div class="sheet-mask" id="buildMask" onclick="hideBuildSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
       <div class="s-title">🏗️ 建造</div>
-      <div class="s-grid">
-        <div class="s-item" onclick="startPlace('region')"><span class="ic">📍</span><span class="nm">区域</span></div>
-        <div class="s-item" onclick="startPlace('home')"><span class="ic">🏠</span><span class="nm">住宅</span></div>
-        <div class="s-item" onclick="startPlace('npc')"><span class="ic">🏙️</span><span class="nm">公共建筑</span></div>
-        <div class="s-item" onclick="setMyHome()"><span class="ic">💗</span><span class="nm">设为我的家</span></div>
-      </div>
+      <div class="s-grid" id="buildGrid"></div>
       <button class="s-close" onclick="hideBuildSheet()">关闭</button>
     </div>
   </div>
@@ -242,7 +238,7 @@ textarea.input { color:#e6f1ff; }
     <div class="modal"><h3 id="permTitle">🔑 访问管理</h3><div id="permList"></div><button class="btn gray" style="width:100%;margin-top:8px" onclick="hidePerm()">关闭</button></div>
   </div>
   <div class="modal-mask" id="privateMask" onclick="if(event.target===this)hidePrivate()">
-    <div class="modal">
+    <div class="modal" id="privModal" style="background-size:cover;background-position:center;">
       <h3>🏠 私人空间 · <span id="privRoomName"></span></h3>
       <div class="priv-tab">
         <button id="ptabNote" class="on" onclick="setPrivTab('note')">💌 纸条</button>
@@ -286,11 +282,6 @@ if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你
 
 // ===== 气泡配色 =====
 function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
-function bubbleBg(sender, isMe){
-  var p = pairOf(sender);
-  if(p){ return isMe ? p.dark : (sender===p.owner ? p.dark : p.light); }
-  return isMe ? '#0e7fd4' : '#1c2f4d';
-}
 function savePairs(){ localStorage.setItem('gc_pairs', JSON.stringify(colorPairs)); }
 function renderPairColors(){
   var el = document.getElementById('pairColors'); el.innerHTML='';
@@ -341,6 +332,11 @@ function canEnterRoom(room){
   return false;
 }
 
+function goBackFromChat(){
+  var b=buildingOfRoom(currentRoom);
+  if(b){ for(var k in mapData.buildings){ if(mapData.buildings[k]===b){ openBuilding(k); return; } } }
+  showMap();
+}
 function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); }
 function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); }
 function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
@@ -420,7 +416,15 @@ function renderMarkers(canvasId, scope, regionName){
   });
 }
 
-function showBuildSheet(){ document.getElementById('buildMask').classList.add('show'); }
+function showBuildSheet(){
+  var g=document.getElementById('buildGrid');
+  if(!currentRegion){
+    g.innerHTML='<div class="s-item" onclick="startPlace(\'region\')"><span class="ic">📍</span><span class="nm">区域</span></div>';
+  } else {
+    g.innerHTML='<div class="s-item" onclick="startPlace(\'home\')"><span class="ic">🏠</span><span class="nm">住宅</span></div><div class="s-item" onclick="startPlace(\'npc\')"><span class="ic">🏙️</span><span class="nm">公共建筑</span></div><div class="s-item" onclick="setMyHome()"><span class="ic">💗</span><span class="nm">设为我的家</span></div>';
+  }
+  document.getElementById('buildMask').classList.add('show');
+}
 function hideBuildSheet(){ document.getElementById('buildMask').classList.remove('show'); }
 function startPlace(type){
   hideBuildSheet();
@@ -560,8 +564,7 @@ function renderBuilding(){
   var isOwner = b.owner === userName;
   var isPublic = b.type==='npc';
   var el=document.getElementById('bvBody'); var html='';
-  html+='<div class="section-title">📝 简介</div><div class="tip" style="margin-bottom:8px">'+(esc(b.description||'（暂无简介，AI 逛之前会读）'))+'</div>';
-  if(isOwner || isPublic){ html+='<button class="btn" style="width:100%" onclick="editBuildingDesc()">✏️ 编辑简介</button>'; }
+  html+='<div class="section-title">📝 简介</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="tip" style="flex:1">'+esc(b.description||'（暂无简介，AI 逛之前会读）')+'</span>'+(isOwner||isPublic?'<span style="cursor:pointer;font-size:16px" onclick="editBuildingDesc()">✏️</span>':'')+'</div>';
   html+='<div class="section-title">'+(isPublic?'🏛️ 创建者：'+esc(b.owner||'?') : '👑 主人：'+esc(b.owner||'?'))+'</div>';
   if(b.type==='home'){
     html+='<div class="section-title">🚪 房间</div><div class="room-grid">';
@@ -571,16 +574,14 @@ function renderBuilding(){
       html+='<div class="room-cell '+(hall?'hall':'locked')+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
     });
     html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div></div>';
-    html+='<div class="section-title">💗 互动</div><div class="home-actions"><button class="act-btn" onclick="setBgPrompt()">🖼️ 背景</button></div>';
   }
   if(isOwner && !isPublic){
     var reqCount = 0;
     (b.rooms||[]).forEach(function(r){ reqCount += (mapData.room_requests[r]||[]).length; });
-    html+='<div class="section-title">🔑 访问管理（'+reqCount+' 个申请）</div><button class="btn" style="width:100%" onclick="openPerm()">📋 查看申请 / 已授权名单</button>';
+    html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><span style="cursor:pointer;font-size:22px" onclick="openPerm()" title="访问管理">🔑</span><span class="tip" style="flex:1">访问管理'+(reqCount?'（'+reqCount+' 个申请）':'')+'</span></div>';
   }
-  html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）</div>';
-  (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div><span class="n-del" onclick="deleteNpc(\''+esc(n.name)+'\')">✖</span></div>'; });
-  html+='<button class="btn" style="width:100%" onclick="addNpcPrompt()">➕ 添加 NPC</button>';
+  html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）<span style="cursor:pointer;font-size:16px;margin-left:8px" onclick="addNpcPrompt()">➕</span></div>';
+  (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div><span style="cursor:pointer;color:#7fd0ff;font-size:14px;margin-left:auto" onclick="editNpc(\''+esc(n.name)+'\')">✏️</span><span style="cursor:pointer;color:#ff6b6b;font-size:14px;margin-left:8px" onclick="deleteNpc(\''+esc(n.name)+'\')">🗑️</span></div>'; });
   html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
   el.innerHTML=html;
 }
@@ -589,6 +590,15 @@ function editBuildingDesc(){
   var d=prompt('建筑简介（这个建筑是做什么的？AI 逛之前会读）：',b.description||'');
   if(d===null) return;
   api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function editNpc(name){
+  var list=mapData.npcs[currentBuilding]||[];
+  var n=null; for(var i=0;i<list.length;i++){ if(list[i].name===name){ n=list[i]; break; } }
+  if(!n) return;
+  var nn=prompt('NPC 名字：',n.name); if(!nn) return;
+  var em=prompt('头像 emoji：',n.emoji||'👤')||'👤';
+  var dd=prompt('人设：',n.desc||'')||'';
+  api('/api/npc/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,new_name:nn,emoji:em,desc:dd})}).then(function(){ toast('✅ NPC 已更新'); loadMapData(); renderBuilding(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function createBuildingRoom(){
   var name=prompt('房间名字（如：卧室、书房）：',''); if(!name) return;
@@ -632,6 +642,10 @@ function editRoomDesc(){
 function togglePrivate(){
   if(!privBuildingId){ toast('当前房间不属于房子'); return; }
   document.getElementById('privRoomName').textContent=roomLabel(currentRoom);
+  var bg=mapData.room_bg[currentRoom];
+  var pm=document.getElementById('privModal');
+  if(bg){ pm.style.backgroundImage='url('+bg+')'; pm.style.backgroundColor='rgba(16,29,51,.85)'; }
+  else { pm.style.backgroundImage='none'; pm.style.backgroundColor='#101d33'; }
   document.getElementById('privateMask').classList.add('show');
   setPrivTab(privTab);
 }
@@ -658,7 +672,7 @@ function loadPriv(){
     api('/api/diaries?room='+encodeURIComponent(currentRoom)).then(function(d){
       var items=d.diaries||[]; el.innerHTML='';
       if(!items.length){ el.innerHTML='<div class="tip">📖 日记本空白，等 AI 来写心事吧</div>'; return; }
-      items.slice().reverse().forEach(function(n){ el.innerHTML+='<div class="note-card"><div class="n-author">📖 '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div></div>'; });
+      items.slice().reverse().forEach(function(n,i){ var idx=items.length-1-i; el.innerHTML+='<div class="note-card"><div class="n-author">📖 '+esc(n.author)+'</div><div class="n-text">'+esc(n.text)+'</div><div class="n-time">'+esc(n.time)+'</div>'+(n.comment?'<div class="n-reply">✍️ '+esc(n.comment.author)+'批注：'+esc(n.comment.text)+'</div>':'<span class="n-rep-btn" onclick="commentDiary('+idx+')">✍️ 批注</span>')+'</div>'; });
     }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
   } else {
     api('/api/story?building_id='+encodeURIComponent(privBuildingId)).then(function(d){
@@ -667,6 +681,10 @@ function loadPriv(){
       items.slice().reverse().forEach(function(s){ el.innerHTML+='<div class="story-card"><div class="s-time">'+esc(s.time)+'</div><div class="s-author">'+esc(s.author)+'</div><div class="s-text">'+esc(s.text)+'</div></div>'; });
     }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
   }
+}
+function commentDiary(idx){
+  var t=prompt('批注这篇日记：',''); if(!t) return;
+  api('/api/diaries/comment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,index:idx,author:userName,text:t})}).then(function(){ toast('✍️ 批注成功'); loadPriv(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function submitPriv(){
   var text=document.getElementById('privInput').value.trim(); if(!text){ toast('写点什么吧'); return; }
@@ -745,6 +763,15 @@ function applyBg(room){
   var bg=mapData.room_bg[room]; var area=document.getElementById('msgArea');
   if(bg){ area.style.backgroundImage='url('+bg+')'; area.style.backgroundColor='rgba(15,26,46,.6)'; }
   else { area.style.backgroundImage='none'; area.style.backgroundColor='#0f1a2e'; }
+}
+function setRoomBgHere(){
+  if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
+    var f=document.createElement('input'); f.type='file'; f.accept='image/*';
+    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ saveBg(currentRoom,e.target.result); }; reader.readAsDataURL(file); };
+    f.click();
+  } else {
+    var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(currentRoom,url.trim());
+  }
 }
 function setBgPrompt(){
   var rooms=(mapData.buildings[currentBuilding]||{}).rooms||[];
@@ -843,11 +870,17 @@ function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(c
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
 function ts(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
 function backupNow(){
+  toast('⏳ 备份中…请稍候');
   api('/api/backup').then(function(d){
-    var name='linkongbackup_'+ts()+'.json';
-    var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
-    var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
-    toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）');
+    try{
+      var name='linkongbackup_'+ts()+'.json';
+      var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a'); a.href=url; a.download=name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+      toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）');
+    }catch(err){ toast('❌ 下载失败：'+err.message); }
   }).catch(function(e){ toast('❌ 备份失败：'+e.message); });
 }
 function restoreBackup(){
