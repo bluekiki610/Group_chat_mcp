@@ -786,10 +786,14 @@ function renderSystem(t){ var d=document.createElement('div'); d.className='msg 
 function renderMsg(m){
   var d=document.createElement('div'); var isMe=m.sender===userName; d.className='msg '+(isMe?'me':'other');
   var av=avatars[m.sender]; var avHtml=av?'<img src="'+av+'">':esc((m.sender||'?').charAt(0));
-  var bg=bubbleBg(m.sender,isMe);
-  var border = isMe ? '' : 'border:1px solid rgba(255,255,255,.1);';
-  var nameTag=isMe?'':'<span style="color:#7fd0ff;font-weight:bold">'+esc(m.sender)+'</span> ';
-  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span></div><div class="bubble" style="background:'+bg+';color:'+(isMe?'#fff':'#e6f1ff')+';'+border+'">'+esc(m.content)+'</div></div>';
+  var p=pairOf(m.sender);
+  var isOwner = p && m.sender===p.owner;
+  var bg = p ? (isOwner ? p.dark : p.light) : (isMe ? '#0e7fd4' : '#1c2f4d');
+  var nameColor = p ? (isOwner ? p.dark : p.light) : '#7fd0ff';
+  var textColor = p ? (isOwner ? '#ffffff' : '#16263c') : (isMe ? '#ffffff' : '#e6f1ff');
+  var border = (!p && !isMe) ? 'border:1px solid rgba(255,255,255,.1);' : '';
+  var nameTag=isMe?'':'<span style="color:'+nameColor+';font-weight:bold">'+esc(m.sender)+'</span> ';
+  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span></div><div class="bubble" style="background:'+bg+';color:'+textColor+';'+border+'">'+esc(m.content)+'</div></div>';
   return d;
 }
 function speakNewMessages(msgs){ if(!('speechSynthesis' in window)||(!speakAll&&!speakNames.length)||!msgs.length) return; var last=msgs[msgs.length-1]; var key=last.sender+'|'+last.content; if(key===lastMsgKey) return; lastMsgKey=key; var ok=(speakAll&&last.sender!==userName)||(!speakAll&&speakNames.indexOf(last.sender)>=0); if(!ok) return; try{ speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance((last.sender==='system'?'':last.sender+'说：')+last.content); u.lang='zh-CN'; speechSynthesis.speak(u);}catch(e){} }
