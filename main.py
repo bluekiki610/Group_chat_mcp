@@ -372,6 +372,7 @@ class WorkStart(BaseModel): name: str; building_id: str; hours: int = 1
 class WorkStop(BaseModel): name: str
 class HomeJob(BaseModel): user: str; ai: str = ""; building_id: str = ""
 class BuildingFeatures(BaseModel): building_id: str; features: List[str] = []; salary: float = 0
+class BuildingNotice(BaseModel): building_id: str; notice: str = ""
 class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
@@ -447,6 +448,13 @@ async def set_building_features(data: BuildingFeatures):
     b["salary"] = max(0, data.salary)
     save_data()
     return {"ok": True, "msg": "功能已更新"}
+
+@app.post("/api/building/notice")
+async def set_building_notice(data: BuildingNotice):
+    if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
+    buildings[data.building_id]["notice"] = data.notice
+    save_data()
+    return {"ok": True, "msg": "公告已更新"}
 
 @app.post("/api/summon")
 async def summon_ai(data: SummonReq):

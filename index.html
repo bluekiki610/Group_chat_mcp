@@ -364,6 +364,13 @@ function setBuildingFeatures(){
   var sal = parseFloat(prompt('时薪（金币/小时，0=不可工作）：', b.salary||50)||'0');
   api('/api/building/features',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,features:feats,salary:sal})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
+function setBuildingNotice(){
+  var b = mapData.buildings[currentBuilding];
+  if(!b) return;
+  var n = prompt('📢 写公告（来这个建筑的人都能看到）：', b.notice||'');
+  if(n===null) return;
+  api('/api/building/notice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,notice:n})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
+}
 function worldSnapshot(){
   api('/api/backup').then(function(d){
     var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, wallets:d.wallets, home_jobs:d.home_jobs, ts:new Date().toLocaleString()};
@@ -700,6 +707,9 @@ function renderBuilding(){
   var ce = canEdit();
   var el=document.getElementById('bvBody'); var html='';
   html+='<div class="section-title">📝 简介</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span class="tip" style="flex:1">'+esc(b.description||'（暂无简介，AI 逛之前会读）')+'</span>'+(ce&&(isOwner||isPublic)?'<span style="cursor:pointer;font-size:16px" onclick="editBuildingDesc()">✏️</span>':'')+'</div>';
+  if(isPublic){
+    html+='<div style="background:#14283f;border:1px solid rgba(255,200,80,.4);border-radius:10px;padding:10px;margin:8px 0"><div style="display:flex;align-items:center;gap:8px"><b style="color:#ffd166">📢 公告栏</b>'+(ce?'<span style="cursor:pointer;font-size:14px;color:#7fd0ff;margin-left:auto" onclick="setBuildingNotice()">✏️</span>':'')+'</div><div class="tip" style="margin-top:4px;white-space:pre-wrap">'+esc(b.notice||'（暂无公告）')+'</div></div>';
+  }
   html+='<div class="section-title">'+(isPublic?'🏛️ 创建者：'+esc(b.owner||'?') : '👑 主人：'+esc(b.owner||'?'))+'</div>';
   if(ce && isPublic){
     var feats=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐'}[f]||f; }).join(' ');
