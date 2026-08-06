@@ -1061,13 +1061,19 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
-# ========== 挂载 MCP 服务器到 FastAPI（标准版） ==========
+# ========== 挂载 MCP 服务器到 FastAPI ==========
 def mount_mcp():
     mcp_app = None
     if hasattr(mcp, "streamable_http_app"):
         try:
-            mcp_app = mcp.streamable_http_app()
-            print("[MCP] got streamable_http_app")
+            mcp_app = mcp.streamable_http_app(mount_path="/")
+            print("[MCP] got streamable_http_app(mount_path='/')")
+        except TypeError:
+            try:
+                mcp_app = mcp.streamable_http_app()
+                print("[MCP] got streamable_http_app() no-arg")
+            except Exception as e:
+                print("[MCP] streamable_http_app() fail:", e)
         except Exception as e:
             print("[MCP] streamable_http_app fail:", e)
     if mcp_app is None and hasattr(mcp, "sse_app"):
@@ -1079,7 +1085,7 @@ def mount_mcp():
     if mcp_app is not None:
         try:
             app.mount("/mcp", mcp_app)
-            print("[MCP] mounted streamable app at /mcp (plain)")
+            print("[MCP] mounted streamable app at /mcp")
             return
         except Exception as e:
             print("[MCP] plain mount fail:", e)
