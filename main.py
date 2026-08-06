@@ -61,6 +61,7 @@ ai_check_ts: float = time.time()
 # ===== 私信系统 =====
 sms: Dict[str, List[Dict]] = {}
 work_history: Dict[str, List[Dict]] = {}
+work_switch: Dict[str, bool] = {}
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -79,7 +80,7 @@ def save_base64_image(data: str, prefix: str) -> str:
 
 
 def collect_all_data() -> dict:
-    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor, "sms": sms, "work_history": work_history}
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor, "sms": sms, "work_history": work_history, "work_switch": work_switch}
 
 
 def save_data():
@@ -138,6 +139,7 @@ def load_data():
         backpacks.update(data.get("backpacks", {})); room_decor.update(data.get("room_decor", {}))
         sms.update(data.get("sms", {}))
         work_history.update(data.get("work_history", {}))
+        work_switch.update(data.get("work_switch", {}))
         print(f"[SAVE] 已恢复数据（房间 {len(rooms)}）", flush=True)
     except Exception as e:
         print(f"[SAVE] 加载失败: {e}", flush=True)
@@ -323,12 +325,15 @@ def settle_work():
 
 def auto_ai_work():
     global ai_check_ts
-    if time.time() - ai_check_ts < 3600: return
+    if time.time() - ai_check_ts < 600: return
     ai_check_ts = time.time()
+    now = datetime.now(timezone.utc) + timedelta(hours=8)
+    if not (9 <= now.hour < 19): return
     changed = False
     for user, ais in user_ais.items():
         for ai in ais:
             if ai in work_sessions: continue
+            if not work_switch.get(ai): continue
             bid = None
             place = home_jobs.get(ai)
             if place and random.random() < 0.8:
@@ -385,7 +390,7 @@ class HomeJob(BaseModel): user: str; ai: str = ""; building_id: str = ""
 class BuildingFeatures(BaseModel): building_id: str; features: List[str] = []; salary: float = 0
 class BuildingNotice(BaseModel): building_id: str; notice: str = ""
 class SmsSend(BaseModel): sender: str; to: str; text: str
-class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None; sms: Optional[Dict] = None; work_history: Optional[Dict] = None
+class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None; sms: Optional[Dict] = None; work_history: Optional[Dict] = None; work_switch: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
@@ -438,6 +443,7 @@ async def work_start(data: WorkStart):
     if (b.get("salary") or 0) <= 0: raise HTTPException(status_code=400, detail="这个建筑还没设定时薪")
     hours = max(1, min(8, data.hours))
     work_sessions[name] = {"building_id": bid, "start_ts": time.time(), "hours": hours, "salary": b["salary"]}
+    work_switch[name] = True
     save_data()
     post_building_msg(bid, f"👔 {name} 去「{b['name']}」上班了（{hours}小时，时薪 {b['salary']:.0f}）")
     save_data()
@@ -448,6 +454,7 @@ async def work_stop(data: WorkStop):
     name = data.name.strip()
     if name not in work_sessions: raise HTTPException(status_code=400, detail="没有在上班")
     s = work_sessions.pop(name)
+    work_switch[name] = False
     elapsed = time.time() - s["start_ts"]
     earn = (elapsed / 3600.0) * s["salary"]
     wallets[name] = wallets.get(name, 0.0) + earn
@@ -521,6 +528,7 @@ async def restore_backup(data: BackupData):
     if data.room_decor is not None: room_decor.clear(); room_decor.update(data.room_decor)
     if data.sms is not None: sms.clear(); sms.update(data.sms)
     if data.work_history is not None: work_history.clear(); work_history.update(data.work_history)
+    if data.work_switch is not None: work_switch.clear(); work_switch.update(data.work_switch)
     building_seq = data.building_seq or 0; note_seq = data.note_seq or 0
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
