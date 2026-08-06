@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v46.4</title>
+<title>人❤️机の小窝 · 临空市 v46.6</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -172,6 +172,7 @@ textarea.input { color:#e6f1ff; }
     <header>
       <div class="header-title"><span id="roomEmoji">🏠</span> <span class="ht" id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
       <div class="header-btns">
+        <button class="hbtn" onclick="goBackFromChat()">←</button>
         <button class="hbtn" onclick="goLobby()">🏠大厅</button>
         <button class="hbtn" onclick="goMyHome()">🏡我家</button>
         <button class="hbtn" onclick="openBell()">🔔<span id="bellDot" style="display:none;color:#ff6b6b;margin-left:2px">●</span></button>
@@ -389,8 +390,7 @@ function myHomeBidFind(){ for(var bid in mapData.buildings){ var b=mapData.build
 function goMyHome(){
   var bid=myHomeBidFind();
   if(!bid){ toast('你还没有自己的家（住宅类型）'); return; }
-  var hall=mapData.buildings[bid].name+'·会客厅';
-  switchRoom(hall,''); showChat();
+  openBuilding(bid);
 }
 function showMe(){ ['chatView','mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('myView').style.display='flex'; renderMe(); }
 function renderMe(){
@@ -510,6 +510,7 @@ function renderConv(){
     rows.forEach(function(m){
       var row=document.createElement('div'); row.className='sms-row '+(m.mine?'mine':'them');
       if(!m.mine){ var avd=document.createElement('div'); avd.style.cssText='width:34px;height:34px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;overflow:hidden;flex-shrink:0;margin-right:6px'; avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0)); row.appendChild(avd); }
+      if(m.mine){ var myav=avatars[userName]; var myd=document.createElement('div'); myd.style.cssText='width:34px;height:34px;border-radius:50%;background:#0e9f6e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;overflow:hidden;flex-shrink:0;margin-left:6px;order:3'; myd.innerHTML=myav?'<img src="'+myav+'" style="width:100%;height:100%;object-fit:cover">':esc((userName||'?').charAt(0)); row.appendChild(myd); }
       var b=document.createElement('div'); b.className='sms-bubble'; b.textContent=m.text;
       var t=document.createElement('span'); t.className='sms-time'; t.textContent=(m.time||'').slice(5,16);
       row.appendChild(b); row.appendChild(t);
@@ -1250,8 +1251,14 @@ function renderMsg(m){
   var textColor = p ? (isOwner ? '#ffffff' : '#16263c') : (isMe ? '#ffffff' : '#e6f1ff');
   var border = (!p && !isMe) ? 'border:1px solid rgba(255,255,255,.1);' : '';
   var nameTag=isMe?'':'<span style="color:'+nameColor+';font-weight:bold">'+esc(m.sender)+'</span> ';
-  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span></div><div class="bubble" style="background:'+bg+';color:'+textColor+';'+border+'">'+esc(m.content)+'</div></div>';
+  var bb=buildingOfRoom(currentRoom); var canDel = bb && bb.owner===userName;
+  var delBtn = canDel ? ' <span style="color:#ff6b6b;cursor:pointer;font-size:12px;margin-left:4px" onclick="delMsg(\''+esc(m.sender)+'\',\''+esc(m.content)+'\',\''+esc(m.time||'')+'\')">✕</span>' : '';
+  d.innerHTML='<div class="avatar">'+avHtml+'</div><div class="body"><div class="meta">'+nameTag+'<span>'+esc(m.time||'')+'</span>'+delBtn+'</div><div class="bubble" style="background:'+bg+';color:'+textColor+';'+border+'">'+esc(m.content)+'</div></div>';
   return d;
+}
+function delMsg(sender,content,time){
+  if(!confirm('删除这条消息？')) return;
+  api('/api/messages/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,sender:sender,content:content,time:time,user:userName})}).then(function(){ toast('🗑️ 已删除'); loadMessages(true); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function speakNewMessages(msgs){ if(!('speechSynthesis' in window)||(!speakAll&&!speakNames.length)||!msgs.length) return; var last=msgs[msgs.length-1]; var key=last.sender+'|'+last.content; if(key===lastMsgKey) return; lastMsgKey=key; var ok=(speakAll&&last.sender!==userName)||(!speakAll&&speakNames.indexOf(last.sender)>=0); if(!ok) return; try{ speechSynthesis.cancel(); var u=new SpeechSynthesisUtterance((last.sender==='system'?'':last.sender+'说：')+last.content); u.lang='zh-CN'; speechSynthesis.speak(u);}catch(e){} }
 function refreshOnline(){ api('/api/online').then(function(d){ var count=0; (d.online||[]).forEach(function(u){ if(u.room===currentRoom){count++;} }); document.getElementById('onlineBadge').textContent=count+' 在线'; }).catch(function(){}); }
