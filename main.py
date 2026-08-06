@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -211,6 +211,11 @@ async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
 async def health(): return {"ok": True, "rooms": len(data["rooms"])}
+
+@app.get("/mcp")
+@app.get("/mcp/")
+async def mcp_probe():
+    return Response(status_code=200, content="MCP server is running")
 
 @app.get("/api/mcp_tools")
 async def mcp_tools():
