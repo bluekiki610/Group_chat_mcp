@@ -59,7 +59,7 @@ backpacks: Dict[str, List[Dict]] = {}
 room_decor: Dict[str, List[Dict]] = {}
 ai_check_ts: float = time.time()
 # ===== 私信系统 =====
-sms: Dict[str, List[Dict]] = {}   # 收件人 -> [{from, text, time}]
+sms: Dict[str, List[Dict]] = {}
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -467,7 +467,7 @@ async def set_building_features(data: BuildingFeatures):
     if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
     b = buildings[data.building_id]
     if b.get("type") != "npc": raise HTTPException(status_code=400, detail="只有公共建筑可以设置功能")
-    b["features"] = [f for f in data.features if f in ("work", "shop", "fun")]
+    b["features"] = [f for f in data.features if f in ("work", "shop", "fun", "date")]
     b["salary"] = max(0, data.salary)
     save_data()
     return {"ok": True, "msg": "功能已更新"}
@@ -893,7 +893,7 @@ def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.1.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -901,7 +901,7 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.1.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
@@ -954,7 +954,7 @@ async def mcp_query(args: dict, request_id):
             ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
             owner = b.get("owner") or "?"
             desc = (b.get("description") or "").split("\n")[0][:40]
-            feats = "".join({"work":"💼","shop":"🛍️","fun":"🎮"}.get(f,"") for f in (b.get("features") or []))
+            feats = "".join({"work":"💼","shop":"🛍️","fun":"🎮","date":"💕"}.get(f,"") for f in (b.get("features") or []))
             extra = f"（时薪{b['salary']:.0f}）" if b.get("salary") else ""
             wl = workers_at(bid2)
             who = f" 👔{len(wl)}人" if wl else ""
@@ -965,10 +965,12 @@ async def mcp_query(args: dict, request_id):
         b = buildings[bid]
         log_trail(sender, f"逛了「{b['emoji']} {b['name']}」", "")
         ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
-        feats = "".join({"work":"💼工作","shop":"🛍️购物","fun":"🎮娱乐"}.get(f,"") + " " for f in (b.get("features") or []))
+        feats = "".join({"work":"💼工作","shop":"🛍️购物","fun":"🎮娱乐","date":"💕约会"}.get(f,"") + " " for f in (b.get("features") or []))
         text = f"🏛️ {b['emoji']} {b['name']}（{ntype}）\n\n📝 简介：{b.get('description') or '（暂无简介）'}\n\n👑 创建者：{b.get('owner') or '?'}\n"
         if feats: text += f"\n⚙️ 功能：{feats}\n"
         if b.get("salary"): text += f"💼 时薪：{b['salary']:.0f} 金币\n"
+        hj_here = [n for n, p in home_jobs.items() if p == b.get("name")]
+        if hj_here: text += f"🏠 常驻于此：{'、'.join(hj_here)}\n"
         wl = workers_at(bid)
         if wl:
             left = max(0, int(work_sessions[wl[0]]["start_ts"] + work_sessions[wl[0]]["hours"]*3600 - time.time()))
