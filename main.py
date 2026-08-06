@@ -39,6 +39,41 @@ def default_data():
         "sms": {}, "trails": {}, "messages_cache": {},
     }
 
+def sanitize_data():
+    """把旧版 data.json 的数据自动规整成新格式，防止接口崩溃。"""
+    try:
+        data["messages"] = {r: [m for m in ms if isinstance(m, dict)] for r, ms in data.get("messages", {}).items()}
+        for name in list(data.get("rooms", {}).keys()):
+            r = data["rooms"][name]
+            if not isinstance(r, dict):
+                data["rooms"][name] = {"creator": "?", "has_password": False, "password": "", "created": now_str(), "description": ""}
+            else:
+                r.setdefault("creator", "?"); r.setdefault("has_password", False); r.setdefault("password", ""); r.setdefault("created", now_str()); r.setdefault("description", "")
+        data["work_history"] = [h for h in data.get("work_history", []) if isinstance(h, dict)]
+        data["wallets"] = {k: (v if isinstance(v, (int, float)) else 0) for k, v in data.get("wallets", {}).items()}
+        data["work_sessions"] = {k: v for k, v in data.get("work_sessions", {}).items() if isinstance(v, dict)}
+        data["home_jobs"] = {k: v for k, v in data.get("home_jobs", {}).items() if isinstance(v, str)}
+        data["work_switch"] = {k: bool(v) for k, v in data.get("work_switch", {}).items()}
+        data["avatars"] = {k: (v if isinstance(v, str) else "") for k, v in data.get("avatars", {}).items()}
+        data["user_ais"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("user_ais", {}).items()}
+        data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
+        data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
+        data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings"]:
+            v = data.get(key)
+            if isinstance(v, dict):
+                for k2 in list(v.keys()):
+                    if not isinstance(v[k2], list):
+                        v[k2] = []
+        if not isinstance(data.get("active_room"), dict):
+            data["active_room"] = {"current": "main"}
+        data["active_room"].setdefault("current", "main")
+        if not isinstance(data.get("rooms"), dict):
+            data["rooms"] = {}
+        data["rooms"].setdefault("main", {"creator": "system", "has_password": False, "password": "", "created": now_str(), "description": "城市的公共大厅，所有人都在这里聊天。"})
+    except Exception:
+        pass
+
 def load_data():
     global data
     if DATA_FILE.exists():
@@ -50,8 +85,7 @@ def load_data():
         data = default_data()
     for k, v in default_data().items():
         data.setdefault(k, v)
-    data.setdefault("rooms", {}).setdefault("main", {"creator": "system", "has_password": False, "password": "", "created": now_str(), "description": "城市的公共大厅，所有人都在这里聊天。"})
-    data["active_room"].setdefault("current", "main")
+    sanitize_data()
 
 def save_data():
     try:
@@ -232,7 +266,7 @@ async def restore_messages(r: RestoreIn):
     if rr.get("has_password") and rr.get("password") != r.password:
         return {"ok": False, "reason": "bad_pwd"}
     cur = data["messages"].get(room, [])
-    got = [m for m in r.messages if m.get("sender") != "system"]
+    got = [m for m in r.messages if isinstance(m, dict) and m.get("sender") != "system"]
     cur_senders = {(m.get("sender"), m.get("content"), m.get("time")) for m in cur}
     added = 0
     for m in got:
@@ -666,11 +700,14 @@ def auto_start_work(name: str):
 
 @app.get("/api/economy")
 async def economy(user: str):
-    w = data["work_sessions"].get(user)
-    my_h = [h for h in data["work_history"] if h.get("name") == user]
-    return {"wallet": data["wallets"].get(user, 0), "working": w,
-            "home_jobs": {k: v for k, v in data["home_jobs"].items() if k == user or is_ai_of(user, k)},
-            "my_history": my_h}
+    try:
+        w = data["work_sessions"].get(user)
+        my_h = [h for h in data["work_history"] if h.get("name") == user]
+        return {"wallet": data["wallets"].get(user, 0), "working": w,
+                "home_jobs": {k: v for k, v in data["home_jobs"].items() if k == user or is_ai_of(user, k)},
+                "my_history": my_h}
+    except Exception:
+        return {"wallet": 0, "working": None, "home_jobs": {}, "my_history": []}
 
 @app.post("/api/work/start")
 async def work_start(ws: WorkStart):
@@ -788,6 +825,7 @@ async def restore_backup(d: dict):
             data[k] = v
     for k, v in default_data().items():
         data.setdefault(k, v)
+    sanitize_data()
     save_data()
     return {"ok": True}
 
