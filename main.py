@@ -13,7 +13,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    from fastmcp import FastMCP
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "data.json"
@@ -63,7 +66,6 @@ def snapshot():
     try:
         name = "auto_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
         (SNAPSHOT_DIR / name).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        # 只留最近 20 份
         files = sorted(SNAPSHOT_DIR.glob("auto_*.json"))
         for f in files[:-20]:
             f.unlink(missing_ok=True)
@@ -111,7 +113,6 @@ def can_access_room(room: str, user: str) -> bool:
     acc = data["room_access"].get(room, [])
     if user in acc:
         return True
-    # 主人授权的真人，其 AI 自动有权限
     for granted in acc:
         if is_ai_of(granted, user):
             return True
@@ -539,7 +540,6 @@ async def room_grant(g: GrantIn):
     if g.allow:
         if g.user not in acc:
             acc.append(g.user)
-        # 该真人的 AI 一起授权
         for ai in data["user_ais"].get(g.user, []):
             if ai not in acc:
                 acc.append(ai)
@@ -635,7 +635,6 @@ def work_tick():
                 s = data["work_sessions"][name]
                 if now >= s["start_ts"] + s["hours"] * 3600:
                     pay_work(name, s["building_id"], s["hours"])
-            # 自动上班（开启了自主工作的 AI）
             for name, on in list(data["work_switch"].items()):
                 if not on:
                     continue
@@ -819,7 +818,6 @@ def group_send(sender: str, content: str, room: str = ""):
     data["messages"].setdefault(target, []).append(msg)
     data["active_room"]["current"] = target
     add_trail(sender, f"在 {target} 说话：{content[:50]}", room=target)
-    # 去别人家的会客厅说话 → 铃铛通知主人
     bid = find_building_of_room(target)
     if bid and target.endswith("·会客厅"):
         owner = data["buildings"][bid].get("owner")
