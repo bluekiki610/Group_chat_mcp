@@ -140,7 +140,6 @@ def load_data():
 
 load_data()
 threading.Thread(target=snapshot_loop, daemon=True).start()
-threading.Thread(target=work_loop, daemon=True).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -336,6 +335,7 @@ def work_loop():
             auto_ai_work()
         except Exception as e:
             print(f"[WORK] 结算异常: {e}", flush=True)
+threading.Thread(target=work_loop, daemon=True).start()
 
 class Message(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = "匿名"
