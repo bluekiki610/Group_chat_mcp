@@ -1062,6 +1062,18 @@ async def mcp_query(args: dict, request_id):
 
 async def mcp_write(args: dict, request_id):
     t = args.get("type", "note"); room = clean_room_name(args.get("room", "main")); content = args.get("content", ""); sender = args.get("sender", "神秘人"); bid = args.get("building_id", ""); note_id = args.get("note_id", "")
+    if t == "work":
+    bid = None
+    for bid2, bb in buildings.items():
+        if bb.get("type") == "npc" and bb.get("name") == room and "work" in (bb.get("features") or []) and (bb.get("salary") or 0) > 0:
+            bid = bid2; break
+    if bid is None: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 没有找到可工作的建筑「{room}」"}]}})
+    if sender in work_sessions: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 已经在上班了"}]}})
+    hours = random.choice([1, 2, 4])
+    work_sessions[sender] = {"building_id": bid, "start_ts": time.time(), "hours": hours, "salary": buildings[bid]["salary"]}
+    save_data()
+    post_building_msg(bid, f"👔 {sender} 去「{buildings[bid]['name']}」上班了（{hours}小时）")
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已开始上班！在「{buildings[bid]['name']}」工作 {hours} 小时"}]}})
     if t == "sms":
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 短信内容不能为空"}]}})
         sms.setdefault(room, []).append({"from": sender, "text": content, "time": get_current_time()})
