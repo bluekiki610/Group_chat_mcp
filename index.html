@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v46.3</title>
+<title>人❤️机の小窝 · 临空市 v46.4</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -162,6 +162,8 @@ textarea.input { color:#e6f1ff; }
 .bell-item { display:flex; gap:8px; background:#14283f; border:1px solid rgba(255,200,80,.25); border-radius:10px; padding:9px 10px; margin-bottom:6px; }
 .bell-item .b-text { flex:1; color:#e6f1ff; font-size:13px; line-height:1.5; }
 .bell-item .b-time { font-size:10px; color:#6d8bb0; flex-shrink:0; }
+.emoji-panel { display:flex; flex-wrap:wrap; gap:8px; padding:10px; }
+.emoji-panel .e { font-size:26px; cursor:pointer; padding:3px; }
 </style>
 </head>
 <body>
@@ -185,6 +187,7 @@ textarea.input { color:#e6f1ff; }
     <div id="msgArea"></div>
     <footer>
       <button class="hbtn" id="privFooterBtn" onclick="togglePrivate()" style="display:none;flex-shrink:0">🏠</button>
+      <span style="cursor:pointer;font-size:20px;flex-shrink:0" onclick="toggleEmoji('chat')">😀</span>
       <input id="msgInput" placeholder="说点什么吧…" autocomplete="off">
       <button id="sendBtn" onclick="sendMessage()">发送</button>
     </footer>
@@ -249,6 +252,13 @@ textarea.input { color:#e6f1ff; }
       <button class="s-close" onclick="hideOp()">关闭</button>
     </div>
   </div>
+  <div class="sheet-mask" id="emojiMask" onclick="hideEmoji()">
+    <div class="sheet" onclick="event.stopPropagation()">
+      <div class="s-title">😀 表情</div>
+      <div class="emoji-panel" id="emojiPanel"></div>
+      <button class="s-close" onclick="hideEmoji()">关闭</button>
+    </div>
+  </div>
   <div class="modal-mask" id="settingsMask" onclick="if(event.target===this)closeSettings()">
     <div class="modal">
       <h3>⚙️ 设置</h3>
@@ -270,13 +280,20 @@ textarea.input { color:#e6f1ff; }
   </div>
   <div class="modal-mask" id="smsMask" onclick="if(event.target===this)hideSms()">
     <div class="modal sms-full" id="smsListModal">
-      <div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
+      <div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#0e9f6e;font-size:13px" onclick="newSms()">➕ 新对话</span><span style="cursor:pointer;color:#7fd0ff;font-size:13px;margin-left:8px" onclick="hideSms()">关闭</span></div>
       <div class="sms-list" id="smsList"></div>
     </div>
     <div class="modal sms-full" id="smsConvModal" style="display:none">
       <div class="sms-head"><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="backToSmsList()">← 返回</span><b id="smsConvName"></b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
       <div class="sms-chat" id="smsConvList"></div>
-      <div style="display:flex;gap:6px;padding:8px 10px;background:#fff;flex-shrink:0"><input id="smsChatInput" placeholder="发短信…" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:15px;outline:none"><button class="btn green" style="margin:0" onclick="sendSmsTo()">发送</button></div>
+      <div style="display:flex;gap:6px;padding:8px 10px;background:#fff;flex-shrink:0"><span style="cursor:pointer;font-size:20px;align-self:center" onclick="toggleEmoji('sms')">😀</span><input id="smsChatInput" placeholder="发短信…" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:15px;outline:none"><button class="btn green" style="margin:0" onclick="sendSmsTo()">发送</button></div>
+    </div>
+  </div>
+  <div class="modal-mask" id="contactMask" onclick="if(event.target===this)hideContacts()">
+    <div class="modal">
+      <h3>👥 通讯录 · 给谁发短信</h3>
+      <div id="contactList"></div>
+      <button class="btn gray" onclick="hideContacts()" style="width:100%;margin-top:8px">关闭</button>
     </div>
   </div>
   <div class="modal-mask" id="bellMask" onclick="if(event.target===this)hideBell()">
@@ -424,11 +441,34 @@ function fillRegionSel(){
 }
 function jumpRegion(){ var v=document.getElementById('regionSel').value; if(v){ showRegion(v); } else { showMap(); } }
 function jumpRegion2(){ var v=document.getElementById('regionSel2').value; if(v){ showRegion(v); } else { showMap(); } }
+// ===== 表情 =====
+var EMOJIS=['😀','😂','😍','😘','🥰','😊','😉','😎','🤗','😭','😅','🥺','😳','🤔','😴','🤤','😋','😜','🤩','🥳','😢','😡','💕','💖','❤️','💙','💜','💛','🧡','💚','💋','🌹','🌙','⭐','✨','☀️','🍀','🌸','🎀','🎁','🍰','🍕','☕','🍜','🍺','🎮','🎵','🎶','🐱','🐶','🐻','🦊','🐰','💤','👀','👍','👎','👌','✌️','🤝','🙏','💪','🫶','🎉','🥂','🍻','💐','🌈','⚡','🔥','❄️','🎊'];
+var emojiTarget='sms';
+function toggleEmoji(w){ emojiTarget=w; var g=document.getElementById('emojiPanel'); if(!g.innerHTML){ EMOJIS.forEach(function(e){ var d=document.createElement('span'); d.className='e'; d.textContent=e; d.onclick=function(){ insertEmoji(e); }; g.appendChild(d); }); } document.getElementById('emojiMask').classList.add('show'); }
+function hideEmoji(){ document.getElementById('emojiMask').classList.remove('show'); }
+function insertEmoji(e){ var inp = emojiTarget==='sms' ? document.getElementById('smsChatInput') : document.getElementById('msgInput'); if(inp){ inp.value += e; inp.focus(); } }
 // ===== 短信（微信式会话，全屏重叠） =====
 function saveSmsOut(){ localStorage.setItem('gc_sms_out', JSON.stringify(smsOut)); }
 function openSms(){ smsContact=null; document.getElementById('smsMask').classList.add('show'); document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsListModal').style.display=''; loadSmsList(); }
 function hideSms(){ document.getElementById('smsMask').classList.remove('show'); smsContact=null; }
 function smsTo(name){ openSms(); setTimeout(function(){ if(name) openConv(name); }, 150); }
+function newSms(){
+  var list=[];
+  Object.keys(mapData.user_ais||{}).forEach(function(u){ if(u!==userName && list.indexOf(u)<0) list.push(u); (mapData.user_ais[u]||[]).forEach(function(a){ if(list.indexOf(a)<0) list.push(a); }); });
+  list = list.filter(function(n){ return n!==userName; });
+  var el=document.getElementById('contactList'); el.innerHTML='';
+  if(!list.length){ el.innerHTML='<div class="tip">世界还没有其他成员～</div>'; }
+  else { list.forEach(function(n){
+    var av=avatars[n];
+    var item=document.createElement('div'); item.className='sms-item';
+    item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">发送短信</div></div>';
+    item.onclick=function(){ pickContact(n); };
+    el.appendChild(item);
+  }); }
+  document.getElementById('contactMask').classList.add('show');
+}
+function hideContacts(){ document.getElementById('contactMask').classList.remove('show'); }
+function pickContact(name){ hideContacts(); openConv(name); document.getElementById('smsChatInput').focus(); }
 function loadSmsList(){
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
     var got = d.sms||[];
@@ -438,7 +478,7 @@ function loadSmsList(){
     var names = Object.keys(contacts);
     names.sort(function(a,b){ var ta=contacts[a].msgs.length?contacts[a].msgs[contacts[a].msgs.length-1].time:''; var tb=contacts[b].msgs.length?contacts[b].msgs[contacts[b].msgs.length-1].time:''; return tb.localeCompare(ta); });
     var el = document.getElementById('smsList'); el.innerHTML='';
-    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:40px 20px">📭 还没有短信<br><span style="font-size:12px">去公共建筑点工作人头像可发短信</span></div>'; return; }
+    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:40px 20px">📭 还没有短信<br><span style="font-size:12px">点上方「➕ 新对话」给世界里的朋友发第一条短信</span></div>'; return; }
     names.forEach(function(n){
       var c=contacts[n]; var last=c.msgs[c.msgs.length-1];
       var av=avatars[n];
@@ -469,9 +509,9 @@ function renderConv(){
     var av = avatars[smsContact];
     rows.forEach(function(m){
       var row=document.createElement('div'); row.className='sms-row '+(m.mine?'mine':'them');
-      if(!m.mine){ var avd=document.createElement('div'); avd.style.cssText='width:30px;height:30px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0;margin-right:6px'; avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0)); row.appendChild(avd); }
+      if(!m.mine){ var avd=document.createElement('div'); avd.style.cssText='width:34px;height:34px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;overflow:hidden;flex-shrink:0;margin-right:6px'; avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0)); row.appendChild(avd); }
       var b=document.createElement('div'); b.className='sms-bubble'; b.textContent=m.text;
-      var t=document.createElement('span'); t.className='sms-time'; t.textContent=(m.time||'').slice(11,16);
+      var t=document.createElement('span'); t.className='sms-time'; t.textContent=(m.time||'').slice(5,16);
       row.appendChild(b); row.appendChild(t);
       el.appendChild(row);
     });
