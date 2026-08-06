@@ -1046,6 +1046,24 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
+# ========== 挂载 MCP 服务器到 FastAPI ==========
+def mount_mcp():
+    try:
+        if hasattr(mcp, "streamable_http_app"):
+            app.mount("/mcp", mcp.streamable_http_app())
+    except Exception:
+        pass
+    try:
+        if hasattr(mcp, "sse_app"):
+            app.mount("/sse", mcp.sse_app())
+    except Exception:
+        pass
+    try:
+        mcp.mount("/mcp", app)
+    except Exception:
+        pass
+mount_mcp()
+
 def run():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
 
