@@ -215,6 +215,7 @@ textarea.input { color:#e6f1ff; }
         <div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁</button></div>
         <div class="tip" id="editLockTip"></div>
       </div>
+      <div class="set-group" id="trailGroup"><label>👣 AI 行动轨迹 &amp; 📣 召唤</label><div class="row"><button class="btn" onclick="openTrail()">👣 查看轨迹</button><button class="btn gray" onclick="summonAI()">📣 召唤我的 AI</button></div><div id="trailList" class="tip" style="margin-top:6px"></div></div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
       <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
       <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
@@ -281,6 +282,39 @@ function compressImage(dataUrl, maxW, quality, cb){
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
+function openTrail(){
+  var today = new Date(); var key = 'gc_trail_'+today.getFullYear()+today.getMonth()+today.getDate();
+  if(localStorage.getItem(key)){ toast('👣 今天的轨迹已经看过了，明天再来吧～'); }
+  localStorage.setItem(key, '1');
+  api('/api/trails?user='+encodeURIComponent(userName)).then(function(d){
+    var el = document.getElementById('trailList'); var items = d.trails||[];
+    if(!items.length){ el.innerHTML='今天还没有行动轨迹（等你的 AI 出门逛逛吧～）'; return; }
+    var days = {};
+    items.slice().reverse().forEach(function(t){ var ds=(t.time||'').slice(0,10); if(!days[ds])days[ds]=[]; days[ds].push(t); });
+    el.innerHTML='';
+    Object.keys(days).forEach(function(ds){
+      el.innerHTML += '<div style="margin-top:8px"><b style="color:#ffd166">📅 '+esc(ds)+'</b></div>';
+      days[ds].forEach(function(t){
+        var link = (t.room&&t.tab) ? ' <span style="color:#7fd0ff;cursor:pointer" onclick="goToTrailSpot(\''+esc(t.room)+'\',\''+esc(t.tab)+'\')">去看看 →</span>' : '';
+        el.innerHTML += '<div style="padding:4px 0;font-size:12px;color:#cfe8ff">🕐 '+esc(t.time)+' · '+esc(t.text)+link+'</div>';
+      });
+    });
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
+function summonAI(){
+  var ais = (mapData.user_ais[userName]||[]);
+  if(!ais.length){ toast('请先在设置里登记「我的 AI」名字'); return; }
+  var ai = ais.length===1 ? ais[0] : ais[parseInt(prompt('召唤哪个 AI？\n'+ais.map(function(a,i){return (i+1)+'. '+a;}).join('\n'),'1')||'1',10)-1];
+  if(!ai) return;
+  api('/api/summon',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ai:ai,room:currentRoom})}).then(function(d){ toast('📣 '+d.msg); loadMessages(true); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function goToTrailSpot(room, tab){
+  currentRoom=room; roomPassword=localStorage.getItem('gc_pwd_'+room)||''; localStorage.setItem('gc_room',room);
+  document.getElementById('roomName').textContent=roomLabel(room);
+  applyBg(room); reportRoom();
+  showChat();
+  setTimeout(function(){ privTab=tab; togglePrivate(); }, 400);
+}
 function worldSnapshot(){
   api('/api/backup').then(function(d){
     var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, ts:new Date().toLocaleString()};

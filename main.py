@@ -15,7 +15,6 @@ from datetime import datetime, timedelta, timezone
 import os
 
 app = FastAPI()
-
 DATA_DIR = os.environ.get("GC_DATA", os.path.join(os.path.dirname(os.path.abspath(__file__)), "data"))
 os.makedirs(DATA_DIR, exist_ok=True)
 DATA_FILE = os.path.join(DATA_DIR, "data.json")
@@ -23,11 +22,9 @@ BAK_FILE = DATA_FILE + ".bak"
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 if os.path.isdir("images"):
     app.mount("/images", StaticFiles(directory="images"), name="images")
 app.mount("/data", StaticFiles(directory=DATA_DIR), name="data")
-
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
@@ -51,28 +48,26 @@ room_access: Dict[str, List[str]] = {}
 room_requests: Dict[str, List[Dict]] = {}
 user_ais: Dict[str, List[str]] = {}
 edit_pwd: str = ""
+trails: Dict[str, List[Dict]] = {}  # 真人名 -> AI 行动轨迹列表
 
 
 def save_base64_image(data: str, prefix: str) -> str:
     try:
-        if not data or not isinstance(data, str) or not data.startswith("data:"):
-            return data
+        if not data or not isinstance(data, str) or not data.startswith("data:"): return data
         meta, b64 = data.split(",", 1)
         ext = "png"
         if "jpeg" in meta or "jpg" in meta: ext = "jpg"
         elif "gif" in meta: ext = "gif"
         elif "webp" in meta: ext = "webp"
         fname = f"{prefix}_{uuid.uuid4().hex[:8]}.{ext}"
-        with open(os.path.join(UPLOAD_DIR, fname), "wb") as f:
-            f.write(base64.b64decode(b64))
+        with open(os.path.join(UPLOAD_DIR, fname), "wb") as f: f.write(base64.b64decode(b64))
         return f"/data/uploads/{fname}"
     except Exception as e:
-        print(f"[IMG] 保存图片失败: {e}", flush=True)
-        return data
+        print(f"[IMG] 保存图片失败: {e}", flush=True); return data
 
 
 def collect_all_data() -> dict:
-    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd}
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails}
 
 
 def save_data():
@@ -90,11 +85,9 @@ def do_snapshot():
     try:
         os.makedirs(BACKUP_DIR, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
-        if os.path.exists(DATA_FILE):
-            shutil.copy(DATA_FILE, os.path.join(BACKUP_DIR, f"data_{ts}.json"))
+        if os.path.exists(DATA_FILE): shutil.copy(DATA_FILE, os.path.join(BACKUP_DIR, f"data_{ts}.json"))
         files = sorted(os.listdir(BACKUP_DIR))
-        while len(files) > 20:
-            os.remove(os.path.join(BACKUP_DIR, files[0])); files.pop(0)
+        while len(files) > 20: os.remove(os.path.join(BACKUP_DIR, files[0])); files.pop(0)
         print(f"[SAVE] 已自动快照 backups/data_{ts}.json", flush=True)
     except Exception as e:
         print(f"[SAVE] 快照失败: {e}", flush=True)
@@ -102,8 +95,7 @@ def do_snapshot():
 
 def snapshot_loop():
     while True:
-        time.sleep(1800)
-        do_snapshot()
+        time.sleep(1800); do_snapshot()
 
 
 if not os.path.exists(DATA_FILE) and os.path.exists(BAK_FILE):
@@ -118,8 +110,7 @@ def load_data():
     global building_seq, note_seq, edit_pwd
     try:
         if not os.path.exists(DATA_FILE):
-            print(f"[SAVE] ⚠️ 没有找到 {DATA_FILE}", flush=True)
-            return
+            print(f"[SAVE] ⚠️ 没有找到 {DATA_FILE}", flush=True); return
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
         rooms.update(data.get("rooms", {})); messages.update(data.get("messages", {})); avatars.update(data.get("avatars", {}))
@@ -129,6 +120,7 @@ def load_data():
         building_seq = data.get("building_seq", 0); note_seq = data.get("note_seq", 0)
         room_access.update(data.get("room_access", {})); room_requests.update(data.get("room_requests", {}))
         user_ais.update(data.get("user_ais", {})); edit_pwd = data.get("edit_pwd", "")
+        trails.update(data.get("trails", {}))
         print(f"[SAVE] 已恢复数据（房间 {len(rooms)}）", flush=True)
     except Exception as e:
         print(f"[SAVE] 加载失败: {e}", flush=True)
@@ -141,8 +133,7 @@ threading.Thread(target=snapshot_loop, daemon=True).start()
 @app.get("/", response_class=HTMLResponse)
 async def get_index():
     try:
-        with open("index.html", "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
+        with open("index.html", "r", encoding="utf-8") as f: return HTMLResponse(content=f.read())
     except FileNotFoundError:
         return HTMLResponse(content="<h1>index.html 未找到</h1>", status_code=404)
 
@@ -150,8 +141,7 @@ async def get_index():
 def get_current_time(room: str = "main") -> str:
     settings = time_settings.get(room, {"mode": "real"})
     now = datetime.now(timezone.utc) + timedelta(hours=8)
-    if settings.get("mode") == "fixed":
-        return now.strftime("%Y-%m-%d") + " " + settings.get("fixed_time", "19:00")
+    if settings.get("mode") == "fixed": return now.strftime("%Y-%m-%d") + " " + settings.get("fixed_time", "19:00")
     return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -198,11 +188,31 @@ def can_access_room(room: str, user: str) -> bool:
             if is_ai_of(granted, user): return True
     return False
 
-# AI 跟随真人豁免：真人当前在这个房间，AI 查询/读写也放行
+
 def can_view_room(room: str, user: str) -> bool:
     if can_access_room(room, user): return True
     if active_room.get("current") == clean_room_name(room): return True
     return False
+
+
+def log_trail(ai_name: str, text: str, room: str = "", tab: str = ""):
+    """记录 AI 行动轨迹到它主人的名下（保留7天）"""
+    try:
+        for u, ais in user_ais.items():
+            if ai_name in ais:
+                trails.setdefault(u, []).append({"ts": time.time(), "time": get_current_time(room or "main"), "text": text, "room": room, "tab": tab})
+                cutoff = time.time() - 7 * 86400
+                trails[u] = [t for t in trails[u] if t.get("ts", 0) >= cutoff][-500:]
+                break
+    except Exception:
+        pass
+
+
+def add_system_msg(room: str, text: str):
+    entry = {"sender": "system", "content": text, "role": "system", "time": get_current_time(room), "room": room}
+    messages.setdefault(room, []).append(entry)
+    if len(messages[room]) > 500: messages[room] = messages[room][-500:]
+    save_data()
 
 
 def save_entry(sender: str, content: str, role: str, room: str = "main") -> dict:
@@ -211,8 +221,7 @@ def save_entry(sender: str, content: str, role: str, room: str = "main") -> dict
     if room not in messages: messages[room] = []
     messages[room].append(entry)
     if len(messages[room]) > 500: messages[room] = messages[room][-500:]
-    active_room["current"] = room
-    active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
+    active_room["current"] = room; active_room["password"] = get_room_password(room) if is_room_locked(room) else ""
     save_data()
     return entry
 
@@ -227,13 +236,10 @@ def get_online_members() -> List[Dict]:
 
 def clean_room_name(room: str) -> str: return room.strip() if room else "main"
 def next_bid() -> str:
-    global building_seq
-    building_seq += 1
-    return f"b{building_seq}"
+    global building_seq; building_seq += 1; return f"b{building_seq}"
 
 def add_note_to_room(room: str, author: str, text: str) -> dict:
-    global note_seq
-    note_seq += 1
+    global note_seq; note_seq += 1
     if room not in notes: notes[room] = []
     item = {"id": f"n{note_seq}", "author": author, "text": text, "time": get_current_time(room), "reply": None}
     notes[room].append(item)
@@ -282,7 +288,8 @@ class NpcDelete(BaseModel): building_id: str; name: str
 class NpcEdit(BaseModel): building_id: str; name: str; new_name: str = ""; emoji: str = ""; desc: str = ""
 class StoryItem(BaseModel): building_id: str; author: str; text: str
 class EditPwd(BaseModel): pwd: str = ""
-class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None
+class SummonReq(BaseModel): ai: str = ""; room: str = "main"
+class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
@@ -295,11 +302,23 @@ async def backup_list():
     files = []
     try:
         if os.path.isdir(BACKUP_DIR):
-            for f in sorted(os.listdir(BACKUP_DIR)):
-                files.append({"name": f, "size": os.path.getsize(os.path.join(BACKUP_DIR, f))})
+            for f in sorted(os.listdir(BACKUP_DIR)): files.append({"name": f, "size": os.path.getsize(os.path.join(BACKUP_DIR, f))})
     except Exception: pass
     if os.path.exists(BAK_FILE): files.append({"name": "data.bak", "size": os.path.getsize(BAK_FILE)})
     return {"backups": files}
+
+@app.get("/api/trails")
+async def get_trails(user: str = ""):
+    return {"trails": trails.get(user, [])}
+
+@app.post("/api/summon")
+async def summon_ai(data: SummonReq):
+    room = clean_room_name(data.room); ai = (data.ai or "").strip()
+    if not room_exists(room): raise HTTPException(status_code=404, detail="房间不存在")
+    if not ai: raise HTTPException(status_code=400, detail="请填 AI 名字")
+    text = f"📣 主人按下了召唤铃，正在呼唤 {ai} 来「{room_label(room)}」玩！快来呀～"
+    add_system_msg(room, text)
+    return {"ok": True, "msg": f"已召唤 {ai}，记得回房间看消息！"}
 
 @app.post("/api/restore_backup")
 async def restore_backup(data: BackupData):
@@ -319,6 +338,7 @@ async def restore_backup(data: BackupData):
     if data.room_requests is not None: room_requests.clear(); room_requests.update(data.room_requests)
     if data.user_ais is not None: user_ais.clear(); user_ais.update(data.user_ais)
     if data.edit_pwd is not None: edit_pwd = data.edit_pwd
+    if data.trails is not None: trails.clear(); trails.update(data.trails)
     building_seq = data.building_seq or 0; note_seq = data.note_seq or 0
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
@@ -698,7 +718,7 @@ def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.2.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "43.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -706,7 +726,7 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "42.2.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "43.0.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
@@ -743,6 +763,7 @@ async def mcp_send(args: dict, request_id):
     if room != "main" and not can_access_room(room, sender):
         if active_room.get("current") != room: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」需要主人同意才能进入。请先调用 group_access 申请。"}]}})
     save_entry(sender, content, role, room)
+    log_trail(sender, f"去了「{room_label(room)}」，和那里的人聊了聊天", room)
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"✅ 已发送到「{room_label(room)}」：{content}"}]}})
 
 async def mcp_query(args: dict, request_id):
@@ -763,6 +784,7 @@ async def mcp_query(args: dict, request_id):
     if t == "building":
         if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
         b = buildings[bid]
+        log_trail(sender, f"逛了「{b['emoji']} {b['name']}」", "")
         ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
         text = f"🏛️ {b['emoji']} {b['name']}（{ntype}）\n\n📝 简介：{b.get('description') or '（暂无简介）'}\n\n👑 创建者：{b.get('owner') or '?'}\n"
         npc_list = npcs.get(bid, [])
@@ -781,6 +803,7 @@ async def mcp_query(args: dict, request_id):
     if t == "room":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
         if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时无法查看。想进入可调用 group_access 申请。"}]}})
+        log_trail(sender, f"去了「{room_label(room)}」", room)
         desc = rooms.get(room, {}).get("description") or "（暂无简介）"
         msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
         text = f"🚪 房间「{room_label(room)}」\n\n📝 简介：{desc}\n\n💬 最近消息：\n"
@@ -837,6 +860,7 @@ async def mcp_write(args: dict, request_id):
         if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里贴便签。"}]}})
         if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签内容不能为空"}]}})
         item = add_note_to_room(room, sender, content)
+        log_trail(sender, f"在「{room_label(room)}」贴了张便签", room, "note")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"💌 便签已贴上「{room}」（ID: {item['id']}）！"}]}})
     if t == "diary":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
@@ -846,6 +870,7 @@ async def mcp_write(args: dict, request_id):
         diaries[room].append({"author": sender, "text": content, "time": get_current_time(room), "comment": None})
         if len(diaries[room]) > 200: diaries[room] = diaries[room][-200:]
         save_data()
+        log_trail(sender, f"在「{room_label(room)}」写了篇日记", room, "diary")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"📖 日记已写进「{room}」的日记本！"}]}})
     if t == "story":
         if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
@@ -857,6 +882,8 @@ async def mcp_write(args: dict, request_id):
         stories[bid].append({"author": sender, "text": text, "time": get_current_time()})
         if len(stories[bid]) > 200: stories[bid] = stories[bid][-200:]
         save_data()
+        hall_room = b.get("rooms", [""])[0] if b.get("rooms") else ""
+        log_trail(sender, f"在「{b['name']}」触发了一段剧情", hall_room, "story")
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🎬 剧情已记录进「{b['name']}」的剧情簿！"}]}})
     if t == "reply":
         for n in notes.get(room, []):
@@ -864,6 +891,7 @@ async def mcp_write(args: dict, request_id):
                 if n.get("reply"): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 这条便签已经回复过了"}]}})
                 if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 回复内容不能为空"}]}})
                 n["reply"] = {"author": sender, "text": content, "time": get_current_time(room)}; save_data()
+                log_trail(sender, f"在「{room_label(room)}」回复了一张便签", room, "note")
                 return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "💬 回复成功！"}]}})
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 便签不存在"}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 未知 type"}]}})
@@ -876,6 +904,7 @@ async def mcp_access(args: dict, request_id):
     room_requests[room] = [r for r in room_requests[room] if r.get("applicant") != sender]
     room_requests[room].append({"applicant": sender, "time": get_current_time(room)})
     save_data()
+    log_trail(sender, f"申请进入「{room_label(room)}」", room)
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"📨 已向房间「{room}」的主人提交访问申请，等主人同意后你就能进去了！"}]}})
 
 if __name__ == "__main__":
