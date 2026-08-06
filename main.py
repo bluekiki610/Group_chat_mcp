@@ -62,6 +62,7 @@ ai_check_ts: float = time.time()
 sms: Dict[str, List[Dict]] = {}
 work_history: Dict[str, List[Dict]] = {}
 work_switch: Dict[str, bool] = {}
+visits: Dict[str, List[Dict]] = {}
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -80,7 +81,7 @@ def save_base64_image(data: str, prefix: str) -> str:
 
 
 def collect_all_data() -> dict:
-    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor, "sms": sms, "work_history": work_history, "work_switch": work_switch}
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor, "sms": sms, "work_history": work_history, "work_switch": work_switch, "visits": visits}
 
 
 def save_data():
@@ -140,6 +141,7 @@ def load_data():
         sms.update(data.get("sms", {}))
         work_history.update(data.get("work_history", {}))
         work_switch.update(data.get("work_switch", {}))
+        visits.update(data.get("visits", {}))
         print(f"[SAVE] 已恢复数据（房间 {len(rooms)}）", flush=True)
     except Exception as e:
         print(f"[SAVE] 加载失败: {e}", flush=True)
@@ -386,11 +388,12 @@ class EditPwd(BaseModel): pwd: str = ""
 class SummonReq(BaseModel): ai: str = ""; room: str = "main"
 class WorkStart(BaseModel): name: str; building_id: str; hours: int = 1
 class WorkStop(BaseModel): name: str
+class WorkAuto(BaseModel): name: str
 class HomeJob(BaseModel): user: str; ai: str = ""; building_id: str = ""
 class BuildingFeatures(BaseModel): building_id: str; features: List[str] = []; salary: float = 0
 class BuildingNotice(BaseModel): building_id: str; notice: str = ""
 class SmsSend(BaseModel): sender: str; to: str; text: str
-class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None; sms: Optional[Dict] = None; work_history: Optional[Dict] = None; work_switch: Optional[Dict] = None
+class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None; sms: Optional[Dict] = None; work_history: Optional[Dict] = None; work_switch: Optional[Dict] = None; visits: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
@@ -415,6 +418,10 @@ async def get_trails(user: str = ""):
 @app.get("/api/economy")
 async def get_economy(user: str = ""):
     return {"wallet": wallets.get(user, 0.0), "working": work_sessions.get(user), "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks.get(user, []), "wallets": wallets, "work_sessions": work_sessions, "my_history": work_history.get(user, [])}
+
+@app.get("/api/bell")
+async def get_bell(owner: str = ""):
+    return {"visits": visits.get(owner, [])}
 
 # ===== 私信 =====
 @app.get("/api/sms")
@@ -462,6 +469,27 @@ async def work_stop(data: WorkStop):
     if len(work_history[name]) > 20: work_history[name] = work_history[name][-20:]
     save_data()
     return {"ok": True, "msg": f"下班！本次赚到 {earn:.0f} 金币"}
+
+@app.post("/api/work/auto")
+async def work_auto(data: WorkAuto):
+    name = data.name.strip()
+    if not name: raise HTTPException(status_code=400, detail="名字不能为空")
+    if name in work_sessions: raise HTTPException(status_code=400, detail="已经在上班了")
+    bid = None
+    place = home_jobs.get(name)
+    if place and random.random() < 0.8:
+        bid = find_work_building_by_name(place)
+    if bid is None:
+        wbs = work_buildings()
+        if wbs: bid = random.choice(wbs)
+    if bid is None: raise HTTPException(status_code=400, detail="没有可工作的建筑，请先给公共建筑设置工作功能")
+    b = buildings[bid]
+    hours = random.choice([1, 2, 4])
+    work_sessions[name] = {"building_id": bid, "start_ts": time.time(), "hours": hours, "salary": b.get("salary", 0)}
+    work_switch[name] = True
+    save_data()
+    post_building_msg(bid, f"👔 {name} 去「{b['name']}」上班了（{hours}小时，时薪 {b.get('salary',0):.0f}）")
+    return {"ok": True, "msg": f"{name} 去「{b['name']}」上班了（{hours}小时，后台计时）"}
 
 @app.post("/api/home_jobs")
 async def set_home_job(data: HomeJob):
@@ -529,6 +557,7 @@ async def restore_backup(data: BackupData):
     if data.sms is not None: sms.clear(); sms.update(data.sms)
     if data.work_history is not None: work_history.clear(); work_history.update(data.work_history)
     if data.work_switch is not None: work_switch.clear(); work_switch.update(data.work_switch)
+    if data.visits is not None: visits.clear(); visits.update(data.visits)
     building_seq = data.building_seq or 0; note_seq = data.note_seq or 0
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
@@ -540,6 +569,13 @@ async def send_message(msg: Message):
     if not check_room_access(room, msg.password): raise HTTPException(status_code=403, detail="密码错误")
     if not can_access_room(room, msg.sender): raise HTTPException(status_code=403, detail="🔒 这个房间需要主人同意才能进入，请先申请访问")
     if not msg.content.strip(): raise HTTPException(status_code=400, detail="消息不能为空")
+    bid = find_building_of_room(room)
+    if bid and buildings[bid].get("type") == "home":
+        owner = buildings[bid].get("owner")
+        if owner and msg.sender != owner and not is_ai_of(owner, msg.sender):
+            had = any(m.get("sender") == msg.sender for m in messages.get(room, []))
+            visits.setdefault(owner, []).append({"text": ("👋 " if not had else "") + f"💬 {msg.sender} 留言：{msg.content}", "time": get_current_time(room)})
+            if len(visits[owner]) > 30: visits[owner] = visits[owner][-30:]
     entry = save_entry(msg.sender, msg.content, msg.role, room)
     return {"ok": True, "time": entry["time"]}
 
@@ -612,7 +648,16 @@ async def set_current_room(data: CurrentRoom):
 @app.post("/api/heartbeat")
 async def heartbeat(data: Heartbeat):
     if data.name:
+        old = online_users.get(data.name)
         online_users[data.name] = data.room or "main"; online_times[data.name] = time.time()
+        new_room = data.room or "main"
+        if old and old != new_room:
+            bid = find_building_of_room(old)
+            if bid and buildings[bid].get("type") == "home":
+                owner = buildings[bid].get("owner")
+                if owner and data.name != owner and not is_ai_of(owner, data.name):
+                    visits.setdefault(owner, []).append({"text": f"👋 {data.name} 离开了家", "time": get_current_time(old)})
+                    if len(visits[owner]) > 30: visits[owner] = visits[owner][-30:]
         return {"ok": True}
     return {"ok": False}
 
@@ -908,7 +953,7 @@ def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.2.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.5.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -916,7 +961,7 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.2.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.5.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
