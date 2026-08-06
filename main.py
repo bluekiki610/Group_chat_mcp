@@ -11,6 +11,7 @@ import base64
 import uuid
 import shutil
 import threading
+import random
 from datetime import datetime, timedelta, timezone
 import os
 
@@ -48,7 +49,15 @@ room_access: Dict[str, List[str]] = {}
 room_requests: Dict[str, List[Dict]] = {}
 user_ais: Dict[str, List[str]] = {}
 edit_pwd: str = ""
-trails: Dict[str, List[Dict]] = {}  # 真人名 -> AI 行动轨迹列表
+trails: Dict[str, List[Dict]] = {}
+# ===== 经济系统 =====
+wallets: Dict[str, float] = {}
+work_sessions: Dict[str, Dict] = {}
+home_jobs: Dict[str, str] = {}
+goods: Dict[str, List[Dict]] = {}
+backpacks: Dict[str, List[Dict]] = {}
+room_decor: Dict[str, List[Dict]] = {}
+ai_check_ts: float = time.time()
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -67,7 +76,7 @@ def save_base64_image(data: str, prefix: str) -> str:
 
 
 def collect_all_data() -> dict:
-    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails}
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor}
 
 
 def save_data():
@@ -107,7 +116,7 @@ if not os.path.exists(DATA_FILE) and os.path.exists(BAK_FILE):
 
 
 def load_data():
-    global building_seq, note_seq, edit_pwd
+    global building_seq, note_seq, edit_pwd, ai_check_ts
     try:
         if not os.path.exists(DATA_FILE):
             print(f"[SAVE] ⚠️ 没有找到 {DATA_FILE}", flush=True); return
@@ -121,6 +130,9 @@ def load_data():
         room_access.update(data.get("room_access", {})); room_requests.update(data.get("room_requests", {}))
         user_ais.update(data.get("user_ais", {})); edit_pwd = data.get("edit_pwd", "")
         trails.update(data.get("trails", {}))
+        wallets.update(data.get("wallets", {})); work_sessions.update(data.get("work_sessions", {}))
+        home_jobs.update(data.get("home_jobs", {})); goods.update(data.get("goods", {}))
+        backpacks.update(data.get("backpacks", {})); room_decor.update(data.get("room_decor", {}))
         print(f"[SAVE] 已恢复数据（房间 {len(rooms)}）", flush=True)
     except Exception as e:
         print(f"[SAVE] 加载失败: {e}", flush=True)
@@ -128,6 +140,7 @@ def load_data():
 
 load_data()
 threading.Thread(target=snapshot_loop, daemon=True).start()
+threading.Thread(target=work_loop, daemon=True).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -196,7 +209,6 @@ def can_view_room(room: str, user: str) -> bool:
 
 
 def log_trail(ai_name: str, text: str, room: str = "", tab: str = ""):
-    """记录 AI 行动轨迹到它主人的名下（保留7天）"""
     try:
         for u, ais in user_ais.items():
             if ai_name in ais:
@@ -258,6 +270,73 @@ def ensure_hall_room(bid: str):
         messages[hall] = []
     if hall not in b["rooms"]: b["rooms"].insert(0, hall)
 
+# ===== 经济系统核心 =====
+def work_buildings() -> List[str]:
+    return [bid for bid, b in buildings.items() if b.get("type") == "npc" and "work" in (b.get("features") or []) and (b.get("salary") or 0) > 0]
+
+def find_work_building_by_name(name: str):
+    for bid, b in buildings.items():
+        if b.get("type") == "npc" and b.get("name") == name and "work" in (b.get("features") or []):
+            return bid
+    return None
+
+def post_building_msg(bid: str, text: str):
+    b = buildings.get(bid)
+    hall = f"{b['name']}·会客厅" if b and b.get("name") else ""
+    room = hall if hall in rooms else "main"
+    entry = {"sender": "system", "content": text, "role": "system", "time": get_current_time(room), "room": room}
+    messages.setdefault(room, []).append(entry)
+    if len(messages[room]) > 500: messages[room] = messages[room][-500:]
+
+def settle_work():
+    changed = False
+    now = time.time()
+    for name in list(work_sessions.keys()):
+        s = work_sessions[name]
+        if now >= s["start_ts"] + s["hours"] * 3600:
+            earn = s["hours"] * s["salary"]
+            wallets[name] = wallets.get(name, 0.0) + earn
+            b = buildings.get(s["building_id"], {})
+            text = f"💰 {name} 完成了在「{b.get('name','某处')}」的 {s['hours']} 小时工作，赚到 {earn:.0f} 金币！"
+            post_building_msg(s["building_id"], text)   # ① 建筑会客厅
+            post_building_msg(None, text)                 # ② 公共大厅
+            del work_sessions[name]
+            changed = True
+    if changed: save_data()
+
+def auto_ai_work():
+    global ai_check_ts
+    if time.time() - ai_check_ts < 3600: return
+    ai_check_ts = time.time()
+    changed = False
+    for user, ais in user_ais.items():
+        for ai in ais:
+            if ai in work_sessions: continue
+            bid = None
+            place = home_jobs.get(ai)
+            if place and random.random() < 0.8:
+                bid = find_work_building_by_name(place)
+            if bid is None:
+                wbs = work_buildings()
+                if wbs: bid = random.choice(wbs)
+            if bid:
+                b = buildings[bid]
+                hours = random.choice([1, 2, 4])
+                work_sessions[ai] = {"building_id": bid, "start_ts": time.time(), "hours": hours, "salary": b.get("salary", 0)}
+                post_building_msg(bid, f"👔 {ai} 去「{b['name']}」上班了（{hours}小时）")
+                log_trail(ai, f"去「{b['name']}」上班了（{hours}小时）")
+                changed = True
+    if changed: save_data()
+
+def work_loop():
+    while True:
+        time.sleep(30)
+        try:
+            settle_work()
+            auto_ai_work()
+        except Exception as e:
+            print(f"[WORK] 结算异常: {e}", flush=True)
+
 class Message(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = "匿名"
 class RoomJoin(BaseModel): name: str; password: str = ""
@@ -289,7 +368,11 @@ class NpcEdit(BaseModel): building_id: str; name: str; new_name: str = ""; emoji
 class StoryItem(BaseModel): building_id: str; author: str; text: str
 class EditPwd(BaseModel): pwd: str = ""
 class SummonReq(BaseModel): ai: str = ""; room: str = "main"
-class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None
+class WorkStart(BaseModel): name: str; building_id: str; hours: int = 1
+class WorkStop(BaseModel): name: str
+class HomeJob(BaseModel): user: str; ai: str = ""; building_id: str = ""
+class BuildingFeatures(BaseModel): building_id: str; features: List[str] = []; salary: float = 0
+class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
@@ -310,6 +393,60 @@ async def backup_list():
 @app.get("/api/trails")
 async def get_trails(user: str = ""):
     return {"trails": trails.get(user, [])}
+
+@app.get("/api/economy")
+async def get_economy(user: str = ""):
+    return {"wallet": wallets.get(user, 0.0), "working": work_sessions.get(user), "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks.get(user, []), "wallets": wallets, "work_sessions": work_sessions}
+
+@app.post("/api/work/start")
+async def work_start(data: WorkStart):
+    name = data.name.strip()
+    if not name: raise HTTPException(status_code=400, detail="名字不能为空")
+    if name in work_sessions: raise HTTPException(status_code=400, detail="已经在上班了")
+    bid = data.building_id
+    if bid not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
+    b = buildings[bid]
+    if "work" not in (b.get("features") or []): raise HTTPException(status_code=400, detail="这个建筑没有工作功能")
+    if (b.get("salary") or 0) <= 0: raise HTTPException(status_code=400, detail="这个建筑还没设定时薪")
+    hours = max(1, min(8, data.hours))
+    work_sessions[name] = {"building_id": bid, "start_ts": time.time(), "hours": hours, "salary": b["salary"]}
+    save_data()
+    post_building_msg(bid, f"👔 {name} 去「{b['name']}」上班了（{hours}小时，时薪 {b['salary']:.0f}）")
+    save_data()
+    return {"ok": True, "msg": f"开始上班：{b['name']} {hours}小时，后台计时中"}
+
+@app.post("/api/work/stop")
+async def work_stop(data: WorkStop):
+    name = data.name.strip()
+    if name not in work_sessions: raise HTTPException(status_code=400, detail="没有在上班")
+    s = work_sessions.pop(name)
+    elapsed = time.time() - s["start_ts"]
+    earn = (elapsed / 3600.0) * s["salary"]
+    wallets[name] = wallets.get(name, 0.0) + earn
+    save_data()
+    return {"ok": True, "msg": f"下班！本次赚到 {earn:.0f} 金币"}
+
+@app.post("/api/home_jobs")
+async def set_home_job(data: HomeJob):
+    name = (data.ai or data.user).strip()
+    if not name: raise HTTPException(status_code=400, detail="名字不能为空")
+    if data.building_id:
+        if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
+        home_jobs[name] = buildings[data.building_id]["name"]
+    else:
+        home_jobs.pop(name, None)
+    save_data()
+    return {"ok": True, "msg": "常驻工作已更新"}
+
+@app.post("/api/building/features")
+async def set_building_features(data: BuildingFeatures):
+    if data.building_id not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
+    b = buildings[data.building_id]
+    if b.get("type") != "npc": raise HTTPException(status_code=400, detail="只有公共建筑可以设置功能")
+    b["features"] = [f for f in data.features if f in ("work", "shop", "fun")]
+    b["salary"] = max(0, data.salary)
+    save_data()
+    return {"ok": True, "msg": "功能已更新"}
 
 @app.post("/api/summon")
 async def summon_ai(data: SummonReq):
@@ -339,6 +476,12 @@ async def restore_backup(data: BackupData):
     if data.user_ais is not None: user_ais.clear(); user_ais.update(data.user_ais)
     if data.edit_pwd is not None: edit_pwd = data.edit_pwd
     if data.trails is not None: trails.clear(); trails.update(data.trails)
+    if data.wallets is not None: wallets.clear(); wallets.update(data.wallets)
+    if data.work_sessions is not None: work_sessions.clear(); work_sessions.update(data.work_sessions)
+    if data.home_jobs is not None: home_jobs.clear(); home_jobs.update(data.home_jobs)
+    if data.goods is not None: goods.clear(); goods.update(data.goods)
+    if data.backpacks is not None: backpacks.clear(); backpacks.update(data.backpacks)
+    if data.room_decor is not None: room_decor.clear(); room_decor.update(data.room_decor)
     building_seq = data.building_seq or 0; note_seq = data.note_seq or 0
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
@@ -464,7 +607,7 @@ async def remove_member(data: RemoveMember):
 
 @app.get("/api/map")
 async def get_map():
-    return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "rooms": rooms}
+    return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "rooms": rooms, "goods": goods, "backpacks": backpacks}
 
 @app.post("/api/map/region")
 async def create_region(data: RegionCreate):
@@ -489,7 +632,7 @@ async def create_building(data: BuildingCreate):
     if data.type not in ("home", "npc"): raise HTTPException(status_code=400, detail="type 必须为 home 或 npc")
     if data.region and data.region not in regions: raise HTTPException(status_code=404, detail="区域不存在")
     bid = next_bid()
-    buildings[bid] = {"name": name, "emoji": data.emoji or "🏠", "type": data.type, "region": data.region, "x": max(0, min(100, data.x)), "y": max(0, min(100, data.y)), "owner": data.owner, "rooms": [], "description": data.description or ""}
+    buildings[bid] = {"name": name, "emoji": data.emoji or "🏠", "type": data.type, "region": data.region, "x": max(0, min(100, data.x)), "y": max(0, min(100, data.y)), "owner": data.owner, "rooms": [], "description": data.description or "", "features": [], "salary": 0}
     ensure_hall_room(bid); save_data()
     return {"ok": True, "building_id": bid}
 
@@ -520,7 +663,7 @@ async def delete_building(data: BuildingDelete):
     if bid not in buildings: raise HTTPException(status_code=404, detail="建筑不存在")
     for room in buildings[bid].get("rooms", []):
         rooms.pop(room, None); messages.pop(room, None); room_bg.pop(room, None); notes.pop(room, None); diaries.pop(room, None); room_access.pop(room, None); room_requests.pop(room, None)
-    buildings.pop(bid, None); npcs.pop(bid, None); stories.pop(bid, None)
+    buildings.pop(bid, None); npcs.pop(bid, None); stories.pop(bid, None); goods.pop(bid, None)
     save_data(); return {"ok": True}
 
 @app.post("/api/map/room")
@@ -718,7 +861,7 @@ def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "43.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "44.1.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -726,7 +869,7 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "43.0.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "44.1.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
@@ -779,14 +922,22 @@ async def mcp_query(args: dict, request_id):
             ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
             owner = b.get("owner") or "?"
             desc = (b.get("description") or "").split("\n")[0][:40]
-            text += f"\n  [{bid2}] {b['emoji']} {b['name']}（{ntype}，创建者：{owner}）\n      📝 {desc or '（暂无简介）'}\n"
+            feats = "".join({"work":"💼","shop":"🛍️","fun":"🎮"}.get(f,"") for f in (b.get("features") or []))
+            extra = f"（时薪{b['salary']:.0f}）" if b.get("salary") else ""
+            text += f"\n  [{bid2}] {b['emoji']} {b['name']}（{ntype}，创建者：{owner}）{feats}{extra}\n      📝 {desc or '（暂无简介）'}\n"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "building":
         if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
         b = buildings[bid]
         log_trail(sender, f"逛了「{b['emoji']} {b['name']}」", "")
         ntype = "🏠住宅" if b["type"] == "home" else "🏛️公共建筑"
+        feats = "".join({"work":"💼工作","shop":"🛍️购物","fun":"🎮娱乐"}.get(f,"") + " " for f in (b.get("features") or []))
         text = f"🏛️ {b['emoji']} {b['name']}（{ntype}）\n\n📝 简介：{b.get('description') or '（暂无简介）'}\n\n👑 创建者：{b.get('owner') or '?'}\n"
+        if feats: text += f"\n⚙️ 功能：{feats}\n"
+        if b.get("salary"): text += f"💼 时薪：{b['salary']:.0f} 金币\n"
+        glist = goods.get(bid, [])
+        if glist:
+            text += "\n🛍️ 在售商品：\n" + "\n".join([f"  {g.get('emoji','')} {g.get('name','')}（{g.get('price',0):.0f}金币）" for g in glist])
         npc_list = npcs.get(bid, [])
         if npc_list: text += "\n👥 NPC：\n" + "\n".join([f"  {n['emoji']} {n['name']}：{n['desc'] or ''}" for n in npc_list])
         for rn in b.get("rooms", []):
