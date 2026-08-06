@@ -13,7 +13,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
-from starlette.routing import Mount
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -212,6 +211,16 @@ async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
 async def health(): return {"ok": True, "rooms": len(data["rooms"])}
+
+@app.get("/api/mcp_tools")
+async def mcp_tools():
+    out = []
+    try:
+        for t in mcp._tool_manager.list_tools():
+            out.append(t.name)
+    except Exception as e:
+        out.append("err:" + str(e))
+    return {"tools": out, "mcp_type": type(mcp).__name__}
 
 @app.get("/api/messages")
 async def get_messages(room: str = "main", password: str = "", user: str = ""):
@@ -1047,22 +1056,8 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
-# ========== 挂载 MCP 服务器到 FastAPI（无重定向版） ==========
-class TrailingSlashMount(Mount):
-    """把 /mcp 请求自动补上尾斜杠，避免 307 重定向。"""
-    async def handle(self, scope, receive, send):
-        if scope.get("type") == "http":
-            p = scope.get("path", "")
-            if p and not p.endswith("/"):
-                scope["path"] = p + "/"
-                try:
-                    scope["raw_path"] = scope.get("raw_path", b"") + b"/"
-                except Exception:
-                    pass
-        await super().handle(scope, receive, send)
-
+# ========== 挂载 MCP 服务器到 FastAPI（标准版） ==========
 def mount_mcp():
-    mounted = False
     mcp_app = None
     if hasattr(mcp, "streamable_http_app"):
         try:
@@ -1078,18 +1073,16 @@ def mount_mcp():
             print("[MCP] sse_app fail:", e)
     if mcp_app is not None:
         try:
-            app.mount("/mcp", TrailingSlashMount("/mcp", app=mcp_app))
-            mounted = True
-            print("[MCP] mounted at /mcp (no-redirect)")
+            app.mount("/mcp", mcp_app)
+            print("[MCP] mounted streamable app at /mcp (plain)")
+            return
         except Exception as e:
-            print("[MCP] mount fail:", e)
-    if not mounted:
-        try:
-            mcp.mount("/mcp", app)
-            print("[MCP] used mcp.mount")
-            mounted = True
-        except Exception as e:
-            print("[MCP] mcp.mount fail:", e)
+            print("[MCP] plain mount fail:", e)
+    try:
+        mcp.mount("/mcp", app)
+        print("[MCP] used mcp.mount")
+    except Exception as e:
+        print("[MCP] mcp.mount fail:", e)
     print("[MCP] type=", type(mcp).__name__, "attrs=", [x for x in dir(mcp) if "app" in x.lower() or "mount" in x.lower()])
 mount_mcp()
 
