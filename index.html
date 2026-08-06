@@ -3,22 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v46.2</title>
+<title>人❤️机の小窝 · 临空市 v46.3</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
 .app { width:100%; max-width:480px; height:100vh; height:100dvh; max-height:900px; background:#0d1424; display:flex; flex-direction:column; position:relative; overflow:hidden; }
-#chatView { display:flex; flex-direction:column; height:100%; }
-header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding:12px 15px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
-.header-title { font-size:17px; font-weight:bold; display:flex; align-items:center; gap:8px; }
-.online-badge { font-size:11px; background:rgba(80,180,255,.2); padding:3px 8px; border-radius:10px; cursor:pointer; border:1px solid rgba(80,180,255,.3); }
-.header-btns { display:flex; gap:8px; }
-.hbtn { background:rgba(80,180,255,.15); border:1px solid rgba(80,180,255,.3); color:#9fd8ff; padding:5px 10px; border-radius:8px; font-size:13px; cursor:pointer; }
-.room-desc-bar { background:#0a1424; border-bottom:1px solid rgba(80,180,255,.12); padding:6px 14px; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+#chatView { display:flex; flex-direction:column; height:100%; flex:1; min-height:0; }
+header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
+.header-title { font-size:16px; font-weight:bold; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; }
+.header-title .ht { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.online-badge { font-size:11px; background:rgba(80,180,255,.2); padding:2px 7px; border-radius:10px; cursor:pointer; border:1px solid rgba(80,180,255,.3); flex-shrink:0; }
+.header-btns { display:flex; gap:5px; flex-shrink:0; }
+.hbtn { background:rgba(80,180,255,.15); border:1px solid rgba(80,180,255,.3); color:#9fd8ff; padding:4px 8px; border-radius:8px; font-size:12px; cursor:pointer; }
+.room-desc-bar { background:#0a1424; border-bottom:1px solid rgba(80,180,255,.12); padding:5px 12px; display:flex; align-items:center; gap:6px; flex-shrink:0; }
 .room-desc-bar .rd-text { flex:1; font-size:12px; color:#7fa8cf; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .room-desc-bar .rd-edit { font-size:11px; color:#7fd0ff; cursor:pointer; flex-shrink:0; }
-.room-tabs { display:flex; gap:6px; padding:8px 12px; background:#0d1a2e; overflow-x:auto; flex-shrink:0; }
-.room-tab { background:#13233d; border:1px solid rgba(80,180,255,.15); color:#cfe8ff; padding:6px 14px; border-radius:15px; font-size:13px; cursor:pointer; white-space:nowrap; }
+.room-tabs { display:flex; gap:6px; padding:7px 10px; background:#0d1a2e; overflow-x:auto; flex-shrink:0; }
+.room-tab { background:#13233d; border:1px solid rgba(80,180,255,.15); color:#cfe8ff; padding:5px 12px; border-radius:15px; font-size:12px; cursor:pointer; white-space:nowrap; }
 .room-tab.active { background:#0e7fd4; color:#fff; }
 #msgArea { flex:1; overflow-y:auto; padding:12px; background-color:#0f1a2e; background-size:cover; background-position:center; background-repeat:no-repeat; }
 .msg { display:flex; margin-bottom:14px; }
@@ -32,13 +33,14 @@ header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding
 .msg.system { justify-content:center; }
 .msg.system .bubble { background:transparent; color:#6d8bb0; font-size:12px; box-shadow:none; padding:2px 10px; }
 .sys-tip { text-align:center; color:#6d8bb0; font-size:12px; padding:4px; }
-footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:8px 10px; display:flex; align-items:center; gap:8px; flex-shrink:0; }
-#msgInput { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:9px 12px; font-size:15px; outline:none; background:#13233d; color:#e6f1ff; }
-#sendBtn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:15px; }
-.map-view { display:none; flex-direction:column; height:100%; background:#070d18; }
-.map-top { position:relative; z-index:30; background:linear-gradient(135deg,#12213a,#0b1526); color:#9fd8ff; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
-.map-top .title { font-size:16px; font-weight:bold; color:#fff; display:flex; align-items:center; gap:8px; }
-.map-stage { flex:1; position:relative; overflow:hidden; background:#070d18; touch-action:none; }
+footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:7px 8px; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+#msgInput { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:8px 10px; font-size:15px; outline:none; background:#13233d; color:#e6f1ff; }
+#sendBtn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:14px; }
+.map-view, .building-view { display:none; flex-direction:column; height:100%; flex:1; min-height:0; background:#070d18; }
+.map-top { position:relative; z-index:30; background:linear-gradient(135deg,#12213a,#0b1526); color:#9fd8ff; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
+.map-top .title { font-size:15px; font-weight:bold; color:#fff; display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.region-sel { background:#13233d; border:1px solid rgba(80,180,255,.3); color:#cfe8ff; border-radius:8px; padding:4px 6px; font-size:12px; flex:1; margin:0 8px; max-width:160px; }
+.map-stage { flex:1; position:relative; overflow:hidden; background:#070d18; touch-action:none; min-height:0; }
 #mapCanvas, #regionCanvas { position:absolute; top:0; left:0; transform-origin:0 0; will-change:transform; }
 #mapCanvas img, #regionCanvas img { display:block; width:100%; height:auto; pointer-events:none; user-select:none; -webkit-user-drag:none; }
 .holo { position:absolute; transform:translate(-50%,-50%); cursor:pointer; text-align:center; z-index:10; }
@@ -52,9 +54,8 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .holo.homepink .core { color:#ff7ab8; --glow:#ff7ab8; --bord:#ff7ab8aa; }
 @keyframes floaty { 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-4px);} }
 .holo.selected { outline:2px dashed #ffd166; outline-offset:5px; border-radius:12px; }
-.map-bar { position:relative; z-index:30; display:flex; gap:10px; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); background:rgba(10,20,38,.96); border-top:1px solid rgba(80,180,255,.25); flex-shrink:0; backdrop-filter:blur(8px); }
-.map-bar .bar-btn { flex:1; background:rgba(80,180,255,.12); border:1px solid rgba(80,180,255,.35); color:#bfe6ff; padding:9px 0; border-radius:12px; font-size:13px; cursor:pointer; text-align:center; }
-.map-bar .bar-btn:active { background:#0e7fd4; color:#fff; }
+.map-bar { position:relative; z-index:30; display:flex; gap:8px; padding:8px 10px; background:rgba(10,20,38,.96); border-top:1px solid rgba(80,180,255,.25); flex-shrink:0; }
+.map-bar .bar-btn { flex:1; background:rgba(80,180,255,.12); border:1px solid rgba(80,180,255,.35); color:#bfe6ff; padding:8px 0; border-radius:10px; font-size:12px; cursor:pointer; text-align:center; }
 .map-bar .bar-btn.on { background:#0e7fd4; color:#fff; border-color:#0e7fd4; }
 .place-hint { position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:40; background:rgba(14,127,212,.95); color:#fff; padding:7px 16px; border-radius:20px; font-size:13px; box-shadow:0 4px 16px rgba(0,0,0,.5); display:flex; align-items:center; gap:10px; }
 .place-hint .cancel { color:#fff; font-weight:bold; }
@@ -65,16 +66,13 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .sheet .s-title { font-size:14px; color:#9fd8ff; margin-bottom:12px; font-weight:bold; }
 .sheet .s-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
 .sheet .s-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:12px; padding:12px 8px; text-align:center; cursor:pointer; }
-.sheet .s-item:active { background:#0e7fd4; }
 .sheet .s-item .ic { font-size:24px; display:block; }
 .sheet .s-item .nm { font-size:12px; color:#cfe8ff; margin-top:4px; display:block; }
 .sheet .s-close { display:block; width:100%; margin-top:12px; background:#1a2c4a; border:none; color:#7fa8cf; padding:9px; border-radius:10px; font-size:13px; }
 .style-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; max-height:48vh; overflow-y:auto; }
 .style-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:10px; padding:10px 4px; text-align:center; cursor:pointer; font-size:22px; }
-.style-item:active { background:#0e7fd4; }
 .style-item .st { font-size:10px; color:#7fa8cf; display:block; margin-top:2px; }
-.building-view { display:none; flex-direction:column; height:100%; background:#0d1424; }
-.bv-body { flex:1; overflow-y:auto; padding:14px; }
+.bv-body { flex:1; overflow-y:auto; padding:12px; }
 .bchat-wrap { height:38%; border-top:1px solid rgba(80,180,255,.25); display:flex; flex-direction:column; flex-shrink:0; }
 .bchat-head { display:flex; align-items:center; gap:6px; padding:6px 12px; background:#0a1424; border-bottom:1px solid rgba(80,180,255,.12); flex-shrink:0; }
 .bchat-head b { font-size:12px; color:#ffd166; flex:1; }
@@ -83,7 +81,6 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .bchat-bar input { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:7px 10px; font-size:14px; outline:none; background:#13233d; color:#e6f1ff; }
 .room-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
 .room-cell { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:14px 6px; text-align:center; cursor:pointer; }
-.room-cell:active { background:#0e7fd4; }
 .room-cell .r-emoji { font-size:26px; display:block; }
 .room-cell .r-name { font-size:12px; margin-top:4px; color:#cfe8ff; word-break:break-all; }
 .room-cell.hall { border-color:#ffd16666; background:#1a2a1a; }
@@ -91,25 +88,24 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .room-cell .r-lock { font-size:11px; color:#ff8a80; display:block; margin-top:2px; }
 .room-cell .r-hall { font-size:11px; color:#ffd166; display:block; margin-top:2px; }
 .room-cell.add { border:2px dashed #2a4a75; color:#4a729f; display:flex; align-items:center; justify-content:center; font-size:24px; }
-.section-title { font-size:15px; color:#9fd8ff; font-weight:bold; margin:12px 0 8px; display:flex; align-items:center; gap:6px; }
+.section-title { font-size:14px; color:#9fd8ff; font-weight:bold; margin:12px 0 8px; display:flex; align-items:center; gap:6px; }
 .npc-card { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
 .npc-card .n-emoji { font-size:28px; }
 .npc-card .n-name { color:#fff; font-weight:bold; }
 .npc-card .n-desc { color:#7fa8cf; font-size:12px; margin-top:2px; }
-.npc-card .n-del { color:#ff6b6b; font-size:11px; margin-left:auto; cursor:pointer; }
 .story-card { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:10px; margin-bottom:8px; }
 .story-card .s-time { font-size:11px; color:#6d8bb0; }
 .story-card .s-author { font-size:12px; color:#ffd166; font-weight:bold; }
 .story-card .s-text { color:#e6f1ff; font-size:14px; margin-top:4px; line-height:1.6; white-space:pre-wrap; }
 .home-actions { display:flex; gap:8px; flex-wrap:wrap; }
-.act-btn { background:#13233d; border:1px solid rgba(80,180,255,.3); border-radius:10px; padding:9px 10px; font-size:13px; cursor:pointer; color:#cfe8ff; flex:1; text-align:center; min-width:44%; }
+.act-btn { background:#13233d; border:1px solid rgba(80,180,255,.3); border-radius:10px; padding:9px 10px; font-size:12px; cursor:pointer; color:#cfe8ff; flex:1; text-align:center; min-width:44%; }
 .act-btn:active { background:#0e7fd4; color:#fff; }
 .req-card { background:#14283f; border:1px solid rgba(255,200,80,.3); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; align-items:center; gap:8px; }
 .req-card .q-name { color:#ffd166; font-weight:bold; flex:1; }
 .req-card .q-time { font-size:11px; color:#6d8bb0; }
 .modal-mask { position:absolute; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:60; }
 .modal-mask.show { display:flex; }
-.modal { background:#101d33; border:1px solid rgba(80,180,255,.3); border-radius:14px; width:88%; max-height:85%; overflow-y:auto; padding:18px; }
+.modal { background:#101d33; border:1px solid rgba(80,180,255,.3); border-radius:14px; width:88%; max-height:85%; overflow-y:auto; padding:16px; }
 .modal h3 { font-size:16px; margin-bottom:12px; color:#fff; }
 .set-group { margin-bottom:14px; border-bottom:1px dashed #1d3a5f; padding-bottom:12px; }
 .set-group label { font-size:13px; color:#7fa8cf; display:block; margin-bottom:6px; }
@@ -118,7 +114,6 @@ textarea.input { color:#e6f1ff; }
 .btn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; cursor:pointer; margin-right:6px; }
 .btn.gray { background:#2a4a75; }
 .btn.green { background:#0e9f6e; }
-.btn:active { opacity:.8; }
 .tip { font-size:12px; color:#6d8bb0; margin-top:4px; }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .note-card { background:#14283f; border:1px solid rgba(255,200,80,.3); border-radius:10px; padding:10px; margin-bottom:8px; }
@@ -126,7 +121,6 @@ textarea.input { color:#e6f1ff; }
 .note-card .n-text { font-size:14px; margin:4px 0; line-height:1.5; color:#fff; }
 .note-card .n-time { font-size:11px; color:#6d8bb0; }
 .note-card .n-reply { background:#12365c; border-radius:8px; padding:6px 8px; margin-top:6px; font-size:13px; color:#9fd8ff; }
-.note-card .n-rep-btn { font-size:11px; color:#7fd0ff; cursor:pointer; margin-left:6px; }
 .pair-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:10px; padding:8px 10px; margin-bottom:6px; display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe8ff; }
 .pair-item .p-color { width:16px; height:16px; border-radius:4px; flex-shrink:0; }
 .pair-item .p-del { color:#ff6b6b; margin-left:auto; cursor:pointer; }
@@ -136,8 +130,8 @@ textarea.input { color:#e6f1ff; }
 .priv-tab { display:flex; gap:8px; margin-bottom:10px; }
 .priv-tab button { flex:1; background:#13233d; border:1px solid rgba(80,180,255,.3); color:#9fd8ff; padding:8px 0; border-radius:10px; font-size:13px; cursor:pointer; }
 .priv-tab button.on { background:#0e7fd4; color:#fff; }
-/* 微信风格短信 */
-.sms-full { width:100%!important; max-width:480px!important; height:100%!important; max-height:100%!important; border-radius:0!important; padding:0!important; display:flex; flex-direction:column; overflow:hidden!important; }
+/* 微信风格短信（全屏，绝对定位重叠不并排） */
+.sms-full { position:absolute; top:0; left:0; right:0; bottom:0; width:100%!important; max-width:480px!important; height:100%!important; max-height:100%!important; border-radius:0!important; padding:0!important; display:flex; flex-direction:column; overflow:hidden!important; }
 .sms-head { display:flex; align-items:center; gap:8px; padding:10px 14px; background:#0a1424; border-bottom:1px solid rgba(80,180,255,.2); flex-shrink:0; }
 .sms-head b { flex:1; color:#fff; font-size:16px; }
 .sms-list { flex:1; overflow-y:auto; background:#ededed; }
@@ -155,17 +149,31 @@ textarea.input { color:#e6f1ff; }
 .sms-row.mine .sms-bubble { background:#95ec69; color:#000; border-top-right-radius:2px; }
 .sms-row.them .sms-bubble { background:#fff; color:#000; border-top-left-radius:2px; }
 .sms-row .sms-time { font-size:10px; color:#999; margin:0 6px; align-self:flex-end; }
+/* 底部导航 */
+.tabbar { display:flex; background:#0a1424; border-top:1px solid rgba(80,180,255,.2); flex-shrink:0; padding-bottom:env(safe-area-inset-bottom); }
+.tabbar .tab { flex:1; text-align:center; padding:7px 0 5px; color:#7fa8cf; font-size:11px; cursor:pointer; }
+.tabbar .tab.on { color:#0e7fd4; }
+.tabbar .tab .ic { font-size:20px; display:block; line-height:1.1; }
+/* 我的页 */
+.my-card { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:12px; margin-bottom:10px; }
+.my-card .m-title { font-size:14px; color:#9fd8ff; font-weight:bold; margin-bottom:8px; }
+.wk-item { display:flex; align-items:center; gap:8px; background:#14283f; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
+.wk-item .wk-name { flex:1; color:#fff; font-size:14px; }
+.bell-item { display:flex; gap:8px; background:#14283f; border:1px solid rgba(255,200,80,.25); border-radius:10px; padding:9px 10px; margin-bottom:6px; }
+.bell-item .b-text { flex:1; color:#e6f1ff; font-size:13px; line-height:1.5; }
+.bell-item .b-time { font-size:10px; color:#6d8bb0; flex-shrink:0; }
 </style>
 </head>
 <body>
 <div class="app">
   <div id="chatView">
     <header>
-      <div class="header-title"><button class="hbtn" onclick="goBackFromChat()" style="margin-right:6px;padding:3px 9px">←</button> <span id="roomEmoji">🏠</span> <span id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
+      <div class="header-title"><span id="roomEmoji">🏠</span> <span class="ht" id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
       <div class="header-btns">
-        <button class="hbtn" id="privBtn" onclick="togglePrivate()" style="display:none">🏠 私人空间</button>
-        <button class="hbtn" onclick="showMap()">🗺️ 地图</button>
-        <button class="hbtn" onclick="openSettings()">⚙️</button>
+        <button class="hbtn" onclick="goLobby()">🏠大厅</button>
+        <button class="hbtn" onclick="goMyHome()">🏡我家</button>
+        <button class="hbtn" onclick="openBell()">🔔<span id="bellDot" style="display:none;color:#ff6b6b;margin-left:2px">●</span></button>
+        <button class="hbtn" id="privBtn" onclick="togglePrivate()" style="display:none">🏠</button>
       </div>
     </header>
     <div class="room-desc-bar" id="roomDescBar" style="display:none">
@@ -177,13 +185,12 @@ textarea.input { color:#e6f1ff; }
     <div id="msgArea"></div>
     <footer>
       <button class="hbtn" id="privFooterBtn" onclick="togglePrivate()" style="display:none;flex-shrink:0">🏠</button>
-      <button class="hbtn" onclick="openSms()" style="flex-shrink:0" title="短信">📩<span id="smsDot" style="display:none;color:#ff6b6b;margin-left:2px">●</span></button>
       <input id="msgInput" placeholder="说点什么吧…" autocomplete="off">
       <button id="sendBtn" onclick="sendMessage()">发送</button>
     </footer>
   </div>
   <div class="map-view" id="mapView">
-    <div class="map-top"><div class="title"><span>🗺️</span> <span>临空市</span></div><div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div></div>
+    <div class="map-top"><div class="title"><span>🗺️</span> <span>临空市</span></div><select class="region-sel" id="regionSel" onchange="jumpRegion()"><option value="">全部区域</option></select><div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div></div>
     <div class="map-stage" id="mapStage">
       <div id="mapCanvas"><img id="mapImg" alt="map"></div>
       <div class="place-hint" id="placeHint" style="display:none">📌 点击地图放置 <span class="cancel" onclick="cancelPlace()">✕ 取消</span></div>
@@ -196,7 +203,7 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
   <div class="map-view" id="regionView">
-    <div class="map-top"><div class="title"><span>📍</span> <span id="regionTitle">区域</span></div><div class="header-btns"><button class="hbtn" onclick="showMap()">← 总览</button></div></div>
+    <div class="map-top"><div class="title"><span>📍</span> <span id="regionTitle">区域</span></div><select class="region-sel" id="regionSel2" onchange="jumpRegion2()"></select><div class="header-btns"><button class="hbtn" onclick="showMap()">← 总览</button></div></div>
     <div class="map-stage" id="regionStage">
       <div id="regionCanvas"><img id="regionImg" alt="region"></div>
       <div class="place-hint" id="regionPlaceHint" style="display:none">📌 点击放置 <span class="cancel" onclick="cancelPlace()">✕ 取消</span></div>
@@ -216,6 +223,10 @@ textarea.input { color:#e6f1ff; }
       <div class="bchat-list" id="bChatList"></div>
       <div class="bchat-bar"><input id="bChatInput" placeholder="在这个建筑里说话…"><button class="btn" style="margin:0" onclick="sendBMsg()">发送</button></div>
     </div>
+  </div>
+  <div class="map-view" id="myView">
+    <div class="map-top"><div class="title"><span>👤</span> <span>我的</span></div><div class="header-btns"><button class="hbtn" onclick="showChat()">← 聊天</button></div></div>
+    <div class="bv-body" id="myBody"></div>
   </div>
   <div class="sheet-mask" id="buildMask" onclick="hideBuildSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
@@ -246,8 +257,6 @@ textarea.input { color:#e6f1ff; }
         <div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁</button></div>
         <div class="tip" id="editLockTip"></div>
       </div>
-      <div class="set-group" id="ecoGroup"><label>💰 钱包</label><div class="row"><button class="btn" onclick="refreshEco()">💰 刷新</button></div><div id="ecoInfo" class="tip" style="margin-top:6px"></div><div class="tip" style="margin-top:4px">上班/下班/设常驻 → 到对应公共建筑里操作</div></div>
-      <div class="set-group" id="trailGroup"><label>👣 AI 行动轨迹 &amp; 📣 召唤</label><div class="row"><button class="btn" onclick="openTrail()">👣 查看轨迹</button><button class="btn gray" onclick="summonAI()">📣 召唤我的 AI</button></div><div id="trailList" class="tip" style="margin-top:6px"></div></div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
       <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
       <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
@@ -260,7 +269,7 @@ textarea.input { color:#e6f1ff; }
     </div>
   </div>
   <div class="modal-mask" id="smsMask" onclick="if(event.target===this)hideSms()">
-    <div class="modal sms-full">
+    <div class="modal sms-full" id="smsListModal">
       <div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
       <div class="sms-list" id="smsList"></div>
     </div>
@@ -268,6 +277,13 @@ textarea.input { color:#e6f1ff; }
       <div class="sms-head"><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="backToSmsList()">← 返回</span><b id="smsConvName"></b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
       <div class="sms-chat" id="smsConvList"></div>
       <div style="display:flex;gap:6px;padding:8px 10px;background:#fff;flex-shrink:0"><input id="smsChatInput" placeholder="发短信…" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:15px;outline:none"><button class="btn green" style="margin:0" onclick="sendSmsTo()">发送</button></div>
+    </div>
+  </div>
+  <div class="modal-mask" id="bellMask" onclick="if(event.target===this)hideBell()">
+    <div class="modal">
+      <h3>🔔 家中的来客</h3>
+      <div id="bellList"></div>
+      <button class="btn gray" onclick="hideBell()" style="width:100%;margin-top:8px">关闭</button>
     </div>
   </div>
   <div class="modal-mask" id="storyMask" onclick="if(event.target===this)hideStoryModal()">
@@ -290,6 +306,12 @@ textarea.input { color:#e6f1ff; }
       <button class="btn gray" onclick="hidePrivate()">关闭</button>
     </div>
   </div>
+  <div class="tabbar">
+    <div class="tab" data-t="chat" onclick="showTab('chat')"><span class="ic">💬</span>聊天</div>
+    <div class="tab" data-t="map" onclick="showTab('map')"><span class="ic">🗺️</span>地图</div>
+    <div class="tab" data-t="sms" onclick="showTab('sms')"><span class="ic">📩</span>短信<span id="smsDot" style="display:none;color:#ff6b6b;margin-left:2px">●</span></div>
+    <div class="tab" data-t="me" onclick="showTab('me')"><span class="ic">👤</span>我的</div>
+  </div>
 </div>
 <script>
 var userName = localStorage.getItem('gc_name') || '';
@@ -309,6 +331,7 @@ var editUnlocked = localStorage.getItem('gc_edit') === '1';
 var smsOut = JSON.parse(localStorage.getItem('gc_sms_out') || '[]');
 var bChatOn = false;
 var smsContact = null;
+var curTab = 'chat';
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -335,9 +358,75 @@ function compressImage(dataUrl, maxW, quality, cb){
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
-// ===== 短信（微信式会话） =====
+// ===== 底部导航 / 快捷 =====
+function showTab(t){
+  curTab=t; updateTab();
+  if(t==='chat') showChat();
+  else if(t==='map') showMap();
+  else if(t==='sms') openSms();
+  else if(t==='me') showMe();
+}
+function updateTab(){ var tabs=document.querySelectorAll('.tabbar .tab'); for(var i=0;i<tabs.length;i++){ tabs[i].className='tab'+(tabs[i].getAttribute('data-t')===curTab?' on':''); } }
+function goLobby(){ switchRoom('main',''); showChat(); }
+function myHomeBidFind(){ for(var bid in mapData.buildings){ var b=mapData.buildings[bid]; if(b.type==='home' && b.owner===userName) return bid; } return null; }
+function goMyHome(){
+  var bid=myHomeBidFind();
+  if(!bid){ toast('你还没有自己的家（住宅类型）'); return; }
+  var hall=mapData.buildings[bid].name+'·会客厅';
+  switchRoom(hall,''); showChat();
+}
+function showMe(){ ['chatView','mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('myView').style.display='flex'; renderMe(); }
+function renderMe(){
+  var el=document.getElementById('myBody'); var html='';
+  html+='<div class="my-card"><div class="m-title">💰 钱包 &amp; 💼 工作</div><div id="ecoInfo" class="tip" style="margin-top:4px">加载中…</div></div>';
+  html+='<div class="my-card"><div class="m-title">💼 一键上班（自动挑地点：常驻80%/随机20%）</div><div class="wk-item"><span class="wk-name">👤 我（'+esc(userName)+'）</span><button class="btn green" style="margin:0" onclick="quickWork(\''+esc(userName)+'\')">上班</button></div>';
+  var ais = mapData.user_ais[userName]||[];
+  ais.forEach(function(ai){ html+='<div class="wk-item"><span class="wk-name">🤖 '+esc(ai)+'</span><button class="btn green" style="margin:0" onclick="quickWork(\''+esc(ai)+'\')">上班</button></div>'; });
+  html+='<div class="tip">下班请去对应公共建筑点「🏃 下班」</div></div>';
+  html+='<div class="my-card"><div class="m-title">📣 AI &amp; 记录</div><div class="home-actions"><button class="act-btn" onclick="summonAI()">📣 召唤AI</button><button class="act-btn" onclick="openTrail()">👣 轨迹</button><button class="act-btn" onclick="openBell()">🔔 来客</button><button class="act-btn" onclick="openSettings()">⚙️ 设置</button></div></div>';
+  html+='<div class="my-card"><div class="m-title">🏠 常用</div><div class="home-actions"><button class="act-btn" onclick="goLobby()">🏠 公共大厅</button><button class="act-btn" onclick="goMyHome()">🏡 我的家</button><button class="act-btn" onclick="showTab(\'map\')">🗺️ 地图</button><button class="act-btn" onclick="showTab(\'sms\')">📩 短信</button></div></div>';
+  el.innerHTML=html;
+  refreshEco();
+}
+function quickWork(name){
+  if(!name) return;
+  api('/api/work/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(d){ toast('✅ '+d.msg); }).catch(function(e){ toast('❌ '+e.message); });
+}
+// ===== 铃铛 =====
+function checkBell(){
+  api('/api/bell?owner='+encodeURIComponent(userName)).then(function(d){
+    var n=(d.visits||[]).length; var seen=parseInt(localStorage.getItem('gc_bell_seen')||'0',10);
+    if(n>seen) document.getElementById('bellDot').style.display='';
+  }).catch(function(){});
+}
+function openBell(){
+  api('/api/bell?owner='+encodeURIComponent(userName)).then(function(d){
+    var items=(d.visits||[]).slice().reverse();
+    var el=document.getElementById('bellList'); el.innerHTML='';
+    if(!items.length){ el.innerHTML='<div class="tip">还没有人来过家里～</div>'; }
+    else { items.forEach(function(v){ el.innerHTML+='<div class="bell-item"><span class="b-text">'+esc(v.text)+'</span><span class="b-time">'+esc((v.time||'').slice(5,16))+'</span></div>'; }); }
+    localStorage.setItem('gc_bell_seen', String(items.length));
+    document.getElementById('bellDot').style.display='none';
+    document.getElementById('bellMask').classList.add('show');
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
+function hideBell(){ document.getElementById('bellMask').classList.remove('show'); }
+// ===== 区域下拉 =====
+function fillRegionSel(){
+  var sel=document.getElementById('regionSel'); if(!sel) return;
+  var old=sel.value; sel.innerHTML='<option value="">全部区域</option>';
+  Object.keys(mapData.regions||{}).forEach(function(name){ sel.innerHTML+='<option value="'+esc(name)+'">'+esc(name)+'</option>'; });
+  if(old) sel.value=old;
+  var sel2=document.getElementById('regionSel2');
+  sel2.innerHTML='<option value="">全部区域</option>';
+  Object.keys(mapData.regions||{}).forEach(function(name){ sel2.innerHTML+='<option value="'+esc(name)+'">'+esc(name)+'</option>'; });
+  if(currentRegion) sel2.value=currentRegion;
+}
+function jumpRegion(){ var v=document.getElementById('regionSel').value; if(v){ showRegion(v); } else { showMap(); } }
+function jumpRegion2(){ var v=document.getElementById('regionSel2').value; if(v){ showRegion(v); } else { showMap(); } }
+// ===== 短信（微信式会话，全屏重叠） =====
 function saveSmsOut(){ localStorage.setItem('gc_sms_out', JSON.stringify(smsOut)); }
-function openSms(){ smsContact=null; document.getElementById('smsMask').classList.add('show'); document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsList').style.display=''; loadSmsList(); }
+function openSms(){ smsContact=null; document.getElementById('smsMask').classList.add('show'); document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsListModal').style.display=''; loadSmsList(); }
 function hideSms(){ document.getElementById('smsMask').classList.remove('show'); smsContact=null; }
 function smsTo(name){ openSms(); setTimeout(function(){ if(name) openConv(name); }, 150); }
 function loadSmsList(){
@@ -363,12 +452,12 @@ function loadSmsList(){
 }
 function openConv(name){
   smsContact=name;
-  document.getElementById('smsList').style.display='none';
+  document.getElementById('smsListModal').style.display='none';
   document.getElementById('smsConvModal').style.display='';
   document.getElementById('smsConvName').textContent=name;
   renderConv();
 }
-function backToSmsList(){ smsContact=null; document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsList').style.display=''; loadSmsList(); }
+function backToSmsList(){ smsContact=null; document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsListModal').style.display=''; loadSmsList(); }
 function renderConv(){
   if(!smsContact) return;
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
@@ -468,14 +557,14 @@ function goToTrailSpot(room, tab){
 // ===== 经济系统 =====
 function refreshEco(){
   api('/api/economy?user='+encodeURIComponent(userName)).then(function(d){
-    var info = document.getElementById('ecoInfo');
+    var info = document.getElementById('ecoInfo'); if(!info) return;
     var txt = '💰 我的余额：' + (d.wallet||0).toFixed(0) + ' 金币';
     var w = d.working;
     if(w){ var b = mapData.buildings[w.building_id]; var left = Math.max(0, Math.ceil(w.start_ts + w.hours*3600 - Date.now()/1000)); txt += '<br>💼 上班中：' + (b?b.name:'?') + '（剩 ' + Math.floor(left/60) + ' 分钟）'; }
     var hj = d.home_jobs[userName]; if(hj) txt += '<br>🏢 我的常驻：' + esc(hj);
     (mapData.user_ais[userName]||[]).forEach(function(ai){ if(d.home_jobs[ai]) txt += '<br>🤖 '+esc(ai)+' 常驻：'+esc(d.home_jobs[ai]); });
     var myh = d.my_history||[];
-    if(myh.length){ txt += '<br><br>📖 我的打工记录：' + myh.slice(-5).reverse().map(function(m){ return '<br>· '+esc(m.time)+' '+esc(m.building)+' '+m.hours+'小时 +'+m.earn.toFixed(0)+'金币'; }).join(''); }
+    if(myh.length){ txt += '<br><br>📖 打工记录：' + myh.slice(-5).reverse().map(function(m){ return '<br>· '+esc(m.time)+' '+esc(m.building)+' '+m.hours+'小时 +'+m.earn.toFixed(0)+'金币'; }).join(''); }
     info.innerHTML = txt;
   }).catch(function(e){ toast('❌ '+e.message); });
 }
@@ -531,7 +620,7 @@ function setBuildingNotice(){
 }
 function worldSnapshot(){
   api('/api/backup').then(function(d){
-    var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, wallets:d.wallets, home_jobs:d.home_jobs, work_sessions:d.work_sessions, work_history:d.work_history, work_switch:d.work_switch, ts:new Date().toLocaleString()};
+    var slim = {regions:d.regions, buildings:d.buildings, npcs:d.npcs, notes:d.notes, diaries:d.diaries, stories:d.stories, room_bg:d.room_bg, room_access:d.room_access, room_requests:d.room_requests, user_ais:d.user_ais, time_settings:d.time_settings, building_seq:d.building_seq, note_seq:d.note_seq, edit_pwd:d.edit_pwd, wallets:d.wallets, home_jobs:d.home_jobs, work_sessions:d.work_sessions, work_history:d.work_history, work_switch:d.work_switch, visits:d.visits, ts:new Date().toLocaleString()};
     try{ localStorage.setItem('gc_world_backup', JSON.stringify(slim)); }catch(e){}
   }).catch(function(){});
 }
@@ -613,22 +702,17 @@ function canEnterRoom(room){
   for(var i=0;i<acc.length;i++){ if((mapData.user_ais[acc[i]]||[]).indexOf(userName)>=0) return true; }
   return false;
 }
-function goBackFromChat(){
-  var b=buildingOfRoom(currentRoom);
-  if(b){ for(var k in mapData.buildings){ if(mapData.buildings[k]===b){ openBuilding(k); return; } } }
-  showMap();
-}
-function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); bChatOn=false; }
-function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); }
-function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
-function showBuilding(bid){ currentBuilding=bid; ['chatView','mapView','regionView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('buildingView').style.display='flex'; exitModes(); renderBuilding(); }
+function showChat(){ ['mapView','regionView','buildingView','myView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); bChatOn=false; curTab='chat'; updateTab(); }
+function showMap(){ ['chatView','regionView','buildingView','myView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); curTab='map'; updateTab(); }
+function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView','myView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
+function showBuilding(bid){ currentBuilding=bid; ['chatView','mapView','regionView','myView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('buildingView').style.display='flex'; exitModes(); renderBuilding(); }
 function backFromBuilding(){ if(buildingFromRegion) showRegion(currentBuildingRegion()); else showMap(); }
 function openBuilding(bid){ buildingFromRegion=!!(mapData.buildings[bid]&&mapData.buildings[bid].region); showBuilding(bid); }
 function currentBuildingRegion(){ var b=mapData.buildings[currentBuilding]; return b?b.region:''; }
 function exitModes(){ placeType=null; pendingType=null; editMode=false; updateEditBtn(); document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function updateEditBtn(){ var e=document.getElementById('editBtn'), r=document.getElementById('regionEditBtn'); if(e)e.className='bar-btn'+(editMode?' on':''); if(r)r.className='bar-btn'+(editMode?' on':''); }
 var MAIN_CANDIDATES = ['/images/map_main.png','/images/map_main.jpg','/images/map_main.jpeg'];
-function loadMap(){ api('/api/map').then(function(d){ mapData=d; renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); }); }
+function loadMap(){ api('/api/map').then(function(d){ mapData=d; fillRegionSel(); renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); }); }
 function renderMap(){
   var img=document.getElementById('mapImg');
   img.onerror=function(){
@@ -661,6 +745,7 @@ function layoutMap(scope){
 function renderRegion(){
   var r=mapData.regions[currentRegion];
   document.getElementById('regionTitle').textContent=currentRegion;
+  var sel2=document.getElementById('regionSel2'); if(sel2) sel2.value=currentRegion;
   var img=document.getElementById('regionImg');
   var base=(r&&r.image)?r.image:'/images/map_n109.png';
   if(base.charAt(0)!=='/') base='/'+base;
@@ -1154,7 +1239,7 @@ function loadRooms(){
   api('/api/rooms').then(function(d){
     var tabs=document.getElementById('roomTabs'); tabs.innerHTML='';
     (d.rooms||[]).forEach(function(r){
-      if(r.creator==='home'||r.creator==='hall') return;
+      if(r.name==='main'||r.creator==='home'||r.creator==='hall') return;
       var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b);
     });
   }).catch(function(){});
@@ -1164,7 +1249,6 @@ function openSettings(){
   document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
   renderPairColors(); renderPairList(); loadTimeSettings();
-  refreshEco();
   var lockGroup=document.getElementById('editLockGroup');
   var lockLabel = lockGroup.querySelector('label');
   var lockBtn = lockGroup.querySelector('button');
@@ -1241,13 +1325,14 @@ function restoreBackup(){
 function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
-  loadRooms(); loadAvatars(); reportRoom();
+  loadRooms(); loadAvatars(); reportRoom(); updateTab();
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
-  worldSnapshot();
+  worldSnapshot(); checkBell();
   setInterval(function(){ loadMessages(true); heartbeat(); if(bChatOn) loadBChat(); }, 3000);
   setInterval(checkSms, 10000);
+  setInterval(checkBell, 15000);
   setInterval(worldSnapshot, 1800000);
 }
 init();
