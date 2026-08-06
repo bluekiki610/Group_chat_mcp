@@ -1051,17 +1051,21 @@ def mount_mcp():
     try:
         if hasattr(mcp, "streamable_http_app"):
             app.mount("/mcp", mcp.streamable_http_app())
-    except Exception:
-        pass
+            print("[MCP] OK mounted streamable_http_app at /mcp")
+    except Exception as e:
+        print("[MCP] streamable_http_app failed:", e)
     try:
         if hasattr(mcp, "sse_app"):
             app.mount("/sse", mcp.sse_app())
-    except Exception:
-        pass
+            print("[MCP] OK mounted sse_app at /sse")
+    except Exception as e:
+        print("[MCP] sse_app failed:", e)
     try:
         mcp.mount("/mcp", app)
-    except Exception:
-        pass
+        print("[MCP] OK mounted via mcp.mount at /mcp")
+    except Exception as e:
+        print("[MCP] mcp.mount failed:", e)
+    print("[MCP] type=", type(mcp).__name__, "attrs=", [x for x in dir(mcp) if "app" in x.lower() or "mount" in x.lower()])
 mount_mcp()
 
 def run():
