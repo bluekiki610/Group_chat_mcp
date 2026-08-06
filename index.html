@@ -376,11 +376,15 @@ function loadBChat(){
   }).catch(function(){});
 }
 function renderBMsg(m){
-  var d=document.createElement('div'); var isMe=m.sender===userName; d.style.cssText='display:flex;margin-bottom:8px;'+(isMe?'justify-content:flex-end;':'');
+  var d=document.createElement('div'); var isMe=m.sender===userName; d.style.cssText='display:flex;align-items:flex-end;margin-bottom:8px;'+(isMe?'justify-content:flex-end;':'');
+  if(m.sender==='system'){ var b0=document.createElement('div'); b0.style.cssText='background:transparent;color:#6d8bb0;font-size:12px;text-align:center;width:100%'; b0.textContent=m.content; d.appendChild(b0); return d; }
+  var av=document.createElement('div'); var a=avatars[m.sender];
+  av.style.cssText='width:26px;height:26px;border-radius:50%;background:#1d3150;display:flex;align-items:center;justify-content:center;font-size:12px;overflow:hidden;flex-shrink:0;margin:0 5px;'+(isMe?'order:2;':'order:0;');
+  av.innerHTML = a?'<img src="'+a+'" style="width:100%;height:100%;object-fit:cover">':esc((m.sender||'?').charAt(0));
   var b=document.createElement('div');
-  if(m.sender==='system'){ b.style.cssText='background:transparent;color:#6d8bb0;font-size:12px;text-align:center;width:100%'; b.textContent=m.content; }
-  else { b.style.cssText='max-width:75%;padding:7px 11px;border-radius:9px;font-size:14px;line-height:1.5;word-break:break-word;background:'+(isMe?'#95ec69':'#1c2f4d')+';color:'+(isMe?'#000':'#e6f1ff')+';'+(isMe?'':'border:1px solid rgba(255,255,255,.1);'); b.textContent=m.content; }
-  d.appendChild(b); return d;
+  b.style.cssText='max-width:68%;padding:7px 11px;border-radius:9px;font-size:14px;line-height:1.5;word-break:break-word;background:'+(isMe?'#95ec69':'#1c2f4d')+';color:'+(isMe?'#000':'#e6f1ff')+';'+(isMe?'':'border:1px solid rgba(255,255,255,.1);');
+  b.textContent=m.content;
+  d.appendChild(av); d.appendChild(b); return d;
 }
 function sendBMsg(){
   var inp=document.getElementById('bChatInput'); var content=inp.value.trim(); if(!content) return;
@@ -443,6 +447,17 @@ function goWorkHere(){
 }
 function stopWorkHere(){
   api('/api/work/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function setAiWork(){
+  var b = mapData.buildings[currentBuilding];
+  if(!b || b.type!=='npc' || (b.features||[]).indexOf('work')<0 || !b.salary){ toast('这个建筑没有工作功能'); return; }
+  var ais = [];
+  Object.keys(mapData.user_ais||{}).forEach(function(u){ (mapData.user_ais[u]||[]).forEach(function(a){ if(ais.indexOf(a)<0) ais.push(a); }); });
+  if(!ais.length){ toast('还没有登记 AI'); return; }
+  var pick = prompt('安排谁在这里上班？\n'+ais.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
+  var ai = ais[parseInt(pick||'1',10)-1]; if(!ai) return;
+  var h = parseInt(prompt('上多久？（1/2/4 小时）','2')||'2',10);
+  api('/api/work/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:ai,building_id:currentBuilding,hours:h})}).then(function(d){ toast('✅ '+ai+' 已上班'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function setHomeJobHere(){
   var b = mapData.buildings[currentBuilding]; if(!b) return;
@@ -652,8 +667,7 @@ function renderMarkers(canvasId, scope, regionName){
     var cls='holo '+(b.type==='npc'?'npc':'home')+(isHome?' homepink':'')+(opType==='building'&&opTarget===bid?' selected':'');
     var m=document.createElement('div'); m.className=cls;
     m.style.left=b.x+'%'; m.style.top=b.y+'%';
-    var feats=(b.features||[]).map(function(f){return {work:'💼',shop:'🛍️',fun:'🎮',date:'💕'}[f]||'';}).join('');
-    m.innerHTML='<span class="core">'+(isHome?'💗':b.emoji)+feats+'</span><span class="lbl">'+esc(b.name)+'</span>';
+    m.innerHTML='<span class="core">'+(isHome?'💗':b.emoji)+'</span><span class="lbl">'+esc(b.name)+'</span>';
     m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode&&canEdit()){openOp('building',bid);} else { openBuilding(bid); } };
     canvas.appendChild(m);
   });
@@ -811,7 +825,7 @@ function renderBuilding(){
   if(isPublic){
     var feats=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐',date:'💕约会'}[f]||f; }).join(' ');
     html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><button class="btn" onclick="setBuildingFeatures()">⚙️ 功能设置</button><span class="tip" style="flex:1">'+(feats||'暂无功能')+' · 时薪：'+((b.salary||0).toFixed(0))+'</span></div>';
-    html+='<div class="home-actions" style="margin:8px 0"><button class="act-btn" onclick="setHomeJobHere()">🏠 常驻</button><button class="act-btn" onclick="goWorkHere()">💼 上班</button><button class="act-btn" onclick="stopWorkHere()">🏃 下班</button><button class="act-btn" onclick="toggleBChat()">💬 对话</button></div>';
+    html+='<div class="home-actions" style="margin:8px 0"><button class="act-btn" onclick="setAiWork()">🤖 安排AI上班</button><button class="act-btn" onclick="setHomeJobHere()">🏠 常驻</button><button class="act-btn" onclick="goWorkHere()">💼 上班</button><button class="act-btn" onclick="stopWorkHere()">🏃 下班</button><button class="act-btn" onclick="toggleBChat()">💬 对话</button></div>';
     var hjHere = Object.keys(mapData.home_jobs||{}).filter(function(n){ return mapData.home_jobs[n]===b.name; });
     if(hjHere.length) html+='<div style="margin:4px 0"><span class="tip">🏠 常驻于此：'+hjHere.map(esc).join('、')+'</span></div>';
   }
