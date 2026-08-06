@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市</title>
+<title>人❤️机の小窝 · 临空市 v46</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -75,6 +75,12 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .style-item .st { font-size:10px; color:#7fa8cf; display:block; margin-top:2px; }
 .building-view { display:none; flex-direction:column; height:100%; background:#0d1424; }
 .bv-body { flex:1; overflow-y:auto; padding:14px; }
+.bchat-wrap { height:38%; border-top:1px solid rgba(80,180,255,.25); display:flex; flex-direction:column; flex-shrink:0; }
+.bchat-head { display:flex; align-items:center; gap:6px; padding:6px 12px; background:#0a1424; border-bottom:1px solid rgba(80,180,255,.12); flex-shrink:0; }
+.bchat-head b { font-size:12px; color:#ffd166; flex:1; }
+.bchat-list { flex:1; overflow-y:auto; padding:8px; background:#0f1a2e; }
+.bchat-bar { display:flex; gap:6px; padding:6px 10px; background:#0d1a2e; flex-shrink:0; }
+.bchat-bar input { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:7px 10px; font-size:14px; outline:none; background:#13233d; color:#e6f1ff; }
 .room-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
 .room-cell { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:14px 6px; text-align:center; cursor:pointer; }
 .room-cell:active { background:#0e7fd4; }
@@ -194,6 +200,11 @@ textarea.input { color:#e6f1ff; }
   <div class="building-view" id="buildingView">
     <div class="map-top"><div class="title"><span id="bEmoji">🏠</span> <span id="bTitle">建筑</span></div><div class="header-btns"><button class="hbtn" onclick="backFromBuilding()">← 返回</button></div></div>
     <div class="bv-body" id="bvBody"></div>
+    <div class="bchat-wrap" id="bChatWrap" style="display:none">
+      <div class="bchat-head"><b>💬 <span id="bChatTitle">对话</span></b><span style="font-size:11px;color:#7fd0ff;cursor:pointer" onclick="toggleBChat()">收起 ▲</span></div>
+      <div class="bchat-list" id="bChatList"></div>
+      <div class="bchat-bar"><input id="bChatInput" placeholder="在这个建筑里说话…"><button class="btn" style="margin:0" onclick="sendBMsg()">发送</button></div>
+    </div>
   </div>
   <div class="sheet-mask" id="buildMask" onclick="hideBuildSheet()">
     <div class="sheet" onclick="event.stopPropagation()">
@@ -224,7 +235,7 @@ textarea.input { color:#e6f1ff; }
         <div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁</button></div>
         <div class="tip" id="editLockTip"></div>
       </div>
-      <div class="set-group" id="ecoGroup"><label>💰 钱包 &amp; 💼 工作</label><div class="row"><button class="btn" onclick="refreshEco()">💰 查看钱包</button><button class="btn gray" onclick="goWork()">💼 去上班</button><button class="btn gray" onclick="stopWork()">🏃 下班</button><button class="btn gray" onclick="setHomeJob()">🏢 设常驻</button></div><div id="ecoInfo" class="tip" style="margin-top:6px"></div></div>
+      <div class="set-group" id="ecoGroup"><label>💰 钱包</label><div class="row"><button class="btn" onclick="refreshEco()">💰 刷新</button></div><div id="ecoInfo" class="tip" style="margin-top:6px"></div><div class="tip" style="margin-top:4px">上班/下班/设常驻 → 到对应公共建筑里操作</div></div>
       <div class="set-group" id="trailGroup"><label>👣 AI 行动轨迹 &amp; 📣 召唤</label><div class="row"><button class="btn" onclick="openTrail()">👣 查看轨迹</button><button class="btn gray" onclick="summonAI()">📣 召唤我的 AI</button></div><div id="trailList" class="tip" style="margin-top:6px"></div></div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
       <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
@@ -247,6 +258,13 @@ textarea.input { color:#e6f1ff; }
       <button class="btn gray" onclick="hideSms()" style="width:100%;margin-top:8px">关闭</button>
     </div>
   </div>
+  <div class="modal-mask" id="storyMask" onclick="if(event.target===this)hideStoryModal()">
+    <div class="modal">
+      <h3>🎬 剧情簿 · <span id="storyTitle"></span></h3>
+      <div id="storyList"></div>
+      <button class="btn gray" onclick="hideStoryModal()" style="width:100%;margin-top:8px">关闭</button>
+    </div>
+  </div>
   <div class="modal-mask" id="privateMask" onclick="if(event.target===this)hidePrivate()">
     <div class="modal" id="privModal" style="background-size:cover;background-position:center;background-repeat:no-repeat;">
       <h3>🏠 私人空间 · <span id="privRoomName"></span></h3>
@@ -267,7 +285,7 @@ var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
 var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
-var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, rooms: {}, room_access: {}, room_requests: {}, user_ais: {}, work_sessions: {} };
+var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, rooms: {}, room_access: {}, room_requests: {}, user_ais: {}, work_sessions: {}, home_jobs: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
 var editMode = false, placeType = null, pendingEmoji = '🏠', pendingType = null, myHomeBid = null;
 var noteRoom = null, replyNoteId = null, opTarget = null, opType = null;
@@ -277,6 +295,7 @@ var selectedPairColor = 0;
 var editLocked = false;
 var editUnlocked = localStorage.getItem('gc_edit') === '1';
 var smsOut = JSON.parse(localStorage.getItem('gc_sms_out') || '[]');
+var bChatOn = false;
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -303,15 +322,14 @@ function compressImage(dataUrl, maxW, quality, cb){
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
-// ===== 短信（微信风格） =====
+// ===== 短信 =====
 function saveSmsOut(){ localStorage.setItem('gc_sms_out', JSON.stringify(smsOut)); }
 function openSms(){ document.getElementById('smsMask').classList.add('show'); loadSms(); }
 function hideSms(){ document.getElementById('smsMask').classList.remove('show'); }
 function smsTo(name){ document.getElementById('smsTo').value = name; openSms(); }
 function loadSms(){
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
-    var got = d.sms||[];
-    var rows = [];
+    var got = d.sms||[]; var rows = [];
     got.forEach(function(m){ rows.push({mine:false, from:m.from, text:m.text, time:m.time}); });
     smsOut.forEach(function(m){ rows.push({mine:true, from:userName, text:m.text, time:m.time}); });
     rows.sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
@@ -323,8 +341,7 @@ function loadSms(){
       var b=document.createElement('div'); b.className='sms-bubble'; b.textContent=m.text;
       var t=document.createElement('span'); t.className='sms-time'; t.textContent=(m.time||'').slice(11,16);
       if(!m.mine){ b.title='回复 '+m.from; b.style.cursor='pointer'; b.onclick=function(){ document.getElementById('smsTo').value=m.from; }; }
-      row.appendChild(b); row.appendChild(t);
-      el.appendChild(row);
+      row.appendChild(b); row.appendChild(t); el.appendChild(row);
     });
     el.scrollTop=el.scrollHeight;
     document.getElementById('smsDot').style.display='none';
@@ -335,17 +352,40 @@ function sendSms(){
   if(!to){ toast('填收件人名字'); return; }
   if(!text){ toast('写点内容'); return; }
   api('/api/sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sender:userName,to:to,text:text})}).then(function(){
-    smsOut.push({to:to,text:text,time:new Date().getFullYear()+'-'+('0'+(new Date().getMonth()+1)).slice(-2)+'-'+('0'+new Date().getDate()).slice(-2)+' '+new Date().toTimeString().slice(0,8)});
-    saveSmsOut(); document.getElementById('smsText').value='';
-    toast('📩 已发给 '+to); loadSms();
+    var now=new Date(); smsOut.push({to:to,text:text,time:now.getFullYear()+'-'+('0'+(now.getMonth()+1)).slice(-2)+'-'+('0'+now.getDate()).slice(-2)+' '+now.toTimeString().slice(0,8)});
+    saveSmsOut(); document.getElementById('smsText').value=''; toast('📩 已发给 '+to); loadSms();
   }).catch(function(e){ toast('❌ '+e.message); });
 }
 function checkSms(){
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
-    var n = (d.sms||[]).length;
-    var shown = document.getElementById('smsList');
+    var n = (d.sms||[]).length; var shown = document.getElementById('smsList');
     if(n>0 && !(shown && shown.textContent)) document.getElementById('smsDot').style.display='';
   }).catch(function(){});
+}
+// ===== 建筑对话框 =====
+function hallRoomOf(bid){ var b=mapData.buildings[bid]; return (b?b.name:'')+'·会客厅'; }
+function toggleBChat(){ bChatOn=!bChatOn; document.getElementById('bChatWrap').style.display = bChatOn?'flex':'none'; if(bChatOn) loadBChat(); }
+function loadBChat(){
+  if(!currentBuilding || !bChatOn) return;
+  var hall = hallRoomOf(currentBuilding);
+  document.getElementById('bChatTitle').textContent = hall;
+  api('/api/messages?room='+encodeURIComponent(hall)+'&user='+encodeURIComponent(userName)).then(function(d){
+    var el=document.getElementById('bChatList'); el.innerHTML='';
+    (d.messages||[]).forEach(function(m){ el.appendChild(renderBMsg(m)); });
+    el.scrollTop=el.scrollHeight;
+  }).catch(function(){});
+}
+function renderBMsg(m){
+  var d=document.createElement('div'); var isMe=m.sender===userName; d.style.cssText='display:flex;margin-bottom:8px;'+(isMe?'justify-content:flex-end;':'');
+  var b=document.createElement('div');
+  if(m.sender==='system'){ b.style.cssText='background:transparent;color:#6d8bb0;font-size:12px;text-align:center;width:100%'; b.textContent=m.content; }
+  else { b.style.cssText='max-width:75%;padding:7px 11px;border-radius:9px;font-size:14px;line-height:1.5;word-break:break-word;background:'+(isMe?'#95ec69':'#1c2f4d')+';color:'+(isMe?'#000':'#e6f1ff')+';'+(isMe?'':'border:1px solid rgba(255,255,255,.1);'); b.textContent=m.content; }
+  d.appendChild(b); return d;
+}
+function sendBMsg(){
+  var inp=document.getElementById('bChatInput'); var content=inp.value.trim(); if(!content) return;
+  var hall = hallRoomOf(currentBuilding);
+  api('/api/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sender:userName,content:content,role:'user',room:hall})}).then(function(){ inp.value=''; loadBChat(); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function openTrail(){
   var today = new Date(); var key = 'gc_trail_'+today.getFullYear()+today.getMonth()+today.getDate();
@@ -380,7 +420,7 @@ function goToTrailSpot(room, tab){
   showChat();
   setTimeout(function(){ privTab=tab; togglePrivate(); }, 400);
 }
-// ===== 经济系统（钱包/工作/常驻） =====
+// ===== 经济系统 =====
 function refreshEco(){
   api('/api/economy?user='+encodeURIComponent(userName)).then(function(d){
     var info = document.getElementById('ecoInfo');
@@ -395,36 +435,33 @@ function refreshEco(){
 function workBids(){
   return Object.keys(mapData.buildings).filter(function(bid){ var b=mapData.buildings[bid]; return b.type==='npc' && (b.features||[]).indexOf('work')>=0 && b.salary>0; });
 }
-function goWork(){
-  var wbs = workBids();
-  if(!wbs.length){ toast('还没有可上班的工作建筑（需公共建筑设 💼工作 + 时薪）'); return; }
-  var names = wbs.map(function(bid){ return mapData.buildings[bid].name+'（时薪'+mapData.buildings[bid].salary+'）'; });
-  var pick = prompt('去哪里上班？\n'+names.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
-  var bid = wbs[parseInt(pick||'1',10)-1]; if(!bid) return;
-  var h = parseInt(prompt('上多久？（1/2/4 小时）','2')||'2',10);
-  api('/api/work/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName,building_id:bid,hours:h})}).then(function(d){ toast('✅ '+d.msg); refreshEco(); }).catch(function(e){ toast('❌ '+e.message); });
+function goWorkHere(){
+  var b = mapData.buildings[currentBuilding];
+  if(!b || b.type!=='npc' || (b.features||[]).indexOf('work')<0 || !b.salary){ toast('这个建筑没有工作功能'); return; }
+  var h = parseInt(prompt('在这里上班多久？（1/2/4 小时）','2')||'2',10);
+  api('/api/work/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName,building_id:currentBuilding,hours:h})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
-function stopWork(){
-  api('/api/work/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName})}).then(function(d){ toast('✅ '+d.msg); refreshEco(); }).catch(function(e){ toast('❌ '+e.message); });
+function stopWorkHere(){
+  api('/api/work/stop',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
-function setHomeJob(){
-  var ais = mapData.user_ais[userName]||[];
-  var targets = [userName].concat(ais);
-  var tp = prompt('给谁设常驻工作？\n'+targets.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
+function setHomeJobHere(){
+  var b = mapData.buildings[currentBuilding]; if(!b) return;
+  // 列所有真人 + 所有AI
+  var targets = [];
+  Object.keys(mapData.user_ais||{}).forEach(function(u){ targets.push(u); (mapData.user_ais[u]||[]).forEach(function(a){ targets.push(a); }); });
+  if(!targets.length){ toast('还没有成员'); return; }
+  targets = targets.filter(function(v,i){ return targets.indexOf(v)===i; });
+  var tp = prompt('设置「'+b.name+'」为谁的常驻工作？\n'+targets.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
   var tname = targets[parseInt(tp||'1',10)-1]; if(!tname) return;
-  var wbs = workBids();
-  if(!wbs.length){ toast('还没有可工作建筑'); return; }
-  var names = wbs.map(function(bid){ return mapData.buildings[bid].name; });
-  var pick = prompt('选「'+tname+'」的常驻工作场所：\n'+names.map(function(n,i){return (i+1)+'. '+n;}).join('\n'),'1');
-  var bid = wbs[parseInt(pick||'1',10)-1]; if(!bid) return;
-  api('/api/home_jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ai:tname===userName?'':tname,building_id:bid})}).then(function(d){ toast('✅ '+d.msg); refreshEco(); }).catch(function(e){ toast('❌ '+e.message); });
+  var isAi = Object.keys(mapData.user_ais||{}).some(function(u){ return (mapData.user_ais[u]||[]).indexOf(tname)>=0; });
+  api('/api/home_jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:isAi?'':tname,ai:isAi?tname:'',building_id:currentBuilding})}).then(function(d){ toast('✅ '+tname+' 常驻于 '+b.name); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function setBuildingFeatures(){
   var b = mapData.buildings[currentBuilding];
   if(!b || b.type!=='npc'){ toast('只有公共建筑可以设置功能'); return; }
   var cur = b.features||[];
-  var f = prompt('功能（逗号分隔，可填 work/shop/fun 或中文 工作/购物/娱乐）：', cur.join(',')||'work');
-  var feats = (f||'').split(/[,，]/).map(function(s){ return s.trim(); }).map(function(s){ return ({'工作':'work','购物':'shop','娱乐':'fun'}[s]||s); }).filter(function(s){ return ['work','shop','fun'].indexOf(s)>=0; });
+  var f = prompt('功能（逗号分隔，可填 work/shop/fun/date 或中文 工作/购物/娱乐/约会）：', cur.join(',')||'work');
+  var feats = (f||'').split(/[,，]/).map(function(s){ return s.trim(); }).map(function(s){ return ({'工作':'work','购物':'shop','娱乐':'fun','约会':'date'}[s]||s); }).filter(function(s){ return ['work','shop','fun','date'].indexOf(s)>=0; });
   var sal = parseFloat(prompt('时薪（金币/小时，0=不可工作）：', b.salary||50)||'0');
   api('/api/building/features',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,features:feats,salary:sal})}).then(function(d){ toast('✅ '+d.msg); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
@@ -524,7 +561,7 @@ function goBackFromChat(){
   if(b){ for(var k in mapData.buildings){ if(mapData.buildings[k]===b){ openBuilding(k); return; } } }
   showMap();
 }
-function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); }
+function showChat(){ ['mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('chatView').style.display='flex'; loadMessages(false); updateRoomUI(); bChatOn=false; }
 function showMap(){ ['chatView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('mapView').style.display='flex'; currentRegion=null; exitModes(); loadMap(); }
 function showRegion(name){ currentRegion=name; ['chatView','mapView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('regionView').style.display='flex'; exitModes(); renderRegion(); }
 function showBuilding(bid){ currentBuilding=bid; ['chatView','mapView','regionView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('buildingView').style.display='flex'; exitModes(); renderBuilding(); }
@@ -542,10 +579,8 @@ function renderMap(){
     else {
       img.style.display='none';
       var cv=document.getElementById('mapCanvas');
-      cv.style.background='#0b1526';
-      cv.style.width='100%'; cv.style.height='100%';
-      cv.dataset.w=document.getElementById('mapStage').clientWidth||360;
-      cv.dataset.h=document.getElementById('mapStage').clientHeight||640;
+      cv.style.background='#0b1526'; cv.style.width='100%'; cv.style.height='100%';
+      cv.dataset.w=document.getElementById('mapStage').clientWidth||360; cv.dataset.h=document.getElementById('mapStage').clientHeight||640;
       cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0;
       renderMarkers('mapCanvas','map',null);
       toast('⚠️ 未找到地图底图，已用暗色背景代替（可正常使用）');
@@ -581,10 +616,8 @@ function renderRegion(){
     if(idx>=cands.length){
       img.style.display='none';
       var cv=document.getElementById('regionCanvas');
-      cv.style.background='#0b1526';
-      cv.style.width='100%'; cv.style.height='100%';
-      cv.dataset.w=document.getElementById('regionStage').clientWidth||360;
-      cv.dataset.h=document.getElementById('regionStage').clientHeight||640;
+      cv.style.background='#0b1526'; cv.style.width='100%'; cv.style.height='100%';
+      cv.dataset.w=document.getElementById('regionStage').clientWidth||360; cv.dataset.h=document.getElementById('regionStage').clientHeight||640;
       cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0;
       renderMarkers('regionCanvas','region',currentRegion);
       toast('⚠️ 分区图未找到，已用暗色背景代替');
@@ -619,7 +652,7 @@ function renderMarkers(canvasId, scope, regionName){
     var cls='holo '+(b.type==='npc'?'npc':'home')+(isHome?' homepink':'')+(opType==='building'&&opTarget===bid?' selected':'');
     var m=document.createElement('div'); m.className=cls;
     m.style.left=b.x+'%'; m.style.top=b.y+'%';
-    var feats=(b.features||[]).map(function(f){return {work:'💼',shop:'🛍️',fun:'🎮'}[f]||'';}).join('');
+    var feats=(b.features||[]).map(function(f){return {work:'💼',shop:'🛍️',fun:'🎮',date:'💕'}[f]||'';}).join('');
     m.innerHTML='<span class="core">'+(isHome?'💗':b.emoji)+feats+'</span><span class="lbl">'+esc(b.name)+'</span>';
     m.onclick=function(){ if(placeType){cancelPlace();return;} if(editMode&&canEdit()){openOp('building',bid);} else { openBuilding(bid); } };
     canvas.appendChild(m);
@@ -775,14 +808,13 @@ function renderBuilding(){
     html+='<div style="background:#14283f;border:1px solid rgba(255,200,80,.4);border-radius:10px;padding:10px;margin:8px 0"><div style="display:flex;align-items:center;gap:8px"><b style="color:#ffd166">📢 公告栏</b>'+(ce?'<span style="cursor:pointer;font-size:14px;color:#7fd0ff;margin-left:auto" onclick="setBuildingNotice()">✏️</span>':'')+'</div><div class="tip" style="margin-top:4px;white-space:pre-wrap">'+esc(b.notice||'（暂无公告）')+'</div></div>';
   }
   html+='<div class="section-title">'+(isPublic?'🏛️ 创建者：'+esc(b.owner||'?') : '👑 主人：'+esc(b.owner||'?'))+'</div>';
-  if(ce && isPublic){
-    var feats=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐'}[f]||f; }).join(' ');
+  if(isPublic){
+    var feats=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐',date:'💕约会'}[f]||f; }).join(' ');
     html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><button class="btn" onclick="setBuildingFeatures()">⚙️ 功能设置</button><span class="tip" style="flex:1">'+(feats||'暂无功能')+' · 时薪：'+((b.salary||0).toFixed(0))+'</span></div>';
-  } else if(isPublic){
-    var feats2=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐'}[f]||f; }).join(' ');
-    if(feats2) html+='<div style="margin:10px 0"><span class="tip">⚙️ '+(feats2)+' · 时薪：'+((b.salary||0).toFixed(0))+'</span></div>';
+    html+='<div class="home-actions" style="margin:8px 0"><button class="act-btn" onclick="setHomeJobHere()">🏠 常驻</button><button class="act-btn" onclick="goWorkHere()">💼 上班</button><button class="act-btn" onclick="stopWorkHere()">🏃 下班</button><button class="act-btn" onclick="toggleBChat()">💬 对话</button></div>';
+    var hjHere = Object.keys(mapData.home_jobs||{}).filter(function(n){ return mapData.home_jobs[n]===b.name; });
+    if(hjHere.length) html+='<div style="margin:4px 0"><span class="tip">🏠 常驻于此：'+hjHere.map(esc).join('、')+'</span></div>';
   }
-  // 在此工作的人（点击可发短信）
   var wsNames = Object.keys(mapData.work_sessions||{}).filter(function(n){ return mapData.work_sessions[n].building_id===currentBuilding; });
   if(wsNames.length){
     html+='<div style="margin:8px 0"><div class="tip" style="margin-bottom:6px">👔 正在此工作（点击发短信）：</div><div style="display:flex;gap:10px;flex-wrap:wrap">';
@@ -816,9 +848,20 @@ function renderBuilding(){
   }
   html+='<div class="section-title">👥 NPC（'+((mapData.npcs[currentBuilding]||[]).length)+' 人）'+(ce?'<span style="cursor:pointer;font-size:16px;margin-left:8px" onclick="addNpcPrompt()">➕</span>':'')+'</div>';
   (mapData.npcs[currentBuilding]||[]).forEach(function(n){ html+='<div class="npc-card"><span class="n-emoji">'+esc(n.emoji)+'</span><div><div class="n-name">'+esc(n.name)+'</div><div class="n-desc">'+esc(n.desc||'')+'</div></div>'+(ce?'<span style="cursor:pointer;color:#7fd0ff;font-size:14px;margin-left:auto" onclick="editNpc(\''+esc(n.name)+'\')">✏️</span><span style="cursor:pointer;color:#ff6b6b;font-size:14px;margin-left:8px" onclick="deleteNpc(\''+esc(n.name)+'\')">🗑️</span>':'')+'</div>'; });
-  html+='<div class="section-title">🎬 剧情簿</div><button class="btn" style="width:100%;margin-bottom:8px" onclick="loadStory()">📖 查看剧情簿</button>';
+  html+='<div style="margin:10px 0"><button class="btn" style="width:100%" onclick="loadStoryModal()">🎬 剧情簿（'+((mapData.stories?0:0))+ '条）</button></div>';
   el.innerHTML=html;
 }
+function loadStoryModal(){
+  var b=mapData.buildings[currentBuilding]; if(!b) return;
+  document.getElementById('storyTitle').textContent=b.name;
+  api('/api/story?building_id='+encodeURIComponent(currentBuilding)).then(function(d){
+    var sts=d.stories||[]; var el=document.getElementById('storyList'); el.innerHTML='';
+    if(!sts.length){ el.innerHTML='<div class="tip">剧情簿还是空的，等 AI 来逛吧～</div>'; }
+    else { sts.slice().reverse().forEach(function(s){ el.innerHTML+='<div class="story-card"><div class="s-time">'+esc(s.time)+'</div><div class="s-author">'+esc(s.author)+'</div><div class="s-text">'+esc(s.text)+'</div></div>'; }); }
+    document.getElementById('storyMask').classList.add('show');
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
+function hideStoryModal(){ document.getElementById('storyMask').classList.remove('show'); }
 function grantUserDirect(room,user,allow){
   var b=mapData.buildings[currentBuilding];
   api('/api/room/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,owner:b.owner,user:user,allow:allow})}).then(function(){ toast(allow?'✅ 已同意 '+user:'已拒绝 '+user); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
@@ -967,16 +1010,6 @@ function addNpcPrompt(){
   api('/api/npc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,emoji:emoji,desc:desc})}).then(function(){ toast('✅ NPC 已加入'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function deleteNpc(name){ api('/api/npc/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(){ loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); }); }
-function loadStory(){
-  api('/api/story?building_id='+encodeURIComponent(currentBuilding)).then(function(d){
-    var sts=d.stories||[]; var el=document.getElementById('bvBody');
-    var html=el.innerHTML.split('<div class="section-title">🎬 剧情簿</div>')[0];
-    html+='<div class="section-title">🎬 剧情簿</div>';
-    if(!sts.length){ html+='<div class="tip">剧情簿还是空的，等 AI 来逛吧～</div>'; }
-    else { sts.slice().reverse().forEach(function(s){ html+='<div class="story-card"><div class="s-time">'+esc(s.time)+'</div><div class="s-author">'+esc(s.author)+'</div><div class="s-text">'+esc(s.text)+'</div></div>'; }); }
-    el.innerHTML=html;
-  }).catch(function(e){ toast('❌ '+e.message); });
-}
 function setMyHome(){
   hideBuildSheet(); var list=Object.keys(mapData.buildings||{});
   if(!list.length){ toast('还没有建筑，先建一个'); return; }
@@ -1000,18 +1033,6 @@ function setRoomBgHere(){
     f.click();
   } else {
     var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(currentRoom,url.trim());
-  }
-}
-function setBgPrompt(){
-  var rooms=(mapData.buildings[currentBuilding]||{}).rooms||[];
-  if(!rooms.length){ toast('先建一个房间'); return; }
-  var room=prompt('给哪个房间设背景？',rooms[0]); if(!room) return;
-  if(confirm('📷 直接选择本地图片做背景？\n（取消则输入图片网址）')){
-    var f=document.createElement('input'); f.type='file'; f.accept='image/*';
-    f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result, 1200, 0.8, function(small){ saveBg(room, small); }); }; reader.readAsDataURL(file); };
-    f.click();
-  } else {
-    var url=prompt('背景图片网址：',''); if(url&&url.trim()) saveBg(room,url.trim());
   }
 }
 function saveBg(room,image){ api('/api/room/bg',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,image:image})}).then(function(){ toast('🖼️ 背景已设置！'); loadMapData(); if(currentRoom===room) applyBg(room); }).catch(function(e){ toast('❌ '+e.message); }); }
@@ -1169,7 +1190,7 @@ function init(){
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
   worldSnapshot();
-  setInterval(function(){ loadMessages(true); heartbeat(); }, 3000);
+  setInterval(function(){ loadMessages(true); heartbeat(); if(bChatOn) loadBChat(); }, 3000);
   setInterval(checkSms, 10000);
   setInterval(worldSnapshot, 1800000);
 }
