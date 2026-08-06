@@ -58,6 +58,8 @@ goods: Dict[str, List[Dict]] = {}
 backpacks: Dict[str, List[Dict]] = {}
 room_decor: Dict[str, List[Dict]] = {}
 ai_check_ts: float = time.time()
+# ===== 私信系统 =====
+sms: Dict[str, List[Dict]] = {}   # 收件人 -> [{from, text, time}]
 
 
 def save_base64_image(data: str, prefix: str) -> str:
@@ -76,7 +78,7 @@ def save_base64_image(data: str, prefix: str) -> str:
 
 
 def collect_all_data() -> dict:
-    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor}
+    return {"rooms": rooms, "messages": messages, "avatars": avatars, "time_settings": time_settings, "regions": regions, "buildings": buildings, "npcs": npcs, "stories": stories, "notes": notes, "diaries": diaries, "room_bg": room_bg, "building_seq": building_seq, "note_seq": note_seq, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "edit_pwd": edit_pwd, "trails": trails, "wallets": wallets, "work_sessions": work_sessions, "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks, "room_decor": room_decor, "sms": sms}
 
 
 def save_data():
@@ -133,6 +135,7 @@ def load_data():
         wallets.update(data.get("wallets", {})); work_sessions.update(data.get("work_sessions", {}))
         home_jobs.update(data.get("home_jobs", {})); goods.update(data.get("goods", {}))
         backpacks.update(data.get("backpacks", {})); room_decor.update(data.get("room_decor", {}))
+        sms.update(data.get("sms", {}))
         print(f"[SAVE] 已恢复数据（房间 {len(rooms)}）", flush=True)
     except Exception as e:
         print(f"[SAVE] 加载失败: {e}", flush=True)
@@ -140,6 +143,17 @@ def load_data():
 
 load_data()
 threading.Thread(target=snapshot_loop, daemon=True).start()
+
+
+def work_loop():
+    while True:
+        time.sleep(30)
+        try:
+            settle_work()
+            auto_ai_work()
+        except Exception as e:
+            print(f"[WORK] 结算异常: {e}", flush=True)
+threading.Thread(target=work_loop, daemon=True).start()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -297,8 +311,8 @@ def settle_work():
             wallets[name] = wallets.get(name, 0.0) + earn
             b = buildings.get(s["building_id"], {})
             text = f"💰 {name} 完成了在「{b.get('name','某处')}」的 {s['hours']} 小时工作，赚到 {earn:.0f} 金币！"
-            post_building_msg(s["building_id"], text)   # ① 建筑会客厅
-            post_building_msg(None, text)                 # ② 公共大厅
+            post_building_msg(s["building_id"], text)
+            post_building_msg(None, text)
             del work_sessions[name]
             changed = True
     if changed: save_data()
@@ -327,15 +341,8 @@ def auto_ai_work():
                 changed = True
     if changed: save_data()
 
-def work_loop():
-    while True:
-        time.sleep(30)
-        try:
-            settle_work()
-            auto_ai_work()
-        except Exception as e:
-            print(f"[WORK] 结算异常: {e}", flush=True)
-threading.Thread(target=work_loop, daemon=True).start()
+def workers_at(bid: str) -> List[str]:
+    return [n for n, s in work_sessions.items() if s.get("building_id") == bid]
 
 class Message(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = "匿名"
@@ -373,7 +380,8 @@ class WorkStop(BaseModel): name: str
 class HomeJob(BaseModel): user: str; ai: str = ""; building_id: str = ""
 class BuildingFeatures(BaseModel): building_id: str; features: List[str] = []; salary: float = 0
 class BuildingNotice(BaseModel): building_id: str; notice: str = ""
-class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None
+class SmsSend(BaseModel): sender: str; to: str; text: str
+class BackupData(BaseModel): rooms: Optional[Dict] = None; messages: Optional[Dict] = None; avatars: Optional[Dict] = None; time_settings: Optional[Dict] = None; regions: Optional[Dict] = None; buildings: Optional[Dict] = None; npcs: Optional[Dict] = None; stories: Optional[Dict] = None; notes: Optional[Dict] = None; diaries: Optional[Dict] = None; room_bg: Optional[Dict] = None; building_seq: Optional[int] = 0; note_seq: Optional[int] = 0; room_access: Optional[Dict] = None; room_requests: Optional[Dict] = None; user_ais: Optional[Dict] = None; edit_pwd: Optional[str] = None; trails: Optional[Dict] = None; wallets: Optional[Dict] = None; work_sessions: Optional[Dict] = None; home_jobs: Optional[Dict] = None; goods: Optional[Dict] = None; backpacks: Optional[Dict] = None; room_decor: Optional[Dict] = None; sms: Optional[Dict] = None
 class RoomApply(BaseModel): room: str; applicant: str
 class RoomGrant(BaseModel): room: str; owner: str; user: str; allow: bool = True
 class RoomRevoke(BaseModel): room: str; owner: str; user: str
@@ -398,6 +406,21 @@ async def get_trails(user: str = ""):
 @app.get("/api/economy")
 async def get_economy(user: str = ""):
     return {"wallet": wallets.get(user, 0.0), "working": work_sessions.get(user), "home_jobs": home_jobs, "goods": goods, "backpacks": backpacks.get(user, []), "wallets": wallets, "work_sessions": work_sessions}
+
+# ===== 私信 =====
+@app.get("/api/sms")
+async def get_sms(user: str = ""):
+    return {"sms": sms.get(user, [])}
+
+@app.post("/api/sms")
+async def send_sms(data: SmsSend):
+    sender = (data.sender or "").strip(); to = (data.to or "").strip(); text = (data.text or "").strip()
+    if not sender or not to: raise HTTPException(status_code=400, detail="收发人不能为空")
+    if not text: raise HTTPException(status_code=400, detail="短信内容不能为空")
+    sms.setdefault(to, []).append({"from": sender, "text": text, "time": get_current_time()})
+    if len(sms[to]) > 200: sms[to] = sms[to][-200:]
+    save_data()
+    return {"ok": True, "msg": f"已私信 {to}"}
 
 @app.post("/api/work/start")
 async def work_start(data: WorkStart):
@@ -490,6 +513,7 @@ async def restore_backup(data: BackupData):
     if data.goods is not None: goods.clear(); goods.update(data.goods)
     if data.backpacks is not None: backpacks.clear(); backpacks.update(data.backpacks)
     if data.room_decor is not None: room_decor.clear(); room_decor.update(data.room_decor)
+    if data.sms is not None: sms.clear(); sms.update(data.sms)
     building_seq = data.building_seq or 0; note_seq = data.note_seq or 0
     save_data(); do_snapshot()
     return {"ok": True, "msg": "数据已恢复！"}
@@ -615,7 +639,7 @@ async def remove_member(data: RemoveMember):
 
 @app.get("/api/map")
 async def get_map():
-    return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "rooms": rooms, "goods": goods, "backpacks": backpacks}
+    return {"regions": regions, "buildings": buildings, "npcs": npcs, "room_bg": room_bg, "room_access": room_access, "room_requests": room_requests, "user_ais": user_ais, "rooms": rooms, "goods": goods, "backpacks": backpacks, "work_sessions": work_sessions, "home_jobs": home_jobs}
 
 @app.post("/api/map/region")
 async def create_region(data: RegionCreate):
@@ -869,7 +893,7 @@ def mcp_log(msg: str): print(f"[MCP] {msg}", flush=True)
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "44.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.0.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -877,14 +901,14 @@ async def mcp_endpoint(request: Request):
     method = body.get("method"); params = body.get("params", {}); request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "44.1.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "GroupChat", "version": "45.0.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"): return Response(status_code=202)
     if method == "ping": return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
     if method == "tools/list":
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": [
             {"name": "group_send", "description": "发送消息。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选"}}, "required": ["sender", "content"]}},
-            {"name": "group_query", "description": "查看一切信息。type：map / building(需building_id) / room(需room) / npc(需building_id) / story(需building_id) / notes(需room) / diaries(需room) / messages(需room) / members / current_room / rooms / room_status。sender 必填你的名字（用于判断私密房间权限）。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（如 黎深），否则私密房间看不到"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
-            {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string", "description": "你的名字"}}, "required": ["type", "content", "sender"]}},
+            {"name": "group_query", "description": "查看一切信息。type：map / building(需building_id) / room(需room) / npc(需building_id) / story(需building_id) / notes(需room) / diaries(需room) / messages(需room) / sms(查看我的私信) / workers(全城工作状态) / members / current_room / rooms / room_status。sender 必填你的名字（用于判断私密房间权限）。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（如 黎深），否则私密房间看不到"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+            {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id) / sms(发私信,需room=收件人名字,content=短信内容)", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string", "description": "你的名字"}}, "required": ["type", "content", "sender"]}},
             {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}}
         ]}})
     if method == "tools/call":
@@ -932,7 +956,9 @@ async def mcp_query(args: dict, request_id):
             desc = (b.get("description") or "").split("\n")[0][:40]
             feats = "".join({"work":"💼","shop":"🛍️","fun":"🎮"}.get(f,"") for f in (b.get("features") or []))
             extra = f"（时薪{b['salary']:.0f}）" if b.get("salary") else ""
-            text += f"\n  [{bid2}] {b['emoji']} {b['name']}（{ntype}，创建者：{owner}）{feats}{extra}\n      📝 {desc or '（暂无简介）'}\n"
+            wl = workers_at(bid2)
+            who = f" 👔{len(wl)}人" if wl else ""
+            text += f"\n  [{bid2}] {b['emoji']} {b['name']}（{ntype}，创建者：{owner}）{feats}{extra}{who}\n      📝 {desc or '（暂无简介）'}\n"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "building":
         if bid not in buildings: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 建筑不存在"}]}})
@@ -943,6 +969,10 @@ async def mcp_query(args: dict, request_id):
         text = f"🏛️ {b['emoji']} {b['name']}（{ntype}）\n\n📝 简介：{b.get('description') or '（暂无简介）'}\n\n👑 创建者：{b.get('owner') or '?'}\n"
         if feats: text += f"\n⚙️ 功能：{feats}\n"
         if b.get("salary"): text += f"💼 时薪：{b['salary']:.0f} 金币\n"
+        wl = workers_at(bid)
+        if wl:
+            left = max(0, int(work_sessions[wl[0]]["start_ts"] + work_sessions[wl[0]]["hours"]*3600 - time.time()))
+            text += f"👔 正在此工作：{'、'.join(wl)}（剩 {left//60} 分钟）\n"
         glist = goods.get(bid, [])
         if glist:
             text += "\n🛍️ 在售商品：\n" + "\n".join([f"  {g.get('emoji','')} {g.get('name','')}（{g.get('price',0):.0f}金币）" for g in glist])
@@ -967,6 +997,19 @@ async def mcp_query(args: dict, request_id):
         msgs = sorted(messages.get(room, []), key=lambda x: x.get("time", ""))[-count:]
         text = f"🚪 房间「{room_label(room)}」\n\n📝 简介：{desc}\n\n💬 最近消息：\n"
         text += "\n".join([f"  {m['sender']}: {m['content']} ({m['time']})" for m in msgs]) if msgs else "  （暂无消息）"
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
+    if t == "sms":
+        items = sms.get(sender, [])
+        text = f"📩 {sender} 的私信（{len(items)} 条）：\n"
+        text += "\n".join([f"· {m['from']}：{m['text']}（{m['time']}）" for m in items]) if items else "  （暂无私信）"
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
+    if t == "workers":
+        text = "👔 全城工作状态：\n"
+        if not work_sessions: text += "  现在没有人上班\n"
+        for n, s in work_sessions.items():
+            b = buildings.get(s.get("building_id"), {})
+            left = max(0, int(s["start_ts"] + s["hours"]*3600 - time.time()))
+            text += f"  - {n} 正在「{b.get('name','?')}」工作，还剩 {left//60} 分钟\n"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "npc":
         items = npcs.get(bid, []); bname = buildings.get(bid, {}).get("name", bid)
@@ -998,6 +1041,9 @@ async def mcp_query(args: dict, request_id):
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "current_room":
         text = f"📍 真人当前在：{room_label(active_room.get('current', 'main'))}"
+        if sender and sender in work_sessions:
+            s = work_sessions[sender]; b = buildings.get(s.get("building_id"), {})
+            text += f"\n👔 你正在「{b.get('name','?')}」工作，专心上班，不要乱跑！"
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": text}]}})
     if t == "rooms":
         text = "📋 房间列表：\n"
@@ -1014,6 +1060,12 @@ async def mcp_query(args: dict, request_id):
 
 async def mcp_write(args: dict, request_id):
     t = args.get("type", "note"); room = clean_room_name(args.get("room", "main")); content = args.get("content", ""); sender = args.get("sender", "神秘人"); bid = args.get("building_id", ""); note_id = args.get("note_id", "")
+    if t == "sms":
+        if not content: return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": "❌ 短信内容不能为空"}]}})
+        sms.setdefault(room, []).append({"from": sender, "text": content, "time": get_current_time()})
+        if len(sms[room]) > 200: sms[room] = sms[room][-200:]
+        save_data()
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"📩 已私信 {room}（优先级高，请对方先回）"}]}})
     if t == "note":
         if not room_exists(room): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"❌ 房间「{room}」不存在"}]}})
         if not can_view_room(room, sender): return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": f"🔒 房间「{room}」是私密的，你暂时不能在这里贴便签。"}]}})
