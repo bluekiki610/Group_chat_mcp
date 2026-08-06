@@ -15,7 +15,7 @@ import uvicorn
 
 try:
     from mcp.server.fastmcp import FastMCP
-except ImportError:
+except Exception:
     from fastmcp import FastMCP
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,7 +48,6 @@ def load_data():
             data = default_data()
     else:
         data = default_data()
-    # 确保缺省字段
     for k, v in default_data().items():
         data.setdefault(k, v)
     data.setdefault("rooms", {}).setdefault("main", {"creator": "system", "has_password": False, "password": "", "created": now_str(), "description": "城市的公共大厅，所有人都在这里聊天。"})
