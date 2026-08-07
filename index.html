@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.7</title>
+<title>人❤️机の小窝 · 临空市 v47.8</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -151,7 +151,8 @@ textarea.input { color:#e6f1ff; }
 .sms-row .sms-bubble { max-width:72%; padding:8px 12px; border-radius:8px; font-size:15px; line-height:1.5; word-break:break-word; }
 .sms-row.mine .sms-bubble { background:#95ec69; color:#000; border-top-right-radius:2px; }
 .sms-row.them .sms-bubble { background:#fff; color:#000; border-top-left-radius:2px; }
-.sms-row .sms-time { font-size:10px; color:#999; margin:0 6px; align-self:flex-end; }
+.sms-time-full { text-align:center; font-size:11px; color:#aaa; padding:6px 0 4px; width:100%; }
+.sms-bubble.sms-cont { margin-top:2px; border-top-left-radius:4px; border-top-right-radius:4px; }
 /* 底部导航 */
 .tabbar { display:flex; background:#0a1424; border-top:1px solid rgba(80,180,255,.2); flex-shrink:0; padding-bottom:env(safe-area-inset-bottom); }
 .tabbar .tab { flex:1; text-align:center; padding:7px 0 5px; color:#7fa8cf; font-size:11px; cursor:pointer; }
@@ -459,12 +460,13 @@ function loadSmsList(){
     got.forEach(function(m){ var n=m.from; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:false,text:m.text,time:m.time}); });
     smsOut.forEach(function(m){ var n=m.to; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:true,text:m.text,time:m.time}); });
     var names = Object.keys(contacts);
-    names.sort(function(a,b){ var ta=contacts[a].msgs.length?contacts[a].msgs[contacts[a].msgs.length-1].time:''; var tb=contacts[b].msgs.length?contacts[b].msgs[contacts[b].msgs.length-1].time:''; return tb.localeCompare(ta); });
+    function sortMsgs(arr){ return arr.slice().sort(function(x,y){ return (x.time||'').localeCompare(y.time||''); }); }
+    names.sort(function(a,b){ var ta=sortMsgs(contacts[a].msgs); var tb=sortMsgs(contacts[b].msgs); var ta2=ta.length?ta[ta.length-1].time:''; var tb2=tb.length?tb[tb.length-1].time:''; return tb2.localeCompare(ta2); });
     var el = document.getElementById('smsList'); el.innerHTML='';
     if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:30px 20px">📭 还没有短信<br><span style="font-size:12px">从下方「新朋友」开始聊天吧</span></div>'; }
     else {
       names.forEach(function(n){
-        var c=contacts[n]; var last=c.msgs[c.msgs.length-1];
+        var c=contacts[n]; var sorted=sortMsgs(c.msgs); var last=sorted[sorted.length-1];
         var av=avatars[n];
         var item=document.createElement('div'); item.className='sms-item';
         item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">'+esc((last.mine?'我：':'')+last.text)+'</div></div><div class="s-time">'+esc((last.time||'').slice(5,16))+'</div>';
@@ -507,12 +509,27 @@ function renderConv(){
     rows.sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
     var el = document.getElementById('smsConvList'); el.innerHTML='';
     var av = avatars[smsContact];
-    rows.forEach(function(m){
+    function pt(s){ var t=new Date(String(s).replace(' ','T')+'+08:00'); return isNaN(t.getTime())?0:t.getTime(); }
+    rows.forEach(function(m, i){
+      var prev = i>0 ? rows[i-1] : null;
+      var sameSide = prev && (m.mine===prev.mine);
+      var gap = prev ? (pt(m.time)-pt(prev.time)) : 999999;
+      var groupStart = !(sameSide && gap>=0 && gap<180000);
+      if(groupStart){
+        var tbar=document.createElement('div'); tbar.className='sms-time-full'; tbar.textContent=(m.time||'').slice(5,16); el.appendChild(tbar);
+      }
       var row=document.createElement('div'); row.className='sms-row '+(m.mine?'mine':'them');
-      if(!m.mine){ var avd=document.createElement('div'); avd.style.cssText='width:30px;height:30px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0;margin-right:6px'; avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0)); row.appendChild(avd); }
-      var b=document.createElement('div'); b.className='sms-bubble'; b.textContent=m.text;
-      var t=document.createElement('span'); t.className='sms-time'; t.textContent=(m.time||'').slice(11,16);
-      row.appendChild(b); row.appendChild(t);
+      if(!m.mine){
+        if(groupStart){
+          var avd=document.createElement('div'); avd.style.cssText='width:36px;height:36px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0;margin-right:6px';
+          avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0));
+          row.appendChild(avd);
+        } else {
+          var pad=document.createElement('div'); pad.style.cssText='width:42px;flex-shrink:0'; row.appendChild(pad);
+        }
+      }
+      var b=document.createElement('div'); b.className='sms-bubble'+(groupStart?'':' sms-cont'); b.textContent=m.text;
+      row.appendChild(b);
       el.appendChild(row);
     });
     el.scrollTop=el.scrollHeight;

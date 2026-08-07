@@ -4,6 +4,7 @@ import time
 import random
 import threading
 import shutil
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -132,6 +133,27 @@ def room_time(room: str) -> str:
 
 def is_ai_of(owner: str, name: str) -> bool:
     return name in data["user_ais"].get(owner, [])
+
+def is_ai_name(name: str) -> bool:
+    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。"""
+    for ais in data["user_ais"].values():
+        if name in ais:
+            return True
+    return False
+
+def split_sms(text: str):
+    """把 AI 的回复按换行/句子拆成多条短信（微信一句话一条）。"""
+    text = (text or '').strip()
+    if not text:
+        return [""]
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    if len(lines) > 1:
+        return lines[:10]
+    sentences = re.split(r'(?<=[。！？；～…!?])', text)
+    out = [s.strip() for s in sentences if s.strip()]
+    if len(out) > 1:
+        return out[:10]
+    return [text]
 
 def find_building_of_room(room: str):
     for bid, b in data["buildings"].items():
@@ -885,14 +907,17 @@ async def get_sms(user: str):
 async def send_sms(s: SmsIn):
     if not s.text.strip():
         raise HTTPException(400, "内容不能为空")
-    data["sms"].setdefault(s.to, []).append({"from": s.sender, "text": s.text[:500], "time": now_str()})
-    data["sms"][s.to] = data["sms"][s.to][-100:]
+    msgs = split_sms(s.text) if is_ai_name(s.sender) else [s.text[:500]]
+    for t in msgs:
+        if t.strip():
+            data["sms"].setdefault(s.to, []).append({"from": s.sender, "text": t[:500], "time": now_str()})
+    data["sms"][s.to] = data["sms"][s.to][-200:]
     save_data()
     return {"ok": True}
 
 @app.get("/api/contacts")
 async def get_contacts():
-    """返回所有可联系的人：房主 + 真人 + AI + NPC + 短信往来。"""
+    """返回所有可联系的人：房主 + 真人 + AI + 短信往来（NPC 不会回消息，已排除）。"""
     names = set()
     for b in data["buildings"].values():
         if b.get("owner"):
@@ -903,10 +928,6 @@ async def get_contacts():
         for a in ais:
             if a:
                 names.add(a)
-    for npcs in data["npcs"].values():
-        for n in npcs:
-            if n.get("name"):
-                names.add(n["name"])
     for msgs in data["sms"].values():
         for m in msgs:
             if m.get("from"):
@@ -1088,7 +1109,8 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             msgs = data["sms"].get(sender, [])
             if not msgs:
                 return "📭 你没有未读的短信"
-            return "📩 你的私信：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in msgs[-count:])
+            recent = msgs[-20:]
+            return "📩 你的私信（最近20条，请结合上下文一起看，逐条回复）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent)
         if type == "mywork":
             mine = [h for h in data["work_history"] if h.get("name") == sender][-count:][::-1]
             if not mine:
@@ -1152,10 +1174,13 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             to = room.strip()
             if not to:
                 return "❌ 发私信需要 room=收件人名字"
-            data["sms"].setdefault(to, []).append({"from": sender, "text": content[:500], "time": now_str()})
-            data["sms"][to] = data["sms"][to][-100:]
+            msgs = split_sms(content) if is_ai_name(sender) else [content[:1500]]
+            for t in msgs:
+                if t.strip():
+                    data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
+            data["sms"][to] = data["sms"][to][-200:]
             save_data()
-            return f"✅ 已发私信给 {to}"
+            return f"✅ 已发私信给 {to}（{len(msgs)} 条）"
         if type == "work":
             name = room.strip()
             candidates = [bid for bid, b in data["buildings"].items()
@@ -1202,7 +1227,7 @@ def group_access(room: str, sender: str):
 MCP_TOOLS = [
     {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
     {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
-    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。短信会自动按句子拆成多条。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
     {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}},
 ]
 
@@ -1212,7 +1237,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.7"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.8"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1222,7 +1247,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.7"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.8"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
