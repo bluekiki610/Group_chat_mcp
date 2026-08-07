@@ -178,17 +178,20 @@ class RegionIn(BaseModel): label: str; x: float; y: float; image: str = ""
 class RegionDel(BaseModel): label: str
 class BuildingIn(BaseModel): name: str; emoji: str; type: str; region: str = ""; x: float; y: float; owner: str = ""; description: str = ""
 class BuildingRename(BaseModel): building_id: str; name: str
+class BuildingMove(BaseModel): building_id: str; x: float; y: float
 class BuildingDesc(BaseModel): building_id: str; description: str
 class BuildingFeatures(BaseModel): building_id: str; features: list = []; salary: float = 0
 class BuildingNotice(BaseModel): building_id: str; notice: str = ""
 class BuildingDel(BaseModel): building_id: str
 class BuildingRoomIn(BaseModel): building_id: str; name: str
+class BuildingRoomDel(BaseModel): building_id: str; room: str
 class RoomDescIn(BaseModel): room: str; description: str
 class RoomBgIn(BaseModel): room: str; image: str
 class NpcIn(BaseModel): building_id: str; name: str; emoji: str = "👤"; desc: str = ""
 class NpcEdit(BaseModel): building_id: str; name: str; new_name: str; emoji: str; desc: str
 class NpcDel(BaseModel): building_id: str; name: str
 class NoteIn(BaseModel): room: str; author: str; text: str
+class NoteReplyIn(BaseModel): room: str; note_id: str; author: str; text: str
 class DiaryComment(BaseModel): room: str; index: int; author: str; text: str
 class StoryIn(BaseModel): building_id: str; author: str; text: str
 class RoomApply(BaseModel): room: str; applicant: str
@@ -296,6 +299,7 @@ async def get_rooms():
     return {"rooms": out}
 
 @app.post("/api/rooms/create")
+@app.post("/api/rooms")
 async def create_room(rc: RoomCreate):
     name = clean_room_name(rc.name)
     if not name:
@@ -415,6 +419,16 @@ async def add_building(b: BuildingIn):
     save_data()
     return {"ok": True, "building_id": bid}
 
+@app.post("/api/map/building/move")
+async def move_building(m: BuildingMove):
+    b = data["buildings"].get(m.building_id)
+    if not b:
+        raise HTTPException(404, "建筑不存在")
+    b["x"] = max(0, min(100, m.x))
+    b["y"] = max(0, min(100, m.y))
+    save_data()
+    return {"ok": True}
+
 @app.post("/api/map/building/rename")
 async def rename_building(r: BuildingRename):
     b = data["buildings"].get(r.building_id)
@@ -434,6 +448,7 @@ async def building_desc(d: BuildingDesc):
     return {"ok": True}
 
 @app.post("/api/map/building/features")
+@app.post("/api/building/features")
 async def building_features(f: BuildingFeatures):
     b = data["buildings"].get(f.building_id)
     if not b:
@@ -444,6 +459,7 @@ async def building_features(f: BuildingFeatures):
     return {"ok": True, "msg": "功能已设置"}
 
 @app.post("/api/map/building/notice")
+@app.post("/api/building/notice")
 async def building_notice(n: BuildingNotice):
     b = data["buildings"].get(n.building_id)
     if not b:
@@ -481,6 +497,22 @@ async def add_room(r: BuildingRoomIn):
     save_data()
     return {"ok": True, "room": room}
 
+@app.post("/api/map/room/delete")
+async def delete_building_room(d: BuildingRoomDel):
+    bid, room = d.building_id, d.room
+    b = data["buildings"].get(bid)
+    if not b:
+        raise HTTPException(404, "建筑不存在")
+    if room in b.get("rooms", []):
+        b["rooms"].remove(room)
+    data["rooms"].pop(room, None)
+    data["messages"].pop(room, None)
+    data["room_bg"].pop(room, None)
+    data["room_access"].pop(room, None)
+    data["room_requests"].pop(room, None)
+    save_data()
+    return {"ok": True}
+
 @app.post("/api/room/desc")
 async def room_desc(d: RoomDescIn):
     room = clean_room_name(d.room)
@@ -488,6 +520,11 @@ async def room_desc(d: RoomDescIn):
         data["rooms"][room]["description"] = d.description
     save_data()
     return {"ok": True}
+
+@app.get("/api/room/desc")
+async def get_room_desc(room: str = "main"):
+    room = clean_room_name(room)
+    return {"description": data["rooms"].get(room, {}).get("description", "")}
 
 @app.post("/api/room/bg")
 async def room_bg(b: RoomBgIn):
@@ -530,6 +567,15 @@ async def add_note(n: NoteIn):
     save_data()
     return {"ok": True}
 
+@app.post("/api/notes/reply")
+async def reply_note(n: NoteReplyIn):
+    for item in data["notes"].get(n.room, []):
+        if item.get("id") == n.note_id and not item.get("reply"):
+            item["reply"] = {"author": n.author, "text": n.text[:300], "time": now_str()}
+            save_data()
+            return {"ok": True}
+    raise HTTPException(404, "便签不存在或已回复")
+
 @app.get("/api/diaries")
 async def get_diaries(room: str):
     return {"diaries": data["diaries"].get(room, [])}
@@ -568,6 +614,11 @@ async def room_apply(a: RoomApply):
         save_data()
         return {"ok": True, "msg": "申请已提交，等主人同意吧～"}
     return {"ok": True, "msg": "你已经申请过了，等主人同意～"}
+
+@app.get("/api/room/requests")
+async def get_room_requests(room: str = ""):
+    room = clean_room_name(room)
+    return {"requests": data["room_requests"].get(room, [])}
 
 @app.post("/api/room/grant")
 async def room_grant(g: GrantIn):
@@ -1060,7 +1111,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.9"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.0"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1070,7 +1121,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.9"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.0"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
