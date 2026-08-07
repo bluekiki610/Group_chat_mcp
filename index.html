@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.8</title>
+<title>人❤️机の小窝 · 临空市 v47.9</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -146,7 +146,7 @@ textarea.input { color:#e6f1ff; }
 .sms-item .s-prev { font-size:12px; color:#999; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
 .sms-item .s-time { font-size:11px; color:#bbb; flex-shrink:0; }
 .sms-chat { flex:1; overflow-y:auto; padding:10px; background:#ededed; }
-.sms-row { display:flex; margin-bottom:10px; }
+.sms-row { display:flex; margin-bottom:10px; align-items:flex-start; }
 .sms-row.mine { justify-content:flex-end; }
 .sms-row .sms-bubble { max-width:72%; padding:8px 12px; border-radius:8px; font-size:15px; line-height:1.5; word-break:break-word; }
 .sms-row.mine .sms-bubble { background:#95ec69; color:#000; border-top-right-radius:2px; }
@@ -275,13 +275,20 @@ textarea.input { color:#e6f1ff; }
   </div>
   <div class="modal-mask" id="smsMask" onclick="if(event.target===this)hideSms()">
     <div class="modal sms-full" id="smsListModal">
-      <div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
+      <div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="openContacts()">👤 通讯录</span><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
       <div class="sms-list" id="smsList"></div>
     </div>
     <div class="modal sms-full" id="smsConvModal" style="display:none">
       <div class="sms-head"><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="backToSmsList()">← 返回</span><b id="smsConvName"></b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div>
       <div class="sms-chat" id="smsConvList"></div>
       <div style="display:flex;gap:6px;padding:8px 10px;background:#fff;flex-shrink:0"><input id="smsChatInput" placeholder="发短信…" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:15px;outline:none"><button class="btn green" style="margin:0" onclick="sendSmsTo()">发送</button></div>
+    </div>
+  </div>
+  <div class="modal-mask" id="contactsMask" onclick="if(event.target===this)hideContacts()">
+    <div class="modal">
+      <h3>👥 通讯录（点人发短信）</h3>
+      <div id="contactsList"></div>
+      <button class="btn gray" onclick="hideContacts()" style="width:100%;margin-top:8px">关闭</button>
     </div>
   </div>
   <div class="modal-mask" id="bellMask" onclick="if(event.target===this)hideBell()">
@@ -448,6 +455,29 @@ function fillRegionSel(){
 }
 function jumpRegion(){ var v=document.getElementById('regionSel').value; if(v){ showRegion(v); } else { showMap(); } }
 function jumpRegion2(){ var v=document.getElementById('regionSel2').value; if(v){ showRegion(v); } else { showMap(); } }
+// ===== 通讯录 =====
+function allContacts(){
+  var names = {};
+  Object.keys(mapData.buildings||{}).forEach(function(bid){ var o=mapData.buildings[bid].owner; if(o && o!=='system' && o!=='null') names[o]=1; });
+  Object.keys(mapData.user_ais||{}).forEach(function(u){ if(u && u!=='null') names[u]=1; (mapData.user_ais[u]||[]).forEach(function(a){ if(a && a!=='null') names[a]=1; }); });
+  return Object.keys(names).sort();
+}
+function openContacts(){
+  var el=document.getElementById('contactsList'); el.innerHTML='';
+  var list=allContacts();
+  if(!list.length){ el.innerHTML='<div class="tip">还没有成员</div>'; }
+  else {
+    list.forEach(function(n){
+      var av=avatars[n];
+      var item=document.createElement('div'); item.className='sms-item';
+      item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">点我发短信</div></div>';
+      item.onclick=function(){ hideContacts(); openConv(n); };
+      el.appendChild(item);
+    });
+  }
+  document.getElementById('contactsMask').classList.add('show');
+}
+function hideContacts(){ document.getElementById('contactsMask').classList.remove('show'); }
 // ===== 短信（微信式会话，全屏重叠） =====
 function saveSmsOut(){ localStorage.setItem('gc_sms_out', JSON.stringify(smsOut)); }
 function openSms(){ smsContact=null; document.getElementById('smsMask').classList.add('show'); document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsListModal').style.display=''; loadSmsList(); }
@@ -457,13 +487,13 @@ function loadSmsList(){
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
     var got = d.sms||[];
     var contacts = {};
-    got.forEach(function(m){ var n=m.from; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:false,text:m.text,time:m.time}); });
-    smsOut.forEach(function(m){ var n=m.to; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:true,text:m.text,time:m.time}); });
+    got.forEach(function(m){ var n=m.from; if(!n || n==='null') return; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:false,text:m.text,time:m.time}); });
+    smsOut.forEach(function(m){ var n=m.to; if(!n || n==='null') return; if(!contacts[n]) contacts[n]={name:n,msgs:[]}; contacts[n].msgs.push({mine:true,text:m.text,time:m.time}); });
     var names = Object.keys(contacts);
     function sortMsgs(arr){ return arr.slice().sort(function(x,y){ return (x.time||'').localeCompare(y.time||''); }); }
     names.sort(function(a,b){ var ta=sortMsgs(contacts[a].msgs); var tb=sortMsgs(contacts[b].msgs); var ta2=ta.length?ta[ta.length-1].time:''; var tb2=tb.length?tb[tb.length-1].time:''; return tb2.localeCompare(ta2); });
     var el = document.getElementById('smsList'); el.innerHTML='';
-    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:30px 20px">📭 还没有短信<br><span style="font-size:12px">从下方「新朋友」开始聊天吧</span></div>'; }
+    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:30px 20px">📭 还没有短信<br><span style="font-size:12px">点右上角「👤 通讯录」找人发短信</span></div>'; }
     else {
       names.forEach(function(n){
         var c=contacts[n]; var sorted=sortMsgs(c.msgs); var last=sorted[sorted.length-1];
@@ -475,21 +505,6 @@ function loadSmsList(){
       });
     }
     document.getElementById('smsDot').style.display='none';
-    // 追加「新朋友」联系人（没聊过的人也能发短信）
-    api('/api/contacts').then(function(cd){
-      var known = names.slice();
-      var newOnes = (cd.contacts||[]).filter(function(n){ return known.indexOf(n)<0 && n!==userName; });
-      if(newOnes.length){
-        el.innerHTML += '<div style="background:#f7f7f7;padding:8px 12px;font-size:12px;color:#999;border-top:6px solid #f2f2f2">➕ 新朋友（点我打招呼）</div>';
-        newOnes.forEach(function(n){
-          var av2=avatars[n];
-          var item=document.createElement('div'); item.className='sms-item';
-          item.innerHTML='<div class="s-av">'+(av2?'<img src="'+av2+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">还没有聊过，点我开始对话～</div></div>';
-          item.onclick=function(){ openConv(n); };
-          el.appendChild(item);
-        });
-      }
-    }).catch(function(){});
   }).catch(function(){});
 }
 function openConv(name){
@@ -509,6 +524,7 @@ function renderConv(){
     rows.sort(function(a,b){ return (a.time||'').localeCompare(b.time||''); });
     var el = document.getElementById('smsConvList'); el.innerHTML='';
     var av = avatars[smsContact];
+    var myAv = avatars[userName];
     function pt(s){ var t=new Date(String(s).replace(' ','T')+'+08:00'); return isNaN(t.getTime())?0:t.getTime(); }
     rows.forEach(function(m, i){
       var prev = i>0 ? rows[i-1] : null;
@@ -519,7 +535,13 @@ function renderConv(){
         var tbar=document.createElement('div'); tbar.className='sms-time-full'; tbar.textContent=(m.time||'').slice(5,16); el.appendChild(tbar);
       }
       var row=document.createElement('div'); row.className='sms-row '+(m.mine?'mine':'them');
-      if(!m.mine){
+      if(m.mine){
+        if(groupStart){
+          var myAvd=document.createElement('div'); myAvd.style.cssText='width:36px;height:36px;border-radius:50%;background:#0e9f6e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0;margin-left:6px;order:2';
+          myAvd.innerHTML=myAv?'<img src="'+myAv+'" style="width:100%;height:100%;object-fit:cover">':esc((userName||'?').charAt(0));
+          row.appendChild(myAvd);
+        }
+      } else {
         if(groupStart){
           var avd=document.createElement('div'); avd.style.cssText='width:36px;height:36px;border-radius:50%;background:#0e7fd4;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;overflow:hidden;flex-shrink:0;margin-right:6px';
           avd.innerHTML=av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((smsContact||'?').charAt(0));
