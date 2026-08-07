@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.9</title>
+<title>人❤️机の小窝 · 临空市 v47.10</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -81,7 +81,7 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .bchat-bar { display:flex; gap:6px; padding:6px 10px; background:#0d1a2e; flex-shrink:0; }
 .bchat-bar input { flex:1; border:1px solid #1d3a5f; border-radius:8px; padding:7px 10px; font-size:14px; outline:none; background:#13233d; color:#e6f1ff; }
 .room-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
-.room-cell { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:14px 6px; text-align:center; cursor:pointer; }
+.room-cell { position:relative; background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:12px; padding:14px 6px; text-align:center; cursor:pointer; }
 .room-cell .r-emoji { font-size:26px; display:block; }
 .room-cell .r-name { font-size:12px; margin-top:4px; color:#cfe8ff; word-break:break-all; }
 .room-cell.hall { border-color:#ffd16666; background:#1a2a1a; }
@@ -90,6 +90,7 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .room-cell .r-lock { font-size:11px; color:#ff8a80; display:block; margin-top:2px; }
 .room-cell .r-hall { font-size:11px; color:#ffd166; display:block; margin-top:2px; }
 .room-cell.add { border:2px dashed #2a4a75; color:#4a729f; display:flex; align-items:center; justify-content:center; font-size:24px; }
+.room-cell .r-del { position:absolute; top:4px; right:6px; color:#ff6b6b; font-size:15px; cursor:pointer; }
 .section-title { font-size:14px; color:#9fd8ff; font-weight:bold; margin:12px 0 8px; display:flex; align-items:center; gap:6px; }
 .npc-card { background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:10px; margin-bottom:8px; display:flex; align-items:center; gap:10px; }
 .npc-card .n-emoji { font-size:28px; }
@@ -145,6 +146,7 @@ textarea.input { color:#e6f1ff; }
 .sms-item .s-name { font-size:15px; color:#111; }
 .sms-item .s-prev { font-size:12px; color:#999; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
 .sms-item .s-time { font-size:11px; color:#bbb; flex-shrink:0; }
+.sms-item .s-del { color:#ff6b6b; font-size:16px; padding:2px 4px; flex-shrink:0; }
 .sms-chat { flex:1; overflow-y:auto; padding:10px; background:#ededed; }
 .sms-row { display:flex; margin-bottom:10px; align-items:flex-start; }
 .sms-row.mine { justify-content:flex-end; }
@@ -264,11 +266,11 @@ textarea.input { color:#e6f1ff; }
       </div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
       <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
-      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色（站长设置，全局生效）</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
+      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色（站长设置，全局生效）</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言❄️,黎深💧" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
       <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
       <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
       <div class="editset" id="eset6"><div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div></div>
-      <div class="editset" id="eset7"><div class="set-group"><label>📦 数据备份</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div></div></div>
+      <div class="editset" id="eset7"><div class="set-group"><label>📦 数据备份（站长专属）</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div></div></div>
       <div class="editset" id="eset8"><div class="set-group"><label>🗄️ 自动备份（防丢失）</label><div class="tip" style="margin-bottom:6px">服务器每30分钟自动快照 + 每次保存留上一版；你的手机每30分钟也存一份世界副本。</div><div class="row"><button class="btn" onclick="restoreWorldBackup()">📤 从手机备份恢复</button><button class="btn gray" onclick="loadServerBackups()">🗄️ 查看服务器快照</button></div><div id="srvBackupList" class="tip" style="margin-top:6px"></div></div></div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
@@ -385,7 +387,7 @@ function compressImage(dataUrl, maxW, quality, cb){
 }
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
-if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言')||'亦言'; localStorage.setItem('gc_name',userName); }
+if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言❄️')||'亦言❄️'; localStorage.setItem('gc_name',userName); }
 // ===== 底部导航 / 快捷 =====
 function showTab(t){
   curTab=t; updateTab();
@@ -483,6 +485,13 @@ function saveSmsOut(){ localStorage.setItem('gc_sms_out', JSON.stringify(smsOut)
 function openSms(){ smsContact=null; document.getElementById('smsMask').classList.add('show'); document.getElementById('smsConvModal').style.display='none'; document.getElementById('smsListModal').style.display=''; loadSmsList(); }
 function hideSms(){ document.getElementById('smsMask').classList.remove('show'); smsContact=null; }
 function smsTo(name){ openSms(); setTimeout(function(){ if(name) openConv(name); }, 150); }
+function clearSmsContact(contact, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  if(!confirm('删除与「'+contact+'」的短信会话？')) return;
+  api('/api/sms/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,contact:contact})}).then(function(){
+    smsOut = smsOut.filter(function(m){ return m.to!==contact; }); saveSmsOut(); loadSmsList();
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
 function loadSmsList(){
   api('/api/sms?user='+encodeURIComponent(userName)).then(function(d){
     var got = d.sms||[];
@@ -499,7 +508,7 @@ function loadSmsList(){
         var c=contacts[n]; var sorted=sortMsgs(c.msgs); var last=sorted[sorted.length-1];
         var av=avatars[n];
         var item=document.createElement('div'); item.className='sms-item';
-        item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">'+esc((last.mine?'我：':'')+last.text)+'</div></div><div class="s-time">'+esc((last.time||'').slice(5,16))+'</div>';
+        item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">'+esc((last.mine?'我：':'')+last.text)+'</div></div><div class="s-time">'+esc((last.time||'').slice(5,16))+'</div><span class="s-del" onclick="clearSmsContact(\''+esc(n)+'\', event)">✕</span>';
         item.onclick=function(){ openConv(n); };
         el.appendChild(item);
       });
@@ -712,10 +721,10 @@ function restoreWorldBackup(){
   var info = ''; try{ info = '（上次备份：' + JSON.parse(raw).ts + '）'; }catch(e){}
   if(!confirm('用手机里的备份覆盖服务器数据？'+info)) return;
   var d = JSON.parse(raw);
-  api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)}).then(function(){ toast('✅ 已从手机备份恢复！'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({user:userName}, d))}).then(function(){ toast('✅ 已从手机备份恢复！'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function loadServerBackups(){
-  api('/api/backup/list').then(function(d){
+  api('/api/backup/list?user='+encodeURIComponent(userName)).then(function(d){
     var el=document.getElementById('srvBackupList');
     var files=d.backups||[];
     if(!files.length){ el.textContent='服务器暂无快照（自动快照会在运行30分钟后出现）'; return; }
@@ -1062,6 +1071,10 @@ function zoomRegion(d){ var c=document.getElementById('regionCanvas'); c.dataset
 function zoomAt(scope,d){ var c=canvasOf(scope); c.dataset.s=Math.max(0.5,Math.min(4,(parseFloat(c.dataset.s||'1')+d))); applyTransform(c,scope); }
 initGestures('map'); initGestures('region');
 function openRegion(name){ var r=mapData.regions[name]; if(r&&r.image){ showRegion(name); } else { toast('📍 「'+name+'」暂无分区图'); } }
+function deleteRoomConfirm(room){
+  if(!confirm('删除房间「'+room+'」？会清空它的消息/纸条/日记，且不可恢复！')) return;
+  api('/api/map/room/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,room:room})}).then(function(){ toast('🗑️ 已删除'); loadMapData().then(function(){ renderBuilding(); loadRooms(); }); }).catch(function(e){ toast('❌ '+e.message); });
+}
 function renderBuilding(){
   var b=mapData.buildings[currentBuilding]; if(!b) return;
   document.getElementById('bEmoji').textContent=b.emoji;
@@ -1098,7 +1111,7 @@ function renderBuilding(){
       var granted = canEnterRoom(r);
       var stateCls = hall ? 'hall' : (granted ? 'open' : 'locked');
       var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : (granted ? '<span class="r-hall">✅ 已开放</span>' : '<span class="r-lock">🔒 私密·需申请</span>');
-      html+='<div class="room-cell '+stateCls+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
+      html+='<div class="room-cell '+stateCls+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+(ce&&!hall?'<span class="r-del" onclick="event.stopPropagation();deleteRoomConfirm(\''+esc(r)+'\')">✕</span>':'')+'</div>';
     });
     if(ce) html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div>';
     html+='</div>';
@@ -1151,11 +1164,11 @@ function editNpc(name){
   api('/api/npc/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,new_name:nn,emoji:em,desc:dd})}).then(function(){ toast('✅ NPC 已更新'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function createBuildingRoom(){
-  var name=prompt('房间名字（如：卧室、书房）：',''); if(!name) return;
+  var name=prompt('房间名字（如：卧室、厨房）：',''); if(!name) return;
   var desc=prompt('房间简介（AI 进房间会读，知道这房间是干嘛的）：','')||'';
   api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(d){
     if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:d.room,description:desc})}).then(function(){});
-    toast('✅ 房间「'+d.room+'」建成！'); loadMapData().then(function(){ renderBuilding(); loadRooms(); });
+    toast('✅ 房间「'+d.room+'」建成！（已自动带上住宅前缀）'); loadMapData().then(function(){ renderBuilding(); loadRooms(); });
   }).catch(function(e){ toast('❌ '+e.message); });
 }
 function loadMapData(){ return api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
@@ -1382,6 +1395,10 @@ function openSettings(){
   var isAdmin = userName === globalPairsAdmin || !globalPairsAdmin;
   if(isAdmin){ renderPairColors(); renderPairList(); }
   else { var es3=document.getElementById('eset3'); if(es3) es3.innerHTML='<div class="set-group"><label>🎨 气泡配色（站长统一管理）</label><div class="tip">站长已统一设置气泡配色，全局生效，无需个人设置～</div></div>'; }
+  if(!isAdmin){
+    var e7=document.getElementById('eset7'); if(e7) e7.innerHTML='<div class="set-group"><label>📦 数据备份</label><div class="tip">🔒 仅站长（'+esc(globalPairsAdmin||'')+'）可操作备份/恢复</div></div>';
+    var e8=document.getElementById('eset8'); if(e8) e8.innerHTML='<div class="set-group"><label>🗄️ 自动备份</label><div class="tip">🔒 仅站长可查看服务器快照/恢复</div></div>';
+  }
   loadTimeSettings();
   var lockGroup=document.getElementById('editLockGroup');
   var lockLabel = lockGroup.querySelector('label');
@@ -1449,7 +1466,7 @@ function restoreBackup(){
     reader.onload=function(e){
       try{
         var data=JSON.parse(e.target.result);
-        api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(){ toast('✅ 导入成功！数据已恢复'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); });
+        api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({user:userName}, data))}).then(function(){ toast('✅ 导入成功！数据已恢复'); setTimeout(function(){ location.reload(); }, 800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); });
       }catch(err){ toast('❌ 备份文件格式不对'); }
     };
     reader.readAsText(file);

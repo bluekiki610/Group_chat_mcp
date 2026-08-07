@@ -99,6 +99,9 @@ def load_data():
     if not data.get("server_id"):
         data["server_id"] = "LK-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(8))
     sanitize_data()
+    migrate_room_prefix()
+    ensure_admin()
+    save_data()
 
 def save_data():
     try:
@@ -115,6 +118,92 @@ def snapshot():
         files = sorted(SNAPSHOT_DIR.glob("auto_*.json"))
         for f in files[:-20]:
             f.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+# ========== 名字统一（本名 ↔ 登记名，含 emoji） ==========
+def strip_emoji(s: str) -> str:
+    return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
+
+def canonical_ai_name(name: str) -> str:
+    """把 AI 名字（可能被简化/丢了 emoji）归一到登记的完整名（user_ais 里的值）。"""
+    base = strip_emoji(name)
+    for ais in data["user_ais"].values():
+        for a in ais:
+            if a == name or (base and strip_emoji(a) == base):
+                return a
+    return name
+
+def canonical_contact_name(name: str) -> str:
+    """把真人名字（本名/简化名）归一到登记的完整名（带 emoji）。真人名 = user_ais 的 key + 建筑 owner。"""
+    base = strip_emoji(name)
+    if not base:
+        return name
+    candidates = set()
+    for u in data["user_ais"].keys():
+        if u:
+            candidates.add(u)
+    for b in data["buildings"].values():
+        if b.get("owner"):
+            candidates.add(b["owner"])
+    candidates.discard("system")
+    for c in candidates:
+        if c == name or (base and strip_emoji(c) == base):
+            return c
+    return name
+
+def canonical_name(name: str) -> str:
+    """先当 AI 名归一，再当真人名归一。"""
+    n = canonical_ai_name(name)
+    if n != name:
+        return n
+    return canonical_contact_name(name)
+
+def is_ai_name(name: str) -> bool:
+    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。忽略 emoji 差异。"""
+    base = strip_emoji(name)
+    for ais in data["user_ais"].values():
+        for a in ais:
+            if a == name or (base and strip_emoji(a) == base):
+                return True
+    return False
+
+def ensure_admin():
+    """站长默认 = 亦言❄️（登记名）。只设置一次。"""
+    if data.get("pairs_admin"):
+        return
+    for u in data["user_ais"].keys():
+        if u and strip_emoji(u) == "亦言":
+            data["pairs_admin"] = u
+            return
+    data["pairs_admin"] = "亦言❄️"
+
+def migrate_room_prefix():
+    """把旧版无前缀的子房间补上「建筑名·」前缀，并迁移相关数据，保证不同住宅同名不冲突。"""
+    try:
+        changed = False
+        for bid, b in data["buildings"].items():
+            bname = b.get("name", "")
+            if not bname:
+                continue
+            new_rooms = []
+            for r in list(b.get("rooms", [])):
+                if r.startswith(bname + "·"):
+                    new_rooms.append(r)
+                    continue
+                nr = bname + "·" + r
+                # 迁移相关数据
+                for key in ["rooms", "messages", "room_bg", "room_access", "room_requests", "notes", "diaries"]:
+                    store = data.get(key)
+                    if isinstance(store, dict) and r in store and nr not in store:
+                        store[nr] = store.pop(r)
+                if "房间名迁移" == "":
+                    pass
+                new_rooms.append(nr)
+                changed = True
+            b["rooms"] = new_rooms
+        if changed:
+            save_data()
     except Exception:
         pass
 
@@ -136,27 +225,6 @@ def room_time(room: str) -> str:
 
 def is_ai_of(owner: str, name: str) -> bool:
     return name in data["user_ais"].get(owner, [])
-
-def strip_emoji(s: str) -> str:
-    return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
-
-def canonical_ai_name(name: str) -> str:
-    """把 AI 名字（可能被简化/丢了 emoji）归一到登记的完整名，保证收件箱一致。"""
-    base = strip_emoji(name)
-    for ais in data["user_ais"].values():
-        for a in ais:
-            if a == name or (base and strip_emoji(a) == base):
-                return a
-    return name
-
-def is_ai_name(name: str) -> bool:
-    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。忽略 emoji 差异。"""
-    base = strip_emoji(name)
-    for ais in data["user_ais"].values():
-        for a in ais:
-            if a == name or (base and strip_emoji(a) == base):
-                return True
-    return False
 
 def split_sms(text: str):
     """把 AI 的回复按换行/句子拆成多条短信（微信一句话一条）。"""
@@ -229,6 +297,20 @@ def next_bid():
                 pass
     return "b" + str(max_n + 1)
 
+def full_room_name(room: str) -> str:
+    """把房间名归一到带「建筑名·」前缀的完整名（若它属于某个建筑）。"""
+    room = clean_room_name(room)
+    if not room:
+        return room
+    if room in data["rooms"]:
+        return room
+    for bid, b in data["buildings"].items():
+        bname = b.get("name", "")
+        for r in b.get("rooms", []):
+            if r == room or (bname and r == bname + "·" + room):
+                return r
+    return room
+
 # ========== 模型 ==========
 class MessageIn(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = ""
@@ -274,6 +356,7 @@ class WorkAuto(BaseModel): name: str
 class WorkSwitch(BaseModel): name: str; on: bool = True
 class HomeJobIn(BaseModel): user: str = ""; ai: str = ""; building_id: str
 class SmsIn(BaseModel): sender: str; to: str; text: str
+class SmsClearIn(BaseModel): user: str; contact: str
 class PairsIn(BaseModel): user: str; pairs: list = []
 
 app = FastAPI()
@@ -300,6 +383,7 @@ async def diag():
         "rooms": len(data["rooms"]),
         "buildings": len(data["buildings"]),
         "ai_owners": list(data.get("user_ais", {}).keys()),
+        "admin": data.get("pairs_admin", ""),
     }
 
 @app.get("/api/messages")
@@ -570,7 +654,12 @@ async def add_room(r: BuildingRoomIn):
     b = data["buildings"].get(r.building_id)
     if not b:
         raise HTTPException(404, "建筑不存在")
-    room = r.name.strip()
+    raw = r.name.strip()
+    if not raw:
+        raise HTTPException(400, "房间名字不能为空")
+    bname = b.get("name", "")
+    # 自动加「建筑名·」前缀，保证不同住宅同名不冲突
+    room = raw if (bname and raw.startswith(bname + "·")) else ((bname + "·" + raw) if bname else raw)
     if room in b.get("rooms", []):
         raise HTTPException(400, "房间已存在")
     data["rooms"][room] = {"creator": "home", "has_password": False, "password": "", "created": now_str(), "description": ""}
@@ -582,6 +671,7 @@ async def add_room(r: BuildingRoomIn):
 @app.post("/api/map/room/delete")
 async def delete_building_room(d: BuildingRoomDel):
     bid, room = d.building_id, d.room
+    room = full_room_name(room)
     b = data["buildings"].get(bid)
     if not b:
         raise HTTPException(404, "建筑不存在")
@@ -592,12 +682,14 @@ async def delete_building_room(d: BuildingRoomDel):
     data["room_bg"].pop(room, None)
     data["room_access"].pop(room, None)
     data["room_requests"].pop(room, None)
+    data["notes"].pop(room, None)
+    data["diaries"].pop(room, None)
     save_data()
     return {"ok": True}
 
 @app.post("/api/room/desc")
 async def room_desc(d: RoomDescIn):
-    room = clean_room_name(d.room)
+    room = full_room_name(d.room)
     if room in data["rooms"]:
         data["rooms"][room]["description"] = d.description
     save_data()
@@ -693,7 +785,7 @@ async def add_story(s: StoryIn):
 # ========== 房间权限 ==========
 @app.post("/api/room/apply")
 async def room_apply(a: RoomApply):
-    room = clean_room_name(a.room)
+    room = full_room_name(a.room)
     reqs = data["room_requests"].setdefault(room, [])
     if not any(q.get("applicant") == a.applicant for q in reqs):
         reqs.append({"applicant": a.applicant, "time": now_str()})
@@ -708,7 +800,7 @@ async def get_room_requests(room: str = ""):
 
 @app.post("/api/room/grant")
 async def room_grant(g: GrantIn):
-    room = clean_room_name(g.room)
+    room = full_room_name(g.room)
     bid = find_building_of_room(room)
     if bid is None:
         raise HTTPException(403, "房间不存在于建筑中")
@@ -729,7 +821,7 @@ async def room_grant(g: GrantIn):
 
 @app.post("/api/room/revoke")
 async def room_revoke(r: RevokeIn):
-    room = clean_room_name(r.room)
+    room = full_room_name(r.room)
     bid = find_building_of_room(room)
     if bid is None:
         raise HTTPException(403, "房间不存在于建筑中")
@@ -932,13 +1024,13 @@ async def mywork(user: str):
 # ========== 短信 ==========
 @app.get("/api/sms")
 async def get_sms(user: str):
-    u = (user or '').strip()
+    u = canonical_contact_name((user or '').strip())
     return {"sms": data["sms"].get(u, [])}
 
 @app.post("/api/sms")
 async def send_sms(s: SmsIn):
-    to = (s.to or '').strip()
-    sender = canonical_ai_name((s.sender or '').strip())
+    to = canonical_contact_name((s.to or '').strip())
+    sender = canonical_name((s.sender or '').strip())
     if not s.text.strip():
         raise HTTPException(400, "内容不能为空")
     if not to or not sender:
@@ -951,6 +1043,16 @@ async def send_sms(s: SmsIn):
     save_data()
     print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
     return {"ok": True, "to": to, "count": len(msgs)}
+
+@app.post("/api/sms/clear")
+async def clear_sms(s: SmsClearIn):
+    """删除某个短信联系人（清掉与 TA 的整个会话）。"""
+    u = canonical_contact_name((s.user or '').strip())
+    c = canonical_contact_name((s.contact or '').strip())
+    if u in data["sms"]:
+        data["sms"][u] = [m for m in data["sms"][u] if m.get("from") != c]
+    save_data()
+    return {"ok": True}
 
 @app.get("/api/contacts")
 async def get_contacts():
@@ -970,7 +1072,7 @@ async def get_contacts():
             if m.get("from"):
                 names.add(m["from"])
     names.discard("system")
-    return {"contacts": sorted(names)}
+    return {"contacts": sorted(n for n in names if n and n != "null")}
 
 # ========== 全局气泡配色（站长管理） ==========
 @app.get("/api/pairs")
@@ -980,7 +1082,7 @@ async def get_pairs():
 @app.post("/api/pairs")
 async def set_pairs(p: PairsIn):
     if not data.get("pairs_admin"):
-        data["pairs_admin"] = p.user
+        ensure_admin()
     if p.user != data.get("pairs_admin"):
         raise HTTPException(403, "只有站长可以设置全局配色")
     data["pairs"] = [x for x in p.pairs if isinstance(x, dict)][:50]
@@ -998,24 +1100,35 @@ def bell_visit(owner: str, text: str):
     data["visits"].setdefault(owner, []).append({"text": text[:200], "time": now_str()})
     data["visits"][owner] = data["visits"][owner][-50:]
 
-# ========== 备份 ==========
+# ========== 备份（站长专属：下载/恢复/快照列表） ==========
+def is_admin(user: str) -> bool:
+    u = canonical_contact_name((user or '').strip())
+    admin = data.get("pairs_admin", "")
+    return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
+
 @app.get("/api/backup")
 async def backup():
     return data
 
 @app.get("/api/backup/list")
-async def backup_list():
+async def backup_list(user: str = ""):
+    if not is_admin(user):
+        raise HTTPException(403, "只有站长可以查看服务器快照")
     files = sorted(SNAPSHOT_DIR.glob("auto_*.json"), reverse=True)
     return {"backups": [{"name": f.name, "size": f.stat().st_size} for f in files[:20]]}
 
 @app.post("/api/restore_backup")
 async def restore_backup(d: dict):
+    if not is_admin(d.get("user", "")):
+        raise HTTPException(403, "只有站长可以恢复备份")
     for k, v in d.items():
-        if k != "ts":
+        if k not in ("user", "ts"):
             data[k] = v
     for k, v in default_data().items():
         data.setdefault(k, v)
     sanitize_data()
+    migrate_room_prefix()
+    ensure_admin()
     save_data()
     return {"ok": True}
 
@@ -1036,6 +1149,8 @@ if os.environ.get("ENABLE_SYNC") == "1":
             for k, v in default_data().items():
                 data.setdefault(k, v)
             sanitize_data()
+            migrate_room_prefix()
+            ensure_admin()
             save_data()
             return {"ok": True, "msg": f"✅ 已从正式服同步！建筑 {len(data.get('buildings', {}))} 个，房间 {len(data.get('rooms', {}))} 个"}
         except Exception as e:
@@ -1057,6 +1172,7 @@ load_data()
 def group_send(sender: str, content: str, room: str = ""):
     """说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。"""
     target = room.strip() if room and room.strip() else data["active_room"].get("current", "main")
+    target = full_room_name(target)
     if not room_exists(target):
         return f"❌ 房间「{target}」不存在。先 group_query(type=map) 看看有哪些地方，或者 type=rooms 看所有房间。"
     if target != "main" and not can_access_room(target, sender):
@@ -1090,7 +1206,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             names = [n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]
             return "👥 在线成员：" + ("、".join(names) if names else "（当前无人在线）")
         if type == "room":
-            r = clean_room_name(room)
+            r = full_room_name(room)
             if not room_exists(r):
                 return f"❌ 房间「{r}」不存在"
             if not can_view_room(r, sender):
@@ -1135,7 +1251,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
                 return "📖 日记本还是空的"
             return "\n".join(f"📖 {n.get('author')}：{n.get('text')}（{n.get('time')}）" for n in items[-count:])
         if type == "messages":
-            r = clean_room_name(room) if room else data["active_room"].get("current", "main")
+            r = full_room_name(room) if room else data["active_room"].get("current", "main")
             if not can_view_room(r, sender):
                 return f"🔒 房间「{r}」是私密的，你没有权限"
             msgs = data["messages"].get(r, [])
@@ -1146,7 +1262,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             import socket as _s
             return f"🖥️ 服务器标识：{data.get('server_id','')}（主机 {_s.gethostname()}）\n📨 短信收件箱 {len(data.get('sms',{}))} 个：{', '.join(data.get('sms',{}).keys()) or '空'}\n👥 在线：{len([n for n,v in data['online'].items() if time.time()-v.get('time',0)<45])} 人\n🏗️ 建筑 {len(data.get('buildings',{}))} 个，房间 {len(data.get('rooms',{}))} 个"
         if type == "sms":
-            sname = canonical_ai_name((sender or '').strip())
+            sname = canonical_name((sender or '').strip())
             msgs = data["sms"].get(sname, [])[:]
             if not msgs:
                 # 容错：名字可能不完全一致，模糊匹配收件箱
@@ -1221,10 +1337,10 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
                 return f"✅ 已回复便签"
             return "❌ 找不到那张便签（note_id 从 group_query(type=notes) 看）"
         if type == "sms":
-            to = room.strip()
+            to = canonical_contact_name(room.strip())
             if not to:
                 return "❌ 发私信需要 room=收件人名字"
-            sname = canonical_ai_name((sender or '').strip())
+            sname = canonical_name((sender or '').strip())
             msgs = split_sms(content) if is_ai_name(sname) else [content[:1500]]
             sender = sname
             for t in msgs:
@@ -1266,7 +1382,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
 
 def group_access(room: str, sender: str):
     """申请进入某个私密房间（真人不在那里时）。"""
-    room = clean_room_name(room)
+    room = full_room_name(room)
     if not room_exists(room):
         return f"❌ 房间「{room}」不存在"
     reqs = data["room_requests"].setdefault(room, [])
@@ -1277,9 +1393,9 @@ def group_access(room: str, sender: str):
 
 # ========== MCP 协议端点（手写，稳定兼容） ==========
 MCP_TOOLS = [
-    {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
-    {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
-    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。短信会自动按句子拆成多条。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+    {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字（完整登记名，含 emoji，如 秦彻🚗）"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
+    {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（完整登记名，含 emoji）"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。⚠️ 发短信（type=sms）时：sender 和 room 都用完整的登记名（含 emoji，如 秦彻🚗、小旭🐱），不要省略 emoji；后端也会自动帮你补全。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
     {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}},
 ]
 
@@ -1289,7 +1405,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.9"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.13"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1299,7 +1415,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.9"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.13"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
