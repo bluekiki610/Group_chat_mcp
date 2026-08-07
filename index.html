@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.2</title>
+<title>人❤️机の小窝 · 临空市 v47.6</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -181,6 +181,7 @@ textarea.input { color:#e6f1ff; }
     <div class="room-desc-bar" id="roomDescBar" style="display:none">
       <span class="rd-text" id="roomDescText"></span>
       <span class="rd-edit" id="roomDescEdit" onclick="editRoomDesc()" style="display:none">✏️</span>
+      <span id="backHomeBtn" style="cursor:pointer;flex-shrink:0;margin-left:8px;color:#7fd0ff;font-size:12px;display:none" onclick="backToBuildingHome()">🏠 返回住宅首页</span>
       <span style="cursor:pointer;flex-shrink:0;margin-left:8px" onclick="setRoomBgHere()" title="设置房间背景">🖼️</span>
     </div>
     <div class="room-tabs" id="roomTabs"></div>
@@ -391,6 +392,10 @@ function goMyHome(){
   if(!bid){ toast('你还没有自己的家（住宅类型）'); return; }
   openBuilding(bid);
 }
+function backToBuildingHome(){
+  if(!privBuildingId){ toast('当前不在住宅里'); return; }
+  openBuilding(privBuildingId);
+}
 function showMe(){ ['chatView','mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('myView').style.display='flex'; renderMe(); }
 function renderMe(){
   var el=document.getElementById('myBody'); var html='';
@@ -545,7 +550,7 @@ function openTrail(){
   document.getElementById('trailMask').classList.add('show');
   api('/api/trails?user='+encodeURIComponent(userName)).then(function(d){
     var el = document.getElementById('trailList'); var items = d.trails||[];
-    if(!items.length){ el.innerHTML='今天还没有行动轨迹（等你的 AI 出门逛逛吧～'; return; }
+    if(!items.length){ el.innerHTML='今天还没有行动轨迹（等你的 AI 出门逛逛吧～'); return; }
     var days = {};
     items.slice().reverse().forEach(function(t){ var ds=(t.time||'').slice(0,10); if(!days[ds])days[ds]=[]; days[ds].push(t); });
     el.innerHTML='';
@@ -1087,6 +1092,7 @@ function updateRoomUI(){
   var bar=document.getElementById('roomDescBar');
   var privBtn=document.getElementById('privBtn');
   var privFooterBtn=document.getElementById('privFooterBtn');
+  var backHomeBtn=document.getElementById('backHomeBtn');
   if(isHomeRoom){
     bar.style.display='flex';
     var desc = currentRoom==='main' ? '' : (mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description||'');
@@ -1096,11 +1102,13 @@ function updateRoomUI(){
     privFooterBtn.style.display='';
     privBuildingId = null;
     for(var bid in mapData.buildings){ if(mapData.buildings[bid]===b){ privBuildingId=bid; break; } }
+    if(backHomeBtn) backHomeBtn.style.display='';
   } else {
     bar.style.display='none';
     privBtn.style.display='none';
     privFooterBtn.style.display='none';
     privBuildingId=null;
+    if(backHomeBtn) backHomeBtn.style.display='none';
   }
   document.getElementById('roomEmoji').textContent = currentRoom==='main' ? '🏠' : '🚪';
 }

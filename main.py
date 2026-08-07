@@ -11,6 +11,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+class CacheStaticFiles(StaticFiles):
+    """静态文件带浏览器缓存头：图片存本地缓存，刷新秒开。"""
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200 and not path.lower().endswith((".html", ".js")):
+            response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
 from pydantic import BaseModel
 import uvicorn
 
@@ -226,7 +234,7 @@ class SmsIn(BaseModel): sender: str; to: str; text: str
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 os.makedirs("images", exist_ok=True)
-app.mount("/images", StaticFiles(directory="images"), name="images")
+app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 
 # ========== 基础 ==========
 @app.get("/")
