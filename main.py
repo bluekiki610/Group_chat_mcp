@@ -1200,8 +1200,8 @@ def group_access(room: str, sender: str):
 
 # ========== MCP 协议端点（手写，稳定兼容） ==========
 MCP_TOOLS = [
-    {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
-    {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+    {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
+    {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
     {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
     {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}},
 ]
@@ -1212,7 +1212,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.6"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.7"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1222,7 +1222,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.6"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.7"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":

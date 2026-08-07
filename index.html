@@ -86,6 +86,7 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .room-cell .r-name { font-size:12px; margin-top:4px; color:#cfe8ff; word-break:break-all; }
 .room-cell.hall { border-color:#ffd16666; background:#1a2a1a; }
 .room-cell.locked { border-color:#ff6b6b66; }
+.room-cell.open { border-color:#0e9f6e66; background:#0e2a1a; }
 .room-cell .r-lock { font-size:11px; color:#ff8a80; display:block; margin-top:2px; }
 .room-cell .r-hall { font-size:11px; color:#ffd166; display:block; margin-top:2px; }
 .room-cell.add { border:2px dashed #2a4a75; color:#4a729f; display:flex; align-items:center; justify-content:center; font-size:24px; }
@@ -1055,8 +1056,10 @@ function renderBuilding(){
     html+='<div class="section-title">🚪 房间</div><div class="room-grid">';
     (b.rooms||[]).forEach(function(r){
       var hall = r.indexOf('·会客厅')>=0;
-      var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : '<span class="r-lock">🔒 私密·需申请</span>';
-      html+='<div class="room-cell '+(hall?'hall':'locked')+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
+      var granted = canEnterRoom(r);
+      var stateCls = hall ? 'hall' : (granted ? 'open' : 'locked');
+      var lockTxt = hall ? '<span class="r-hall">🛋️ 公共会客区</span>' : (granted ? '<span class="r-hall">✅ 已开放</span>' : '<span class="r-lock">🔒 私密·需申请</span>');
+      html+='<div class="room-cell '+stateCls+'" onclick="enterRoom(\''+esc(r)+'\')"><span class="r-emoji">'+(hall?'🛋️':'🚪')+'</span><span class="r-name">'+esc(r)+'</span>'+lockTxt+'</div>';
     });
     if(ce) html+='<div class="room-cell add" onclick="createBuildingRoom()">+</div>';
     html+='</div>';
