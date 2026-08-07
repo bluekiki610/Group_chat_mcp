@@ -888,6 +888,28 @@ async def restore_backup(d: dict):
     save_data()
     return {"ok": True}
 
+# ========== 一键同步正式服数据（仅当设置 ENABLE_SYNC=1 时启用，测试服专用） ==========
+if os.environ.get("ENABLE_SYNC") == "1":
+    @app.get("/api/sync_from_live")
+    async def sync_from_live():
+        import urllib.request
+        live_url = os.environ.get("LIVE_SERVER", "https://linkong.zeabur.app") + "/api/backup"
+        try:
+            req = urllib.request.Request(live_url, headers={"User-Agent": "linkong-sync"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                live = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(live, dict):
+                return {"ok": False, "msg": "正式服返回格式不对"}
+            data.clear()
+            data.update(live)
+            for k, v in default_data().items():
+                data.setdefault(k, v)
+            sanitize_data()
+            save_data()
+            return {"ok": True, "msg": f"✅ 已从正式服同步！建筑 {len(data.get('buildings', {}))} 个，房间 {len(data.get('rooms', {}))} 个"}
+        except Exception as e:
+            return {"ok": False, "msg": f"❌ 同步失败：{e}"}
+
 # ========== 后台线程 ==========
 threading.Thread(target=work_tick, daemon=True).start()
 
