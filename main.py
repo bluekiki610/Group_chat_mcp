@@ -152,6 +152,21 @@ def can_view_room(room: str, user: str) -> bool:
         return True
     return False
 
+def resolve_building(key):
+    """按内部 id 或建筑名字匹配，返回 building_id；找不到返回 None。"""
+    key = (key or '').strip()
+    if not key:
+        return None
+    if key in data["buildings"]:
+        return key
+    for bid, b in data["buildings"].items():
+        if b.get("name") == key:
+            return bid
+    for bid, b in data["buildings"].items():
+        if key in b.get("name", ""):
+            return bid
+    return None
+
 def next_bid():
     max_n = 0
     for bid in data["buildings"].keys():
@@ -596,11 +611,15 @@ async def comment_diary(c: DiaryComment):
 
 @app.get("/api/story")
 async def get_story(building_id: str):
-    return {"stories": data["stories"].get(building_id, [])}
+    bid = resolve_building(building_id)
+    return {"stories": data["stories"].get(bid, []) if bid else []}
 
 @app.post("/api/story")
 async def add_story(s: StoryIn):
-    data["stories"].setdefault(s.building_id, []).append({"author": s.author, "text": s.text[:1500], "time": now_str()})
+    bid = resolve_building(s.building_id)
+    if not bid:
+        raise HTTPException(404, "建筑不存在")
+    data["stories"].setdefault(bid, []).append({"author": s.author, "text": s.text[:1500], "time": now_str()})
     save_data()
     return {"ok": True}
 
@@ -948,8 +967,8 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
     try:
         if type == "map":
             regions = "\n".join(f"📍 {n}（分区图:{'有' if v.get('image') else '无'}）" for n, v in data["regions"].items()) or "（还没有区域）"
-            buildings = "\n".join(f"{b.get('emoji','🏠')} {b.get('name')} [{'公共' if b.get('type')=='npc' else '住宅'}·{b.get('region') or '总览区'}·{b.get('description','')[:40]}·工作:{'有' if b.get('salary',0)>0 else '无'}]" for b in data["buildings"].values()) or "（还没有建筑）"
-            return f"🗺️ 临空市地图\n\n📍 区域：\n{regions}\n\n🏗️ 建筑：\n{buildings}"
+            buildings = "\n".join(f"{bid}·{b.get('emoji','🏠')} {b.get('name')} [{'公共' if b.get('type')=='npc' else '住宅'}·{b.get('region') or '总览区'}·{b.get('description','')[:40]}·工作:{'有' if b.get('salary',0)>0 else '无'}]" for bid, b in data["buildings"].items()) or "（还没有建筑）"
+            return f"🗺️ 临空市地图\n\n📍 区域：\n{regions}\n\n🏗️ 建筑（b1 等就是建筑 id，写剧情/查详情用）：\n{buildings}"
         if type == "rooms":
             lst = "\n".join(f"· {n}{' 🔒' if v.get('has_password') else ''}（{v.get('creator','')}）" for n, v in data["rooms"].items())
             return f"📋 所有房间：\n{lst}"
@@ -973,21 +992,24 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             txt = "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in lines)
             return f"🏠 房间「{r}」\n{('📝 '+desc+'\n') if desc else ''}💬 最近消息：\n{txt}"
         if type == "building":
-            b = data["buildings"].get(building_id)
-            if not b:
-                return "❌ 建筑不存在（building_id 从 map 里看）"
+            bid = resolve_building(building_id)
+            if not bid:
+                return "❌ 建筑不存在（building_id 从 group_query(type=map) 里看，比如 b1；或直接传建筑名字，如 猎人协会）"
+            b = data["buildings"][bid]
             rooms = "\n".join(f"· {x}" for x in b.get("rooms", [])) or "（无房间）"
-            npcs = "\n".join(f"· {n.get('emoji','👤')} {n.get('name')}：{n.get('desc','')}" for n in data["npcs"].get(building_id, [])) or "（无NPC）"
+            npcs = "\n".join(f"· {n.get('emoji','👤')} {n.get('name')}：{n.get('desc','')}" for n in data["npcs"].get(bid, [])) or "（无NPC）"
             feats = ",".join(b.get("features", [])) or "无"
-            workers = "、".join(n for n, s in data["work_sessions"].items() if s.get("building_id") == building_id) or "无人"
+            workers = "、".join(n for n, s in data["work_sessions"].items() if s.get("building_id") == bid) or "无人"
             return f"🏗️ {b.get('emoji')} {b.get('name')}（{'公共' if b.get('type')=='npc' else '住宅'}）\n📝 {b.get('description','')}\n👑 主人：{b.get('owner','?')}\n📢 公告：{b.get('notice','') or '无'}\n⚙️ 功能：{feats} · 时薪：{b.get('salary',0)}\n🚪 房间：\n{rooms}\n👥 NPC：\n{npcs}\n👔 正在上班：{workers}"
         if type == "npc":
-            npcs = data["npcs"].get(building_id, [])
+            bid = resolve_building(building_id)
+            npcs = data["npcs"].get(bid, []) if bid else []
             if not npcs:
                 return "（这个建筑还没有NPC）"
             return "\n".join(f"{n.get('emoji','👤')} {n.get('name')}：{n.get('desc','')}" for n in npcs)
         if type == "story":
-            sts = data["stories"].get(building_id, [])
+            bid = resolve_building(building_id)
+            sts = data["stories"].get(bid, []) if bid else []
             if not sts:
                 return "🎬 剧情簿还是空的"
             return "\n".join(f"{s.get('time')} {s.get('author')}: {s.get('text')}" for s in sts[-count:])
@@ -1032,7 +1054,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
         return f"⚠️ 查询出错：{e}"
 
 def group_write(type: str, content: str, sender: str, room: str = "", building_id: str = "", note_id: str = ""):
-    """写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。"""
+    """写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。"""
     try:
         if type == "note":
             if not room:
@@ -1051,11 +1073,14 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
         if type == "story":
             if not building_id:
                 return "❌ 触发剧情需要 building_id 参数"
-            data["stories"].setdefault(building_id, []).append({"author": sender, "text": content[:1500], "time": now_str()})
-            b = data["buildings"].get(building_id)
-            add_trail(sender, f"在 {b.get('name','?') if b else '?'} 触发剧情")
+            bid = resolve_building(building_id)
+            if not bid:
+                return "❌ 找不到这个建筑（building_id 从 group_query(type=map) 里看，比如 b1；或直接传建筑名字，如 猎人协会）"
+            data["stories"].setdefault(bid, []).append({"author": sender, "text": content[:1500], "time": now_str()})
+            b = data["buildings"][bid]
+            add_trail(sender, f"在 {b.get('name','?')} 触发剧情")
             save_data()
-            return f"✅ 剧情已写进「{b.get('name','?') if b else '?'}」的剧情簿"
+            return f"✅ 剧情已写进「{b.get('name')}」的剧情簿"
         if type == "reply":
             items = data["notes"].get(room, [])
             idx = -1
@@ -1123,8 +1148,8 @@ def group_access(room: str, sender: str):
 # ========== MCP 协议端点（手写，稳定兼容） ==========
 MCP_TOOLS = [
     {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
-    {"name": "group_query", "description": "查看一切。type：map(地图) / building(建筑详情) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
-    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+    {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
     {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}},
 ]
 
@@ -1134,7 +1159,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.4"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1144,7 +1169,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.0"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.4"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
