@@ -41,6 +41,7 @@ def default_data():
         "wallets": {}, "home_jobs": {}, "work_sessions": {},
         "work_history": [], "work_switch": {}, "visits": {},
         "sms": {}, "trails": {}, "messages_cache": {},
+        "pairs": [], "pairs_admin": "",
     }
 
 def sanitize_data():
@@ -69,6 +70,10 @@ def sanitize_data():
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], list):
                         v[k2] = []
+        if not isinstance(data.get("pairs"), list):
+            data["pairs"] = []
+        if not isinstance(data.get("pairs_admin"), str):
+            data["pairs_admin"] = ""
         if not isinstance(data.get("active_room"), dict):
             data["active_room"] = {"current": "main"}
         data["active_room"].setdefault("current", "main")
@@ -230,6 +235,7 @@ class WorkAuto(BaseModel): name: str
 class WorkSwitch(BaseModel): name: str; on: bool = True
 class HomeJobIn(BaseModel): user: str = ""; ai: str = ""; building_id: str
 class SmsIn(BaseModel): sender: str; to: str; text: str
+class PairsIn(BaseModel): user: str; pairs: list = []
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -884,6 +890,45 @@ async def send_sms(s: SmsIn):
     save_data()
     return {"ok": True}
 
+@app.get("/api/contacts")
+async def get_contacts():
+    """返回所有可联系的人：房主 + 真人 + AI + NPC + 短信往来。"""
+    names = set()
+    for b in data["buildings"].values():
+        if b.get("owner"):
+            names.add(b["owner"])
+    for u, ais in data["user_ais"].items():
+        if u:
+            names.add(u)
+        for a in ais:
+            if a:
+                names.add(a)
+    for npcs in data["npcs"].values():
+        for n in npcs:
+            if n.get("name"):
+                names.add(n["name"])
+    for msgs in data["sms"].values():
+        for m in msgs:
+            if m.get("from"):
+                names.add(m["from"])
+    names.discard("system")
+    return {"contacts": sorted(names)}
+
+# ========== 全局气泡配色（站长管理） ==========
+@app.get("/api/pairs")
+async def get_pairs():
+    return {"pairs": data.get("pairs", []), "admin": data.get("pairs_admin", "")}
+
+@app.post("/api/pairs")
+async def set_pairs(p: PairsIn):
+    if not data.get("pairs_admin"):
+        data["pairs_admin"] = p.user
+    if p.user != data.get("pairs_admin"):
+        raise HTTPException(403, "只有站长可以设置全局配色")
+    data["pairs"] = [x for x in p.pairs if isinstance(x, dict)][:50]
+    save_data()
+    return {"ok": True, "admin": data["pairs_admin"], "pairs": data["pairs"]}
+
 # ========== 铃铛 ==========
 @app.get("/api/bell")
 async def get_bell(owner: str):
@@ -1167,7 +1212,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.4"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.6"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1177,7 +1222,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.4"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.6"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.6</title>
+<title>人❤️机の小窝 · 临空市 v47.7</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -262,7 +262,7 @@ textarea.input { color:#e6f1ff; }
       </div>
       <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
       <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div><div class="tip">主人授权你时，你的 AI 自动一起获得权限</div></div></div>
-      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
+      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色（站长设置，全局生效）</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）如：亦言,黎深" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
       <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
       <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
       <div class="editset" id="eset6"><div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div></div>
@@ -350,6 +350,7 @@ var bChatOn = false;
 var smsContact = null;
 var curTab = 'chat';
 var dragState = null;
+var globalPairs = [], globalPairsAdmin = '';
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -459,16 +460,33 @@ function loadSmsList(){
     var names = Object.keys(contacts);
     names.sort(function(a,b){ var ta=contacts[a].msgs.length?contacts[a].msgs[contacts[a].msgs.length-1].time:''; var tb=contacts[b].msgs.length?contacts[b].msgs[contacts[b].msgs.length-1].time:''; return tb.localeCompare(ta); });
     var el = document.getElementById('smsList'); el.innerHTML='';
-    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:40px 20px">📭 还没有短信<br><span style="font-size:12px">去公共建筑点工作人头像可发短信</span></div>'; return; }
-    names.forEach(function(n){
-      var c=contacts[n]; var last=c.msgs[c.msgs.length-1];
-      var av=avatars[n];
-      var item=document.createElement('div'); item.className='sms-item';
-      item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">'+esc((last.mine?'我：':'')+last.text)+'</div></div><div class="s-time">'+esc((last.time||'').slice(5,16))+'</div>';
-      item.onclick=function(){ openConv(n); };
-      el.appendChild(item);
-    });
+    if(!names.length){ el.innerHTML='<div style="text-align:center;color:#999;padding:30px 20px">📭 还没有短信<br><span style="font-size:12px">从下方「新朋友」开始聊天吧</span></div>'; }
+    else {
+      names.forEach(function(n){
+        var c=contacts[n]; var last=c.msgs[c.msgs.length-1];
+        var av=avatars[n];
+        var item=document.createElement('div'); item.className='sms-item';
+        item.innerHTML='<div class="s-av">'+(av?'<img src="'+av+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">'+esc((last.mine?'我：':'')+last.text)+'</div></div><div class="s-time">'+esc((last.time||'').slice(5,16))+'</div>';
+        item.onclick=function(){ openConv(n); };
+        el.appendChild(item);
+      });
+    }
     document.getElementById('smsDot').style.display='none';
+    // 追加「新朋友」联系人（没聊过的人也能发短信）
+    api('/api/contacts').then(function(cd){
+      var known = names.slice();
+      var newOnes = (cd.contacts||[]).filter(function(n){ return known.indexOf(n)<0 && n!==userName; });
+      if(newOnes.length){
+        el.innerHTML += '<div style="background:#f7f7f7;padding:8px 12px;font-size:12px;color:#999;border-top:6px solid #f2f2f2">➕ 新朋友（点我打招呼）</div>';
+        newOnes.forEach(function(n){
+          var av2=avatars[n];
+          var item=document.createElement('div'); item.className='sms-item';
+          item.innerHTML='<div class="s-av">'+(av2?'<img src="'+av2+'" style="width:100%;height:100%;object-fit:cover">':esc((n||'?').charAt(0)))+'</div><div class="s-main"><div class="s-name">'+esc(n)+'</div><div class="s-prev">还没有聊过，点我开始对话～</div></div>';
+          item.onclick=function(){ openConv(n); };
+          el.appendChild(item);
+        });
+      }
+    }).catch(function(){});
   }).catch(function(){});
 }
 function openConv(name){
@@ -680,8 +698,20 @@ function unlockEdit(){
     else toast('❌ 密码错误');
   }).catch(function(e){ toast('❌ '+e.message); });
 }
-function pairOf(name){ for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
-function savePairs(){ localStorage.setItem('gc_pairs', JSON.stringify(colorPairs)); }
+function pairOf(name){
+  for(var i=0;i<globalPairs.length;i++){ if(globalPairs[i].names.indexOf(name)>=0) return globalPairs[i]; }
+  for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; }
+  return null;
+}
+function saveGlobalPairs(){
+  api('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,pairs:globalPairs})}).then(function(d){
+    globalPairs=d.pairs||globalPairs; globalPairsAdmin=d.admin||userName;
+    toast('✅ 全局配色已保存，所有人自动生效');
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
+function loadPairs(){
+  api('/api/pairs').then(function(d){ globalPairs=d.pairs||[]; globalPairsAdmin=d.admin||''; }).catch(function(){});
+}
 function renderPairColors(){
   var el = document.getElementById('pairColors'); el.innerHTML='';
   for(var i=0;i<PAIR_COLORS.length;i++){
@@ -694,7 +724,7 @@ function renderPairColors(){
 }
 function renderPairList(){
   var el=document.getElementById('pairList'); el.innerHTML='';
-  colorPairs.forEach(function(p,i){
+  globalPairs.forEach(function(p,i){
     var d=document.createElement('div'); d.className='pair-item';
     d.innerHTML='<span class="p-color" style="background:linear-gradient(90deg,'+p.dark+','+p.light+')"></span><span>'+esc(p.names.join(' · '))+'</span><span class="p-del" onclick="delPair('+i+')">✖</span>';
     el.appendChild(d);
@@ -704,10 +734,11 @@ function addPair(){
   var names = (document.getElementById('pairNames').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
   if(names.length<2){ toast('至少填 2 个名字（真人+AI）'); return; }
   var c = PAIR_COLORS[selectedPairColor];
-  colorPairs.push({owner:names[0], names:names, dark:c.dark, light:c.light});
-  savePairs(); document.getElementById('pairNames').value=''; renderPairList(); toast('✅ 配对已添加：'+names.join('·')+'（'+c.name+'）');
+  globalPairs.push({owner:names[0], names:names, dark:c.dark, light:c.light});
+  document.getElementById('pairNames').value='';
+  saveGlobalPairs();
 }
-function delPair(i){ colorPairs.splice(i,1); savePairs(); renderPairList(); }
+function delPair(i){ globalPairs.splice(i,1); saveGlobalPairs(); }
 function saveMyAis(){
   var ais = (document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean);
   api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); }).catch(function(e){ toast('❌ '+e.message); });
@@ -1306,7 +1337,10 @@ function openSettings(){
   document.getElementById('setName').value=userName;
   document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
-  renderPairColors(); renderPairList(); loadTimeSettings();
+  var isAdmin = userName === globalPairsAdmin || !globalPairsAdmin;
+  if(isAdmin){ renderPairColors(); renderPairList(); }
+  else { var es3=document.getElementById('eset3'); if(es3) es3.innerHTML='<div class="set-group"><label>🎨 气泡配色（站长统一管理）</label><div class="tip">站长已统一设置气泡配色，全局生效，无需个人设置～</div></div>'; }
+  loadTimeSettings();
   var lockGroup=document.getElementById('editLockGroup');
   var lockLabel = lockGroup.querySelector('label');
   var lockBtn = lockGroup.querySelector('button');
@@ -1383,7 +1417,7 @@ function restoreBackup(){
 function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
   document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
-  loadRooms(); loadAvatars(); reportRoom(); updateTab();
+  loadRooms(); loadAvatars(); loadPairs(); reportRoom(); updateTab();
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
