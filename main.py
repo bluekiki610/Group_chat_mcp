@@ -137,11 +137,25 @@ def room_time(room: str) -> str:
 def is_ai_of(owner: str, name: str) -> bool:
     return name in data["user_ais"].get(owner, [])
 
-def is_ai_name(name: str) -> bool:
-    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。"""
+def strip_emoji(s: str) -> str:
+    return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
+
+def canonical_ai_name(name: str) -> str:
+    """把 AI 名字（可能被简化/丢了 emoji）归一到登记的完整名，保证收件箱一致。"""
+    base = strip_emoji(name)
     for ais in data["user_ais"].values():
-        if name in ais:
-            return True
+        for a in ais:
+            if a == name or (base and strip_emoji(a) == base):
+                return a
+    return name
+
+def is_ai_name(name: str) -> bool:
+    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。忽略 emoji 差异。"""
+    base = strip_emoji(name)
+    for ais in data["user_ais"].values():
+        for a in ais:
+            if a == name or (base and strip_emoji(a) == base):
+                return True
     return False
 
 def split_sms(text: str):
@@ -924,7 +938,7 @@ async def get_sms(user: str):
 @app.post("/api/sms")
 async def send_sms(s: SmsIn):
     to = (s.to or '').strip()
-    sender = (s.sender or '').strip()
+    sender = canonical_ai_name((s.sender or '').strip())
     if not s.text.strip():
         raise HTTPException(400, "内容不能为空")
     if not to or not sender:
@@ -1132,7 +1146,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             import socket as _s
             return f"🖥️ 服务器标识：{data.get('server_id','')}（主机 {_s.gethostname()}）\n📨 短信收件箱 {len(data.get('sms',{}))} 个：{', '.join(data.get('sms',{}).keys()) or '空'}\n👥 在线：{len([n for n,v in data['online'].items() if time.time()-v.get('time',0)<45])} 人\n🏗️ 建筑 {len(data.get('buildings',{}))} 个，房间 {len(data.get('rooms',{}))} 个"
         if type == "sms":
-            sname = (sender or '').strip()
+            sname = canonical_ai_name((sender or '').strip())
             msgs = data["sms"].get(sname, [])[:]
             if not msgs:
                 # 容错：名字可能不完全一致，模糊匹配收件箱
@@ -1210,7 +1224,9 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             to = room.strip()
             if not to:
                 return "❌ 发私信需要 room=收件人名字"
-            msgs = split_sms(content) if is_ai_name(sender) else [content[:1500]]
+            sname = canonical_ai_name((sender or '').strip())
+            msgs = split_sms(content) if is_ai_name(sname) else [content[:1500]]
+            sender = sname
             for t in msgs:
                 if t.strip():
                     data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
