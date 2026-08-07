@@ -7,17 +7,12 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
-
-try:
-    from mcp.server.fastmcp import FastMCP
-except Exception:
-    from fastmcp import FastMCP
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_FILE = BASE_DIR / "data.json"
@@ -211,21 +206,6 @@ async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
 async def health(): return {"ok": True, "rooms": len(data["rooms"])}
-
-@app.get("/mcp")
-@app.get("/mcp/")
-async def mcp_probe():
-    return Response(status_code=200, content="MCP server is running")
-
-@app.get("/api/mcp_tools")
-async def mcp_tools():
-    out = []
-    try:
-        for t in mcp._tool_manager.list_tools():
-            out.append(t.name)
-    except Exception as e:
-        out.append("err:" + str(e))
-    return {"tools": out, "mcp_type": type(mcp).__name__}
 
 @app.get("/api/messages")
 async def get_messages(room: str = "main", password: str = "", user: str = ""):
@@ -858,10 +838,8 @@ threading.Thread(target=snapshot_loop, daemon=True).start()
 
 load_data()
 
-# ========== MCP ==========
-mcp = FastMCP("linkong-world")
+# ========== MCP 工具（手写实现，不用任何 SDK） ==========
 
-@mcp.tool()
 def group_send(sender: str, content: str, room: str = ""):
     """说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。"""
     target = room.strip() if room and room.strip() else data["active_room"].get("current", "main")
@@ -881,7 +859,6 @@ def group_send(sender: str, content: str, room: str = ""):
     save_data()
     return f"✅ 已在「{target}」发言。"
 
-@mcp.tool()
 def group_query(type: str, sender: str, room: str = "", building_id: str = "", count: int = 10):
     """查看一切。type：map(地图) / building(建筑详情) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。"""
     try:
@@ -970,7 +947,6 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
     except Exception as e:
         return f"⚠️ 查询出错：{e}"
 
-@mcp.tool()
 def group_write(type: str, content: str, sender: str, room: str = "", building_id: str = "", note_id: str = ""):
     """写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。"""
     try:
@@ -1049,7 +1025,6 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
     except Exception as e:
         return f"⚠️ 写入出错：{e}"
 
-@mcp.tool()
 def group_access(room: str, sender: str):
     """申请进入某个私密房间（真人不在那里时）。"""
     room = clean_room_name(room)
@@ -1061,42 +1036,56 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
-# ========== 挂载 MCP 服务器（原样转发，不剥前缀） ==========
-class McpMiddleware:
-    """把 POST /mcp 请求原样转发给 fastmcp（它内部自带 /mcp 路由），其他请求走 FastAPI。"""
-    def __init__(self, app, mcp_app):
-        self.app = app
-        self.mcp_app = mcp_app
-    async def __call__(self, scope, receive, send):
-        if scope.get("type") == "http":
-            method = scope.get("method", "")
-            path = scope.get("path", "")
-            if method == "POST" and path.startswith("/mcp"):
-                await self.mcp_app(scope, receive, send)
-                return
-        await self.app(scope, receive, send)
+# ========== MCP 协议端点（手写，稳定兼容） ==========
+MCP_TOOLS = [
+    {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
+    {"name": "group_query", "description": "查看一切。type：map(地图) / building(建筑详情) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
+    {"name": "group_write", "description": "写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "content": {"type": "string"}, "sender": {"type": "string"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "note_id": {"type": "string"}}, "required": ["type", "content", "sender"]}},
+    {"name": "group_access", "description": "申请进入某个私密房间（真人不在那里时）。", "inputSchema": {"type": "object", "properties": {"room": {"type": "string"}, "sender": {"type": "string"}}, "required": ["room", "sender"]}},
+]
 
-def mount_mcp():
-    global app
-    mcp_app = None
-    if hasattr(mcp, "streamable_http_app"):
-        try:
-            mcp_app = mcp.streamable_http_app()
-            print("[MCP] got streamable_http_app (default mount)")
-        except Exception as e:
-            print("[MCP] streamable_http_app fail:", e)
-    if mcp_app is None and hasattr(mcp, "sse_app"):
-        try:
-            mcp_app = mcp.sse_app()
-            print("[MCP] got sse_app (fallback)")
-        except Exception as e:
-            print("[MCP] sse_app fail:", e)
-    if mcp_app is not None:
-        app = McpMiddleware(app, mcp_app)
-        print("[MCP] wrapped app with McpMiddleware (POST /mcp passthrough)")
-        return
-    print("[MCP] no mcp_app; type=", type(mcp).__name__)
-mount_mcp()
+def mcp_log(msg: str):
+    print(f"[MCP] {msg}", flush=True)
+
+@app.api_route("/mcp", methods=["GET", "POST"])
+async def mcp_endpoint(request: Request):
+    if request.method == "GET":
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.8"}}})
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse(status_code=400, content={"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}})
+    method = body.get("method")
+    params = body.get("params", {})
+    request_id = body.get("id")
+    mcp_log(f"收到请求: method={method}")
+    if method == "initialize":
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.8"}}})
+    if isinstance(method, str) and method.startswith("notifications/"):
+        return Response(status_code=202)
+    if method == "ping":
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {}})
+    if method == "tools/list":
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"tools": MCP_TOOLS}})
+    if method == "tools/call":
+        tool_name = params.get("name") or ""
+        arguments = params.get("arguments", {}) or {}
+        mcp_log(f"→ 处理 tools/call: {tool_name}")
+        if tool_name.endswith("group_send"): tool_name = "group_send"
+        elif tool_name.endswith("group_query"): tool_name = "group_query"
+        elif tool_name.endswith("group_write"): tool_name = "group_write"
+        elif tool_name.endswith("group_access"): tool_name = "group_access"
+        result_text = "❌ 未知工具"
+        if tool_name == "group_send":
+            result_text = group_send(arguments.get("sender", ""), arguments.get("content", ""), arguments.get("room", ""))
+        elif tool_name == "group_query":
+            result_text = group_query(arguments.get("type", "map"), arguments.get("sender", ""), arguments.get("room", ""), arguments.get("building_id", ""), arguments.get("count", 10))
+        elif tool_name == "group_write":
+            result_text = group_write(arguments.get("type", ""), arguments.get("content", ""), arguments.get("sender", ""), arguments.get("room", ""), arguments.get("building_id", ""), arguments.get("note_id", ""))
+        elif tool_name == "group_access":
+            result_text = group_access(arguments.get("room", ""), arguments.get("sender", ""))
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": str(result_text)}]}})
+    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
 def run():
     uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
