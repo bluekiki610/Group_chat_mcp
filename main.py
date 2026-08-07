@@ -152,6 +152,16 @@ def can_view_room(room: str, user: str) -> bool:
         return True
     return False
 
+def next_bid():
+    max_n = 0
+    for bid in data["buildings"].keys():
+        if bid.startswith("b"):
+            try:
+                max_n = max(max_n, int(bid[1:]))
+            except ValueError:
+                pass
+    return "b" + str(max_n + 1)
+
 # ========== 模型 ==========
 class MessageIn(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
 class RoomCreate(BaseModel): name: str; password: str = ""; creator: str = ""
@@ -390,8 +400,8 @@ async def del_region(r: RegionDel):
 
 @app.post("/api/map/building")
 async def add_building(b: BuildingIn):
-    bid = "b" + str(data["building_seq"])
-    data["building_seq"] += 1
+    bid = next_bid()
+    data["building_seq"] = max(data.get("building_seq", 1), int(bid[1:]))
     data["buildings"][bid] = {
         "name": b.name, "emoji": b.emoji, "type": b.type, "region": b.region,
         "x": b.x, "y": b.y, "owner": b.owner, "description": b.description,
@@ -1050,7 +1060,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.8"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.9"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1060,7 +1070,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.8"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "46.9"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
