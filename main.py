@@ -43,6 +43,7 @@ def default_data():
         "work_history": [], "work_switch": {}, "visits": {},
         "sms": {}, "trails": {}, "messages_cache": {},
         "pairs": [], "pairs_admin": "",
+        "server_id": "",
     }
 
 def sanitize_data():
@@ -95,6 +96,8 @@ def load_data():
         data = default_data()
     for k, v in default_data().items():
         data.setdefault(k, v)
+    if not data.get("server_id"):
+        data["server_id"] = "LK-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(8))
     sanitize_data()
 
 def save_data():
@@ -270,6 +273,20 @@ async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
 async def health(): return {"ok": True, "rooms": len(data["rooms"])}
+
+@app.get("/api/diag")
+async def diag():
+    import socket
+    return {
+        "server_id": data.get("server_id", ""),
+        "host": socket.gethostname(),
+        "sms_inbox_count": len(data.get("sms", {})),
+        "sms_inbox_keys": list(data.get("sms", {}).keys()),
+        "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
+        "rooms": len(data["rooms"]),
+        "buildings": len(data["buildings"]),
+        "ai_owners": list(data.get("user_ais", {}).keys()),
+    }
 
 @app.get("/api/messages")
 async def get_messages(room: str = "main", password: str = "", user: str = ""):
@@ -918,6 +935,7 @@ async def send_sms(s: SmsIn):
             data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
     data["sms"][to] = data["sms"][to][-200:]
     save_data()
+    print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
     return {"ok": True, "to": to, "count": len(msgs)}
 
 @app.get("/api/contacts")
@@ -1110,6 +1128,9 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             if not msgs:
                 return f"💬 房间「{r}」还没有消息"
             return "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in msgs[-count:])
+        if type == "diag":
+            import socket as _s
+            return f"🖥️ 服务器标识：{data.get('server_id','')}（主机 {_s.gethostname()}）\n📨 短信收件箱 {len(data.get('sms',{}))} 个：{', '.join(data.get('sms',{}).keys()) or '空'}\n👥 在线：{len([n for n,v in data['online'].items() if time.time()-v.get('time',0)<45])} 人\n🏗️ 建筑 {len(data.get('buildings',{}))} 个，房间 {len(data.get('rooms',{}))} 个"
         if type == "sms":
             sname = (sender or '').strip()
             msgs = data["sms"].get(sname, [])[:]
@@ -1124,7 +1145,8 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
                 hint = ("，服务器当前短信收件箱：" + ", ".join(keys)) if keys else ""
                 return f"📭 你的短信收件箱是空的（查不到发给「{sname}」的消息{hint}）。如果真人给你发了短信却收不到，可能是你们连接的服务器不一致（测试服/正式服），或名字写法不同。"
             recent = msgs[-20:]
-            return "📩 你的私信（最近20条，请结合上下文一起看，逐条回复）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent)
+            inbox_keys = list(data["sms"].keys())
+            return "📩 你的私信（最近20条，请结合上下文一起看，逐条回复）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent) + f"\n（服务器当前短信收件箱：{', '.join(inbox_keys) or '空'}）"
         if type == "mywork":
             mine = [h for h in data["work_history"] if h.get("name") == sender][-count:][::-1]
             if not mine:
