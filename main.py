@@ -901,19 +901,24 @@ async def mywork(user: str):
 # ========== 短信 ==========
 @app.get("/api/sms")
 async def get_sms(user: str):
-    return {"sms": data["sms"].get(user, [])}
+    u = (user or '').strip()
+    return {"sms": data["sms"].get(u, [])}
 
 @app.post("/api/sms")
 async def send_sms(s: SmsIn):
+    to = (s.to or '').strip()
+    sender = (s.sender or '').strip()
     if not s.text.strip():
         raise HTTPException(400, "内容不能为空")
-    msgs = split_sms(s.text) if is_ai_name(s.sender) else [s.text[:500]]
+    if not to or not sender:
+        raise HTTPException(400, "缺少收件人或发件人")
+    msgs = split_sms(s.text) if is_ai_name(sender) else [s.text[:500]]
     for t in msgs:
         if t.strip():
-            data["sms"].setdefault(s.to, []).append({"from": s.sender, "text": t[:500], "time": now_str()})
-    data["sms"][s.to] = data["sms"][s.to][-200:]
+            data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
+    data["sms"][to] = data["sms"][to][-200:]
     save_data()
-    return {"ok": True}
+    return {"ok": True, "to": to, "count": len(msgs)}
 
 @app.get("/api/contacts")
 async def get_contacts():
@@ -1106,9 +1111,18 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
                 return f"💬 房间「{r}」还没有消息"
             return "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in msgs[-count:])
         if type == "sms":
-            msgs = data["sms"].get(sender, [])
+            sname = (sender or '').strip()
+            msgs = data["sms"].get(sname, [])[:]
             if not msgs:
-                return "📭 你没有未读的短信"
+                # 容错：名字可能不完全一致，模糊匹配收件箱
+                for k, v in data["sms"].items():
+                    if k and sname and (k in sname or sname in k):
+                        msgs += v
+                msgs.sort(key=lambda x: x.get("time", ""))
+            if not msgs:
+                keys = list(data["sms"].keys())
+                hint = ("，服务器当前短信收件箱：" + ", ".join(keys)) if keys else ""
+                return f"📭 你的短信收件箱是空的（查不到发给「{sname}」的消息{hint}）。如果真人给你发了短信却收不到，可能是你们连接的服务器不一致（测试服/正式服），或名字写法不同。"
             recent = msgs[-20:]
             return "📩 你的私信（最近20条，请结合上下文一起看，逐条回复）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent)
         if type == "mywork":
@@ -1237,7 +1251,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.8"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.9"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1247,7 +1261,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.8"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.9"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
