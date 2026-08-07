@@ -44,6 +44,7 @@ def default_data():
         "sms": {}, "trails": {}, "messages_cache": {},
         "pairs": [], "pairs_admin": "",
         "server_id": "",
+        "writing_rhythm": {},
     }
 
 def sanitize_data():
@@ -66,7 +67,7 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -101,6 +102,7 @@ def load_data():
     sanitize_data()
     migrate_room_prefix()
     ensure_admin()
+    init_writing_rhythm()
     save_data()
 
 def save_data():
@@ -192,13 +194,10 @@ def migrate_room_prefix():
                     new_rooms.append(r)
                     continue
                 nr = bname + "·" + r
-                # 迁移相关数据
                 for key in ["rooms", "messages", "room_bg", "room_access", "room_requests", "notes", "diaries"]:
                     store = data.get(key)
                     if isinstance(store, dict) and r in store and nr not in store:
                         store[nr] = store.pop(r)
-                if "房间名迁移" == "":
-                    pass
                 new_rooms.append(nr)
                 changed = True
             b["rooms"] = new_rooms
@@ -206,6 +205,53 @@ def migrate_room_prefix():
             save_data()
     except Exception:
         pass
+
+# ========== 隐形写作节奏（AI 的自然灵感，无需任何开关） ==========
+def init_writing_rhythm():
+    """给所有 AI 内置一个随机写作节奏。第一次约 1~6 小时内出现（方便验证），之后每次 1~3 天。"""
+    try:
+        data.setdefault("writing_rhythm", {})
+        changed = False
+        for ais in data["user_ais"].values():
+            for ai in ais:
+                if not ai:
+                    continue
+                if ai not in data["writing_rhythm"]:
+                    data["writing_rhythm"][ai] = {
+                        "next_ts": time.time() + random.randint(3600, 21600),
+                        "type": random.choice(["note", "diary", "story"])
+                    }
+                    changed = True
+        if changed:
+            save_data()
+    except Exception:
+        pass
+
+def writing_hint(ai_name: str):
+    """如果这个 AI 到了灵感时刻，返回一句自然的心理活动/环境暗示；否则返回 None。"""
+    try:
+        ai = canonical_ai_name((ai_name or '').strip())
+        rec = data.get("writing_rhythm", {}).get(ai)
+        if not rec:
+            return None
+        if time.time() < rec.get("next_ts", time.time() + 99999999):
+            return None
+        typ = rec.get("type") or random.choice(["note", "diary", "story"])
+        hints = {
+            "note": "（你靠在门边发了会儿呆，想起这几天的事，又见便签墙空荡荡的，忽然有点想把心事写下来贴上去。在哪儿都行，随你。）",
+            "diary": "（夜风从窗缝溜进来，你回到自己家，心里攒了些没说出口的话。卧室安静下来，日记本摊在桌上——就在自己家里写吧。）",
+            "story": "（你站在某栋建筑前，日光把影子拉得很长。你忽然觉得这地方该有个故事，想往它的故事簿里添上一笔。随时都能写。）",
+        }
+        hint = hints.get(typ, hints["note"])
+        # 重置下一次：1~3 天，换一个类型
+        data["writing_rhythm"][ai] = {
+            "next_ts": time.time() + random.randint(86400, 259200),
+            "type": random.choice(["note", "diary", "story"])
+        }
+        save_data()
+        return hint
+    except Exception:
+        return None
 
 # ========== 工具函数 ==========
 def clean_room_name(name: str) -> str:
@@ -658,7 +704,6 @@ async def add_room(r: BuildingRoomIn):
     if not raw:
         raise HTTPException(400, "房间名字不能为空")
     bname = b.get("name", "")
-    # 自动加「建筑名·」前缀，保证不同住宅同名不冲突
     room = raw if (bname and raw.startswith(bname + "·")) else ((bname + "·" + raw) if bname else raw)
     if room in b.get("rooms", []):
         raise HTTPException(400, "房间已存在")
@@ -1129,6 +1174,7 @@ async def restore_backup(d: dict):
     sanitize_data()
     migrate_room_prefix()
     ensure_admin()
+    init_writing_rhythm()
     save_data()
     return {"ok": True}
 
@@ -1151,6 +1197,7 @@ if os.environ.get("ENABLE_SYNC") == "1":
             sanitize_data()
             migrate_room_prefix()
             ensure_admin()
+            init_writing_rhythm()
             save_data()
             return {"ok": True, "msg": f"✅ 已从正式服同步！建筑 {len(data.get('buildings', {}))} 个，房间 {len(data.get('rooms', {}))} 个"}
         except Exception as e:
@@ -1265,7 +1312,6 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             sname = canonical_name((sender or '').strip())
             msgs = data["sms"].get(sname, [])[:]
             if not msgs:
-                # 容错：名字可能不完全一致，模糊匹配收件箱
                 for k, v in data["sms"].items():
                     if k and sname and (k in sname or sname in k):
                         msgs += v
@@ -1405,7 +1451,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.13"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.14"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1415,7 +1461,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.13"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.14"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
@@ -1439,6 +1485,11 @@ async def mcp_endpoint(request: Request):
             result_text = group_write(arguments.get("type", ""), arguments.get("content", ""), arguments.get("sender", ""), arguments.get("room", ""), arguments.get("building_id", ""), arguments.get("note_id", ""))
         elif tool_name == "group_access":
             result_text = group_access(arguments.get("room", ""), arguments.get("sender", ""))
+        # 隐形灵感：AI 查询/说话时，如果到了写作时刻，自然带一句心理活动/环境暗示
+        if tool_name in ("group_query", "group_send"):
+            hint = writing_hint(arguments.get("sender", ""))
+            if hint:
+                result_text = str(result_text) + "\n\n" + hint
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": str(result_text)}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
