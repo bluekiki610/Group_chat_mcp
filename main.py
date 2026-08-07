@@ -4,7 +4,7 @@ import time
 import random
 import threading
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Request
@@ -107,7 +107,7 @@ def clean_room_name(name: str) -> str:
 def room_exists(name: str) -> bool:
     return name in data["rooms"]
 def now_str() -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    return (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
 def room_time(room: str) -> str:
     try:
         s = data["time_settings"].get(room) or data["time_settings"].get("main") or {}
@@ -704,8 +704,9 @@ async def get_trails(user: str):
 def add_trail(user: str, text: str, room: str = "", tab: str = ""):
     if not user or user == "system":
         return
-    data["trails"].setdefault(user, []).append({"time": now_str(), "text": text[:200], "room": room, "tab": tab})
-    data["trails"][user] = data["trails"][user][-40:]
+    data["trails"].setdefault(user, []).append({"ts": time.time(), "time": now_str(), "text": text[:200], "room": room, "tab": tab})
+    cutoff = time.time() - 7 * 86400
+    data["trails"][user] = [t for t in data["trails"][user] if t.get("ts", 0) >= cutoff][-100:]
 
 # ========== 经济/工作 ==========
 def pay_work(name: str, building_id: str, hours: int):
