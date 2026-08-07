@@ -550,7 +550,7 @@ function openTrail(){
   document.getElementById('trailMask').classList.add('show');
   api('/api/trails?user='+encodeURIComponent(userName)).then(function(d){
     var el = document.getElementById('trailList'); var items = d.trails||[];
-    if(!items.length){ el.innerHTML='今天还没有行动轨迹（等你的 AI 出门逛逛吧～'); return; }
+    if(!items.length){ el.innerHTML='今天还没有行动轨迹（等你的 AI 出门逛逛吧～'; return; }
     var days = {};
     items.slice().reverse().forEach(function(t){ var ds=(t.time||'').slice(0,10); if(!days[ds])days[ds]=[]; days[ds].push(t); });
     el.innerHTML='';
