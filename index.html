@@ -389,8 +389,7 @@ function myHomeBidFind(){ for(var bid in mapData.buildings){ var b=mapData.build
 function goMyHome(){
   var bid=myHomeBidFind();
   if(!bid){ toast('你还没有自己的家（住宅类型）'); return; }
-  var hall=mapData.buildings[bid].name+'·会客厅';
-  switchRoom(hall,''); showChat();
+  openBuilding(bid);
 }
 function showMe(){ ['chatView','mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('myView').style.display='flex'; renderMe(); }
 function renderMe(){
