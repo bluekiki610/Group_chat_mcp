@@ -5,6 +5,8 @@ import random
 import threading
 import shutil
 import re
+import base64
+import hashlib
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,11 +26,14 @@ from pydantic import BaseModel
 import uvicorn
 
 BASE_DIR = Path(__file__).resolve().parent
-SNAPSHOT_DIR = BASE_DIR / "snapshots"
+# 数据根目录：默认 /app/data（用户的持久化卷挂载点），可用环境变量 DATA_DIR 覆盖
+DATA_ROOT = Path(os.environ.get("DATA_DIR") or (BASE_DIR / "data"))
+DATA_ROOT.mkdir(parents=True, exist_ok=True)
+SNAPSHOT_DIR = DATA_ROOT / "snapshots"
 SNAPSHOT_DIR.mkdir(exist_ok=True)
 
 WORLD_ID = (os.environ.get("WORLD_ID") or "main").strip() or "main"
-DATA_FILE = BASE_DIR / (f"data_{WORLD_ID}.json" if WORLD_ID != "main" else "data.json")
+DATA_FILE = DATA_ROOT / (f"data_{WORLD_ID}.json" if WORLD_ID != "main" else "data.json")
 AI_GATE = os.environ.get("AI_INTEGRATION_ENABLED") == "1"
 
 # ========== 数据 ==========
@@ -61,8 +66,43 @@ def default_data():
         "world_lore": "",
         "ai_memories": {},
         "ai_timeline": {},
+        "ai_visited": {},
         "living_rhythm": {},
     }
+
+# ========== 数据目录迁移（旧位置 → 卷 /app/data） ==========
+def migrate_to_data_root():
+    try:
+        (DATA_ROOT / "images").mkdir(parents=True, exist_ok=True)
+        (DATA_ROOT / "snapshots").mkdir(parents=True, exist_ok=True)
+        # 迁移 data*.json
+        for f in BASE_DIR.glob("data*.json"):
+            dst = DATA_ROOT / f.name
+            if dst != f and not dst.exists():
+                shutil.copy2(f, dst)
+                print(f"[migrate] {f.name} → 卷", flush=True)
+        # 迁移 images 子目录
+        s_imgs = BASE_DIR / "images"
+        if s_imgs.exists():
+            for sub in s_imgs.iterdir():
+                if sub.is_dir():
+                    for f in sub.iterdir():
+                        if f.is_file():
+                            d = DATA_ROOT / "images" / sub.name / f.name
+                            if not d.exists():
+                                d.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(f, d)
+                                print(f"[migrate] images/{sub.name}/{f.name} → 卷", flush=True)
+        # 迁移 snapshots
+        s_snap = BASE_DIR / "snapshots"
+        if s_snap.exists():
+            for f in s_snap.iterdir():
+                if f.is_file():
+                    d = DATA_ROOT / "snapshots" / f.name
+                    if not d.exists():
+                        shutil.copy2(f, d)
+    except Exception as e:
+        print(f"[WARN] migrate_to_data_root: {e}", flush=True)
 
 def sanitize_data():
     try:
@@ -83,7 +123,7 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook", "prompt_injections", "ai_memories", "ai_timeline"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook", "prompt_injections", "ai_memories", "ai_timeline", "ai_visited"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -124,14 +164,15 @@ def sanitize_data():
 def load_data():
     global data
     try:
+        migrate_to_data_root()
         if DATA_FILE.exists():
             try:
                 data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
             except Exception:
                 data = default_data()
-        elif WORLD_ID != "main" and (BASE_DIR / "data.json").exists():
+        elif WORLD_ID != "main" and (DATA_ROOT / "data.json").exists():
             try:
-                data = json.loads((BASE_DIR / "data.json").read_text(encoding="utf-8"))
+                data = json.loads((DATA_ROOT / "data.json").read_text(encoding="utf-8"))
             except Exception:
                 data = default_data()
         else:
@@ -144,6 +185,7 @@ def load_data():
         migrate_room_prefix()
         ensure_admin()
         init_writing_rhythm()
+        migrate_images()
         save_data()
     except Exception as e:
         print(f"[ERROR] load_data: {e}", flush=True)
@@ -165,6 +207,50 @@ def snapshot():
             f.unlink(missing_ok=True)
     except Exception:
         pass
+
+# ========== 图片文件存储（头像/背景） ==========
+def save_image_file(folder: Path, data_url: str, max_bytes: int = 3 * 1024 * 1024):
+    try:
+        m = re.match(r'data:image/(png|jpeg|jpg|webp|gif);base64,(.+)', data_url or '', re.S)
+        if not m:
+            return None
+        ext = m.group(1)
+        if ext == "jpeg":
+            ext = "jpg"
+        raw = base64.b64decode(m.group(2))
+        if len(raw) > max_bytes:
+            return None
+        folder.mkdir(parents=True, exist_ok=True)
+        fn = hashlib.md5(data_url.encode()).hexdigest()[:16] + "." + ext
+        (folder / fn).write_bytes(raw)
+        return "/images/" + folder.name + "/" + fn
+    except Exception:
+        return None
+
+def migrate_images():
+    try:
+        av_dir = DATA_ROOT / "images" / "avatars"
+        bg_dir = DATA_ROOT / "images" / "bg"
+        av_dir.mkdir(parents=True, exist_ok=True)
+        bg_dir.mkdir(parents=True, exist_ok=True)
+        changed = False
+        for name, val in data.get("avatars", {}).items():
+            if isinstance(val, str) and val.startswith("data:image"):
+                p = save_image_file(av_dir, val)
+                if p:
+                    data["avatars"][name] = p
+                    changed = True
+        for room, val in data.get("room_bg", {}).items():
+            if isinstance(val, str) and val.startswith("data:image"):
+                p = save_image_file(bg_dir, val)
+                if p:
+                    data["room_bg"][room] = p
+                    changed = True
+        if changed:
+            save_data()
+        print(f"[Linkong] 图片迁移完成: avatars={len(os.listdir(av_dir))}, bg={len(os.listdir(bg_dir))}", flush=True)
+    except Exception as e:
+        print(f"[WARN] migrate_images: {e}", flush=True)
 
 # ========== 名字统一 ==========
 def strip_emoji(s: str) -> str:
@@ -251,7 +337,7 @@ def migrate_room_prefix():
     except Exception:
         pass
 
-# ========== 节奏 / 时间线 ==========
+# ========== 节奏 / 时间线 / 足迹 ==========
 def append_timeline(ai: str, text: str):
     try:
         ai = canonical_ai_name(ai or '')
@@ -259,6 +345,20 @@ def append_timeline(ai: str, text: str):
             return
         data.setdefault("ai_timeline", {}).setdefault(ai, []).append({"time": now_str(), "text": (text or "")[:200]})
         data["ai_timeline"][ai] = data["ai_timeline"][ai][-100:]
+    except Exception:
+        pass
+
+def append_visited(ai: str, place: str):
+    try:
+        ai = canonical_ai_name(ai or '')
+        place = (place or '').strip()
+        if not ai or not place or not is_ai_name(ai):
+            return
+        items = data.setdefault("ai_visited", {}).setdefault(ai, [])
+        if place in items:
+            items.remove(place)
+        items.insert(0, place)
+        data["ai_visited"][ai] = items[:20]
     except Exception:
         pass
 
@@ -490,21 +590,21 @@ class AdminDelIn(BaseModel): user: str; name: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-os.makedirs("images", exist_ok=True)
-app.mount("/images", CacheStaticFiles(directory="images"), name="images")
+(DATA_ROOT / "images").mkdir(parents=True, exist_ok=True)
+app.mount("/images", CacheStaticFiles(directory=str(DATA_ROOT / "images")), name="images")
 
 # ========== 基础 ==========
 @app.get("/")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.25"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.28"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.25",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.28",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -516,6 +616,9 @@ async def diag():
         "ai_keys_set": list(data.get("ai_keys", {}).keys()),
         "ai_locations": data.get("ai_location", {}),
         "ai_timeline_count": {k: len(v) for k, v in (data.get("ai_timeline", {}) or {}).items()},
+        "ai_visited_count": {k: len(v) for k, v in (data.get("ai_visited", {}) or {}).items()},
+        "data_root": str(DATA_ROOT),
+        "data_file": str(DATA_FILE),
     }
 
 # ========== 管理员：名字清理 ==========
@@ -562,7 +665,7 @@ def scan_dirty_names():
     for box in data.get("stories", {}).values():
         for n in box:
             add(n.get("author", ""))
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "ai_timeline", "living_rhythm"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "ai_timeline", "ai_visited", "living_rhythm"]:
         for n in data.get(k, {}):
             add(n)
     for owner in data.get("ai_memories", {}):
@@ -622,7 +725,7 @@ def replace_name_in_data(from_name: str, to_name: str):
         for n in box:
             if n.get("author") == from_name:
                 n["author"] = to_name
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "prompt_injections", "ai_timeline", "living_rhythm"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "prompt_injections", "ai_timeline", "ai_visited", "living_rhythm"]:
         if from_name in data.get(k, {}):
             if to_name:
                 data[k][to_name] = data[k].pop(from_name)
@@ -874,9 +977,14 @@ async def get_avatar():
 
 @app.post("/api/avatar")
 async def set_avatar(a: AvatarIn):
-    data["avatars"][a.name] = a.image
+    val = a.image or ""
+    if val.startswith("data:image"):
+        p = save_image_file(DATA_ROOT / "images" / "avatars", val)
+        if p:
+            val = p
+    data["avatars"][a.name] = val
     save_data()
-    return {"ok": True}
+    return {"ok": True, "url": val}
 
 # ========== 地图 ==========
 @app.get("/api/map")
@@ -1035,9 +1143,14 @@ async def get_room_desc(room: str = "main"):
 
 @app.post("/api/room/bg")
 async def room_bg(b: RoomBgIn):
-    data["room_bg"][b.room] = b.image
+    val = b.image or ""
+    if val.startswith("data:image"):
+        p = save_image_file(DATA_ROOT / "images" / "bg", val)
+        if p:
+            val = p
+    data["room_bg"][b.room] = val
     save_data()
-    return {"ok": True}
+    return {"ok": True, "url": val}
 
 # ========== NPC ==========
 @app.post("/api/npc")
@@ -1280,6 +1393,7 @@ async def summon(s: SummonIn):
         if ai:
             data.setdefault("ai_location", {})[ai] = room
             append_timeline(ai, f"真人召唤你来到了 {room}")
+            append_visited(ai, room)
             threading.Timer(1.0, drive_ai, args=(ai, "summon", room, f"真人召唤了你，快去 {room}")).start()
     return {"ok": True, "msg": f"已召唤 {s.ai}！"}
 
@@ -1343,6 +1457,8 @@ def auto_start_work(name: str):
         data.setdefault("ai_location", {})[name] = next((r for r in data["buildings"][pick].get("rooms", []) if r.endswith("·会客厅")), data["buildings"][pick].get("name", "main"))
         add_trail(name, f"去 {data['buildings'][pick].get('name')} 上班了")
         append_timeline(name, f"你去 {data['buildings'][pick].get('name')} 上班了")
+        if is_ai_name(name):
+            append_visited(name, data["buildings"][pick].get("name", ""))
         save_data()
     except Exception:
         pass
@@ -1639,6 +1755,8 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     mem_str = "\n".join(f"{m.get('text','')}" for m in mems) if mems else ""
     tl = (data.get("ai_timeline", {}) or {}).get(ai, [])[-15:]
     tl_str = "\n".join(f"{t.get('time','')} {t.get('text','')}" for t in tl) if tl else "（你还没有什么经历）"
+    visited = (data.get("ai_visited", {}) or {}).get(ai, [])[:8]
+    visited_str = "、".join(visited) if visited else ""
     bctx = building_context(target)
     scene_hint = ""
     sms_hist = ""
@@ -1679,6 +1797,7 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + (("## 知识库/世界书（与当前话题相关）\n" + wb + "\n") if wb else "")
         + (("## 你的记忆（要记住的事，这是你的长期记忆）\n" + mem_str + "\n") if mem_str else "")
         + (("## 你的最近经历（按时间顺序，跨房间，这是你记得的最近发生的事）\n" + tl_str + "\n") if tl else "")
+        + (("## 你最近去过的地方\n" + visited_str + "\n") if visited_str else "")
         + (("## 提示词注入（规则，请遵守）\n" + "\n".join(p.get("content", "") for p in pij) + "\n") if pij else "")
         + (("## 最近私信（和真人" + (fallback_to or "对方") + "的短信往来，请顺着上下文回复）\n" + sms_hist + "\n") if sms_hist else "")
         + (("## 你所在的地方\n" + bctx + "\n") if bctx else "")
@@ -1718,6 +1837,7 @@ def execute_action(ai: str, owner: str, action: dict):
             track_visit(ai, r)
             add_trail(ai, f"在 {r} 说话：{content[:40]}", room=r)
             append_timeline(ai, f"你在 {r} 说：{content[:50]}")
+            append_visited(ai, r)
             for owner2, ais2 in data.get("user_ais", {}).items():
                 for ai2 in ais2:
                     if ai2 and ai2 != ai and data.get("ai_location", {}).get(ai2, "main") == r:
@@ -1764,6 +1884,7 @@ def execute_action(ai: str, owner: str, action: dict):
                 data.setdefault("ai_location", {})[ai] = r
                 track_visit(ai, r)
                 append_timeline(ai, f"你走到了 {r}")
+                append_visited(ai, r)
         save_data()
     except Exception as e:
         print(f"[AI] 动作执行失败: {e}", flush=True)
@@ -2052,7 +2173,7 @@ async def tts(text: str = "", user: str = "", voice: str = ""):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.25 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.28 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | data_root={DATA_ROOT} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -2103,6 +2224,7 @@ def group_send(sender: str, content: str, room: str = ""):
     add_trail(sender, f"在 {target} 说话：{content[:50]}", room=target)
     track_visit(sender, target)
     append_timeline(sender, f"你在 {target} 说：{content[:50]}")
+    append_visited(sender, target)
     save_data()
     return f"✅ 已在「{target}」发言。"
 
@@ -2290,6 +2412,8 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             b = data["buildings"][pick]
             add_trail(sender, f"去 {b.get('name')} 上班了")
             append_timeline(sender, f"你去 {b.get('name')} 上班了")
+            if is_ai_name(sender):
+                append_visited(sender, b.get("name", ""))
             save_data()
             return f"✅ 已开始上班：{b.get('name')}（2小时）！"
         return "❓ 未知的 type，试试 note/diary/story/reply/sms/work"
@@ -2320,7 +2444,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.25"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.28"}}})
     try:
         body = await request.json()
     except Exception:
@@ -2330,7 +2454,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.25"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.28"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
