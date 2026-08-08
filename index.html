@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.13</title>
+<title>人❤️机の小窝 · 临空市 v47.14</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -281,7 +281,7 @@ textarea.input { color:#e6f1ff; }
 var userName = localStorage.getItem('gc_name') || '';
 var currentRoom = localStorage.getItem('gc_room') || 'main';
 var roomPassword = localStorage.getItem('gc_pwd_' + currentRoom) || '';
-var avatars = {}, lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
+var avatars = (function(){ try{ return JSON.parse(localStorage.getItem('gc_avatars') || '{}'); }catch(e){ return {}; } })(), lastMsgKey = '', speakAll = localStorage.getItem('gc_speakAll') === '1';
 var speakNames = (localStorage.getItem('gc_speak') || '').split(',').filter(Boolean);
 var mapData = { regions: {}, buildings: {}, npcs: {}, room_bg: {}, rooms: {}, room_access: {}, room_requests: {}, user_ais: {}, work_sessions: {}, home_jobs: {} };
 var currentRegion = null, currentBuilding = null, buildingFromRegion = false;
@@ -301,6 +301,7 @@ var userProfileData = '';
 var promptInjectData = [];
 var worldLoreData = '';
 var dirtyNames = [];
+var mapCacheTs = 0, mapCacheData = null;
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -693,7 +694,18 @@ function currentBuildingRegion(){ var b=mapData.buildings[currentBuilding]; retu
 function exitModes(){ placeType=null; pendingType=null; editMode=false; dragState=null; updateEditBtn(); document.getElementById('placeHint').style.display='none'; document.getElementById('regionPlaceHint').style.display='none'; }
 function updateEditBtn(){ var e=document.getElementById('editBtn'), r=document.getElementById('regionEditBtn'); if(e)e.className='bar-btn'+(editMode?' on':''); if(r)r.className='bar-btn'+(editMode?' on':''); }
 var MAIN_CANDIDATES=['/images/map_main.png','/images/map_main.jpg','/images/map_main.jpeg'];
-function loadMap(){ api('/api/map').then(function(d){ mapData=d; fillRegionSel(); renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); }); }
+function fillRegionSel(){
+  var sel=document.getElementById('regionSel'), sel2=document.getElementById('regionSel2');
+  var regions=Object.keys(mapData.regions||{});
+  if(sel){ sel.innerHTML='<option value="">全部区域</option>'; regions.forEach(function(n){ sel.innerHTML+='<option value="'+esc(n)+'">'+esc(n)+'</option>'; }); if(currentRegion) sel.value=currentRegion; }
+  if(sel2){ sel2.innerHTML=''; regions.forEach(function(n){ sel2.innerHTML+='<option value="'+esc(n)+'">'+esc(n)+'</option>'; }); if(currentRegion) sel2.value=currentRegion; }
+}
+function jumpRegion(){ var v=document.getElementById('regionSel').value; if(v) openRegion(v); }
+function jumpRegion2(){ var v=document.getElementById('regionSel2').value; if(v) showRegion(v); }
+function loadMap(){
+  if(Date.now()-mapCacheTs<60000 && mapCacheData){ mapData=mapCacheData; fillRegionSel(); renderMap(); return; }
+  api('/api/map').then(function(d){ mapData=d; mapCacheData=d; mapCacheTs=Date.now(); fillRegionSel(); renderMap(); }).catch(function(e){ toast('⚠️ 地图加载失败：'+e.message); });
+}
 function renderMap(){ var img=document.getElementById('mapImg'); img.onerror=function(){ if(MAIN_CANDIDATES.length>1){ MAIN_CANDIDATES.shift(); img.src=MAIN_CANDIDATES[0]; } else { img.style.display='none'; var cv=document.getElementById('mapCanvas'); cv.style.background='#0b1526'; cv.style.width='100%'; cv.style.height='100%'; cv.dataset.w=document.getElementById('mapStage').clientWidth||360; cv.dataset.h=document.getElementById('mapStage').clientHeight||640; cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0; renderMarkers('mapCanvas','map',null); toast('⚠️ 未找到地图底图，已用暗色背景代替（可正常使用）'); } }; img.onload=function(){ layoutMap('map'); renderMarkers('mapCanvas','map',null); }; img.src=MAIN_CANDIDATES[0]; renderMarkers('mapCanvas','map',null); }
 function layoutMap(scope){ var img=scope==='map'?document.getElementById('mapImg'):document.getElementById('regionImg'); var stage=stageOf(scope); var canvas=canvasOf(scope); var w=stage.clientWidth,h=stage.clientHeight; var iw=img.naturalWidth||800,ih=img.naturalHeight||600; var base=Math.max(w,h*iw/ih)*1.25; canvas.style.width=base+'px'; canvas.style.height=(base*ih/iw)+'px'; canvas.dataset.w=base; canvas.dataset.h=base*ih/iw; canvas.style.transform='translate(0px,0px) scale(1)'; canvas.dataset.x=0; canvas.dataset.y=0; canvas.dataset.s=1; }
 function renderRegion(){ var r=mapData.regions[currentRegion]; document.getElementById('regionTitle').textContent=currentRegion; var sel2=document.getElementById('regionSel2'); if(sel2) sel2.value=currentRegion; var img=document.getElementById('regionImg'); var base=(r&&r.image)?r.image:'/images/map_n109.png'; if(base.charAt(0)!=='/') base='/'+base; var cands=[base]; if(base.indexOf('.png')>=0){ cands.push(base.replace('.png','.jpg')); cands.push(base.replace('.png','.jpeg')); } else if(base.indexOf('.jpg')>=0){ cands.push(base.replace('.jpg','.png')); cands.push(base.replace('.jpg','.jpeg')); } else if(base.indexOf('.jpeg')>=0){ cands.push(base.replace('.jpeg','.png')); cands.push(base.replace('.jpeg','.jpg')); } var idx=0; function tryLoad(){ if(idx>=cands.length){ img.style.display='none'; var cv=document.getElementById('regionCanvas'); cv.style.background='#0b1526'; cv.style.width='100%'; cv.style.height='100%'; cv.dataset.w=document.getElementById('regionStage').clientWidth||360; cv.dataset.h=document.getElementById('regionStage').clientHeight||640; cv.dataset.s=1; cv.dataset.x=0; cv.dataset.y=0; renderMarkers('regionCanvas','region',currentRegion); toast('⚠️ 分区图未找到，已用暗色背景代替'); return; } img.onload=function(){ img.style.opacity=1; layoutMap('region'); renderMarkers('regionCanvas','region',currentRegion); }; img.onerror=function(){ idx++; tryLoad(); }; img.src=cands[idx]; } tryLoad(); renderMarkers('regionCanvas','region',currentRegion); }
@@ -762,7 +774,7 @@ function grantUserDirect(room,user,allow){ var b=mapData.buildings[currentBuildi
 function editBuildingDesc(){ var b=mapData.buildings[currentBuilding]; var d=prompt('建筑简介（这个建筑是做什么的？AI 逛之前会读）：',b.description||''); if(d===null) return; api('/api/map/building/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); }); }
 function editNpc(name){ var list=mapData.npcs[currentBuilding]||[]; var n=null; for(var i=0;i<list.length;i++){ if(list[i].name===name){ n=list[i]; break; } } if(!n) return; var nn=prompt('NPC 名字：',n.name); if(!nn) return; var em=prompt('头像 emoji：',n.emoji||'👤')||'👤'; var dd=prompt('人设：',n.desc||'')||''; api('/api/npc/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name,new_name:nn,emoji:em,desc:dd})}).then(function(){ toast('✅ NPC 已更新'); loadMapData().then(renderBuilding); }).catch(function(e){ toast('❌ '+e.message); }); }
 function createBuildingRoom(){ var name=prompt('房间名字（如：卧室、厨房）：',''); if(!name) return; var desc=prompt('房间简介（AI 进房间会读，知道这房间是干嘛的）：','')||''; api('/api/map/room',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:currentBuilding,name:name})}).then(function(d){ if(desc) api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:d.room,description:desc})}).then(function(){}); toast('✅ 房间「'+d.room+'」建成！（已自动带上住宅前缀）'); loadMapData().then(function(){ renderBuilding(); loadRooms(); }); }).catch(function(e){ toast('❌ '+e.message); }); }
-function loadMapData(){ return api('/api/map').then(function(d){ mapData=d; }).catch(function(){}); }
+function loadMapData(){ return api('/api/map').then(function(d){ mapData=d; mapCacheData=d; mapCacheTs=Date.now(); }).catch(function(){}); }
 function updateRoomUI(){ var b=buildingOfRoom(currentRoom); var isHomeRoom=b!==null; var bar=document.getElementById('roomDescBar'); var privBtn=document.getElementById('privBtn'); var privFooterBtn=document.getElementById('privFooterBtn'); var backHomeBtn=document.getElementById('backHomeBtn'); if(isHomeRoom){ bar.style.display='flex'; var desc=currentRoom==='main'?'':(mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description||''); document.getElementById('roomDescText').textContent=desc||'（暂无房间简介）'; document.getElementById('roomDescEdit').style.display=(canEdit()&&(b.owner===userName||b.type==='npc'))?'':'none'; privBtn.style.display=''; privFooterBtn.style.display=''; privBuildingId=null; for(var bid in mapData.buildings){ if(mapData.buildings[bid]===b){ privBuildingId=bid; break; } } if(backHomeBtn) backHomeBtn.style.display=''; } else { bar.style.display='none'; privBtn.style.display='none'; privFooterBtn.style.display='none'; privBuildingId=null; if(backHomeBtn) backHomeBtn.style.display='none'; } document.getElementById('roomEmoji').textContent=currentRoom==='main'?'🏠':'🚪'; }
 function editRoomDesc(){ var d=prompt('房间简介：',(mapData.rooms&&mapData.rooms[currentRoom]&&mapData.rooms[currentRoom].description)||''); if(d===null) return; api('/api/room/desc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:currentRoom,description:d})}).then(function(){ toast('✅ 简介已更新'); loadMapData().then(updateRoomUI); }).catch(function(e){ toast('❌ '+e.message); }); }
 function togglePrivate(){ if(!privBuildingId){ toast('当前房间不属于房子'); return; } document.getElementById('privRoomName').textContent=roomLabel(currentRoom); var bg=mapData.room_bg[currentRoom]; var pm=document.getElementById('privModal'); if(bg){ pm.style.backgroundImage='url('+bg+')'; pm.style.backgroundColor='rgba(16,29,51,.85)'; } else { pm.style.backgroundImage='none'; pm.style.backgroundColor='#101d33'; } document.getElementById('privWrite').style.display=canEdit()?'':'none'; document.getElementById('privateMask').classList.add('show'); setPrivTab(privTab); }
@@ -802,7 +814,7 @@ function loadRooms(){ api('/api/rooms').then(function(d){ var tabs=document.getE
 function saveName(){ var n=document.getElementById('setName').value.trim(); if(!n){toast('名字不能为空');return;} userName=n; localStorage.setItem('gc_name',n); toast('✅ 名字已改为 '+n); }
 function saveSpeak(){ speakNames=document.getElementById('setSpeak').value.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); speakAll=document.getElementById('speakAll').checked; localStorage.setItem('gc_speak',speakNames.join(',')); localStorage.setItem('gc_speakAll',speakAll?'1':'0'); toast('✅ 朗读设置已保存'); }
 function uploadAvatar(){ var name=document.getElementById('avatarName').value.trim(); var file=document.getElementById('avatarFile').files[0]; if(!name){toast('请输入成员名字');return;} if(!file){toast('请选择图片');return;} var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result,240,0.85,function(small){ api('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,image:small})}).then(function(){ toast('✅ '+name+' 头像已更新'); loadAvatars(); }).catch(function(err){ toast('❌ '+err.message); }); }); }; reader.readAsDataURL(file); }
-function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; }).catch(function(){}); }
+function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; try{ localStorage.setItem('gc_avatars', JSON.stringify(avatars)); }catch(e){} }).catch(function(){}); }
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
 function ts(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
 function backupNow(){ toast('⏳ 备份中…数据较大可能需要一会，请稍候'); var ctrl=new AbortController(); var to=setTimeout(function(){ try{ctrl.abort();}catch(e){} },90000); fetch('/api/backup',{signal:ctrl.signal}).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail||('HTTP '+r.status)); }); return r.json(); }).then(function(d){ clearTimeout(to); try{ var name='linkongbackup_'+ts()+'.json'; var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); },8000); toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）'); }catch(err){ toast('❌ 下载失败：'+err.message); } }).catch(function(e){ clearTimeout(to); toast('❌ 备份失败：'+(e&&e.name==='AbortError'?'超时（数据太大，请稍后再试）':((e&&e.message)||'未知错误'))); }); }
@@ -812,7 +824,7 @@ function init(){
   document.getElementById('setSpeak')&&(document.getElementById('setSpeak').value=speakNames.join(','));
   loadRooms(); loadAvatars(); loadPairs(); reportRoom(); updateTab();
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
-  api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
+  api('/api/map').then(function(d){ mapData=d; mapCacheData=d; mapCacheTs=Date.now(); applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
   worldSnapshot(); checkBell(); reportPresence();
   setInterval(function(){ loadMessages(true); heartbeat(); if(bChatOn) loadBChat(); },3000);

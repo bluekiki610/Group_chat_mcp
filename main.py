@@ -478,13 +478,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.22"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.23"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.22",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.23",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -834,7 +834,8 @@ async def get_online():
 
 # ========== 头像 ==========
 @app.get("/api/avatar")
-async def get_avatar(): return {"avatars": data["avatars"]}
+async def get_avatar():
+    return JSONResponse(content={"avatars": data["avatars"]}, headers={"Cache-Control": "public, max-age=300"})
 
 @app.post("/api/avatar")
 async def set_avatar(a: AvatarIn):
@@ -846,11 +847,11 @@ async def set_avatar(a: AvatarIn):
 @app.get("/api/map")
 async def get_map():
     return {
-        "regions": data["regions"], "buildings": data["buildings"], "npcs": data["npcs"],
-        "room_bg": data["room_bg"], "rooms": data["rooms"],
-        "room_access": data["room_access"], "room_requests": data["room_requests"],
-        "user_ais": data["user_ais"], "work_sessions": data["work_sessions"],
-        "home_jobs": data["home_jobs"],
+        "regions": data.get("regions", {}), "buildings": data.get("buildings", {}), "npcs": data.get("npcs", {}),
+        "room_bg": data.get("room_bg", {}), "rooms": data.get("rooms", {}),
+        "room_access": data.get("room_access", {}), "room_requests": data.get("room_requests", {}),
+        "user_ais": data.get("user_ais", {}), "work_sessions": data.get("work_sessions", {}),
+        "home_jobs": data.get("home_jobs", {}),
         "ai_location": data.get("ai_location", {}),
     }
 
@@ -1345,7 +1346,7 @@ async def send_sms(s: SmsIn):
     data["sms"][to] = data["sms"][to][-200:]
     save_data()
     if ai_integration_enabled() and is_ai_name(to):
-        delay = random.randint(60, 300)
+        delay = random.randint(60, 180)
         threading.Timer(delay, drive_ai, args=(to, "sms", "", f"{sender} 给你发来私信：{s.text[:80]}", sender)).start()
     print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
     return {"ok": True, "to": to, "count": len(msgs)}
@@ -1507,8 +1508,20 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     pij = [p for p in (data.get("prompt_injections", {}) or {}).get(owner, []) if p.get("enabled") and p.get("content")]
     lore = data.get("world_lore", "") or ""
     scene_hint = ""
+    sms_hist = ""
     if trigger == "sms":
         scene_hint = f"这是真人 {fallback_to or '对方'} 给你发来私信。请务必用 sms 动作回复（to 填 {fallback_to or '对方'}），不要用 speak 在公开聊天里说。"
+        if fallback_to:
+            pairs = []
+            for m in data.get("sms", {}).get(ai, []):
+                if m.get("from") == fallback_to:
+                    pairs.append((m.get("time", ""), fallback_to, m.get("text", "")))
+            for m in data.get("sms", {}).get(fallback_to, []):
+                if m.get("from") == ai:
+                    pairs.append((m.get("time", ""), ai, m.get("text", "")))
+            pairs.sort(key=lambda x: x[0])
+            if pairs:
+                sms_hist = "\n".join(f"{t} {w}: {c}" for t, w, c in pairs[-20:])
     elif trigger == "chat":
         scene_hint = "你正在这个房间和真人聊天，用 speak 回应即可。"
     elif trigger == "summon":
@@ -1532,6 +1545,7 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + (("## 主人想让 AI 知道的（用户画像）\n" + uprof + "\n") if uprof else "")
         + (("## 知识库/世界书（与当前话题相关）\n" + wb + "\n") if wb else "")
         + (("## 提示词注入（规则，请遵守）\n" + "\n".join(p.get("content", "") for p in pij) + "\n") if pij else "")
+        + (("## 最近私信（和真人" + (fallback_to or "对方") + "的短信往来，请顺着上下文回复）\n" + sms_hist + "\n") if sms_hist else "")
         + f"## 你当前在\n{target}\n\n## 最近这里的对话\n{chat}\n"
         + f"## 这次触发\n{trigger_text or trigger}\n\n"
         + ((scene_hint + "\n\n") if scene_hint else "")
@@ -1584,7 +1598,10 @@ def execute_action(ai: str, owner: str, action: dict):
         elif act == "sms":
             if not to:
                 return
-            data["sms"].setdefault(to, []).append({"from": ai, "text": content[:500], "time": now_str()})
+            pieces = split_sms(content)[:6]
+            for piece in pieces:
+                if piece.strip():
+                    data["sms"].setdefault(to, []).append({"from": ai, "text": piece[:500], "time": now_str()})
             data["sms"][to] = data["sms"][to][-200:]
         elif act == "move":
             r = full_room_name(action.get("room") or "")
@@ -1809,7 +1826,7 @@ async def tts(text: str = "", user: str = "", voice: str = ""):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.22 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.23 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -2062,7 +2079,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.22"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.23"}}})
     try:
         body = await request.json()
     except Exception:
@@ -2072,7 +2089,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.22"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.23"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
