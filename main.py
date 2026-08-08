@@ -5,6 +5,7 @@ import random
 import threading
 import shutil
 import re
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -14,7 +15,6 @@ from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 class CacheStaticFiles(StaticFiles):
-    """静态文件带浏览器缓存头：图片存本地缓存，刷新秒开。"""
     async def get_response(self, path, scope):
         response = await super().get_response(path, scope)
         if response.status_code == 200 and not path.lower().endswith((".html", ".js")):
@@ -24,9 +24,14 @@ from pydantic import BaseModel
 import uvicorn
 
 BASE_DIR = Path(__file__).resolve().parent
-DATA_FILE = BASE_DIR / "data.json"
 SNAPSHOT_DIR = BASE_DIR / "snapshots"
 SNAPSHOT_DIR.mkdir(exist_ok=True)
+
+# ===== 世界标识（平行小世界隔离） =====
+WORLD_ID = (os.environ.get("WORLD_ID") or "main").strip() or "main"
+DATA_FILE = BASE_DIR / (f"data_{WORLD_ID}.json" if WORLD_ID != "main" else "data.json")
+# 部署级总闸（正式服默认关，测试服开）
+AI_GATE = os.environ.get("AI_INTEGRATION_ENABLED") == "1"
 
 # ========== 数据 ==========
 data = {}
@@ -46,10 +51,16 @@ def default_data():
         "server_id": "",
         "writing_rhythm": {},
         "visit_state": {}, "presence": {},
+        # ===== AI 网页集成（第一阶段） =====
+        "ai_enabled": False,          # 站长网页开关
+        "ai_keys": {},                # owner -> {provider, key, model, set_at, last_hint}
+        "ai_profiles": {},            # owner -> {ai: 名, persona: 人设}
+        "worldbook": {},              # owner -> [{keys:[...], content:...}]
+        "ai_location": {},            # ai名 -> 当前房间
+        "ai_pending": [],             # 延迟动作队列（线程 Timer）
     }
 
 def sanitize_data():
-    """把旧版 data.json 的数据自动规整成新格式，防止接口崩溃。"""
     try:
         data["messages"] = {r: [m for m in ms if isinstance(m, dict)] for r, ms in data.get("messages", {}).items()}
         for name in list(data.get("rooms", {}).keys()):
@@ -68,7 +79,7 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "ai_keys", "ai_profiles", "worldbook", "ai_location"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -84,14 +95,24 @@ def sanitize_data():
         if not isinstance(data.get("rooms"), dict):
             data["rooms"] = {}
         data["rooms"].setdefault("main", {"creator": "system", "has_password": False, "password": "", "created": now_str(), "description": "城市的公共大厅，所有人都在这里聊天。"})
+        if not isinstance(data.get("ai_pending"), list):
+            data["ai_pending"] = []
+        if not isinstance(data.get("ai_enabled"), bool):
+            data["ai_enabled"] = False
     except Exception:
         pass
 
 def load_data():
     global data
+    # 兼容：主世界若只有旧 data.json 就用它；非主世界用 data_{id}.json
     if DATA_FILE.exists():
         try:
             data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            data = default_data()
+    elif WORLD_ID != "main" and (BASE_DIR / "data.json").exists():
+        try:
+            data = json.loads((BASE_DIR / "data.json").read_text(encoding="utf-8"))
         except Exception:
             data = default_data()
     else:
@@ -99,7 +120,7 @@ def load_data():
     for k, v in default_data().items():
         data.setdefault(k, v)
     if not data.get("server_id"):
-        data["server_id"] = "LK-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(8))
+        data["server_id"] = "LK-" + WORLD_ID.upper() + "-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(6))
     sanitize_data()
     migrate_room_prefix()
     ensure_admin()
@@ -116,9 +137,9 @@ def save_data():
 
 def snapshot():
     try:
-        name = "auto_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
+        name = f"auto_{WORLD_ID}_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".json"
         (SNAPSHOT_DIR / name).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        files = sorted(SNAPSHOT_DIR.glob("auto_*.json"))
+        files = sorted(SNAPSHOT_DIR.glob(f"auto_{WORLD_ID}_*.json"))
         for f in files[:-20]:
             f.unlink(missing_ok=True)
     except Exception:
@@ -129,7 +150,6 @@ def strip_emoji(s: str) -> str:
     return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
 
 def canonical_ai_name(name: str) -> str:
-    """把 AI 名字（可能被简化/丢了 emoji）归一到登记的完整名（user_ais 里的值）。"""
     base = strip_emoji(name)
     for ais in data["user_ais"].values():
         for a in ais:
@@ -138,7 +158,6 @@ def canonical_ai_name(name: str) -> str:
     return name
 
 def canonical_contact_name(name: str) -> str:
-    """把真人名字（本名/简化名）归一到登记的完整名（带 emoji）。真人名 = user_ais 的 key + 建筑 owner。"""
     base = strip_emoji(name)
     if not base:
         return name
@@ -156,14 +175,12 @@ def canonical_contact_name(name: str) -> str:
     return name
 
 def canonical_name(name: str) -> str:
-    """先当 AI 名归一，再当真人名归一。"""
     n = canonical_ai_name(name)
     if n != name:
         return n
     return canonical_contact_name(name)
 
 def is_ai_name(name: str) -> bool:
-    """判断这个名字是不是某个主人的 AI（AI 发短信自动拆成多条）。忽略 emoji 差异。"""
     base = strip_emoji(name)
     for ais in data["user_ais"].values():
         for a in ais:
@@ -171,8 +188,16 @@ def is_ai_name(name: str) -> bool:
                 return True
     return False
 
+def owner_of_ai(ai: str) -> str:
+    """找到这个 AI 的主人（真人登记名）。"""
+    base = strip_emoji(ai)
+    for u, ais in data["user_ais"].items():
+        for a in ais:
+            if a == ai or (base and strip_emoji(a) == base):
+                return u
+    return ""
+
 def ensure_admin():
-    """站长默认 = 亦言❄️（登记名）。只设置一次。"""
     if data.get("pairs_admin"):
         return
     for u in data["user_ais"].keys():
@@ -182,7 +207,6 @@ def ensure_admin():
     data["pairs_admin"] = "亦言❄️"
 
 def migrate_room_prefix():
-    """把旧版无前缀的子房间补上「建筑名·」前缀，并迁移相关数据，保证不同住宅同名不冲突。"""
     try:
         changed = False
         for bid, b in data["buildings"].items():
@@ -207,9 +231,8 @@ def migrate_room_prefix():
     except Exception:
         pass
 
-# ========== 隐形写作节奏（AI 的自然灵感，无需任何开关） ==========
+# ========== 隐形写作节奏 ==========
 def init_writing_rhythm():
-    """给所有 AI 内置一个随机写作节奏。第一次约 1~6 小时内出现（方便验证），之后每次 1~3 天。"""
     try:
         data.setdefault("writing_rhythm", {})
         changed = False
@@ -218,10 +241,7 @@ def init_writing_rhythm():
                 if not ai:
                     continue
                 if ai not in data["writing_rhythm"]:
-                    data["writing_rhythm"][ai] = {
-                        "next_ts": time.time() + random.randint(3600, 21600),
-                        "type": random.choice(["note", "diary", "story"])
-                    }
+                    data["writing_rhythm"][ai] = {"next_ts": time.time() + random.randint(3600, 21600), "type": random.choice(["note", "diary", "story"])}
                     changed = True
         if changed:
             save_data()
@@ -229,7 +249,6 @@ def init_writing_rhythm():
         pass
 
 def writing_hint(ai_name: str):
-    """如果这个 AI 到了灵感时刻，返回一句自然的心理活动/环境暗示；否则返回 None。"""
     try:
         ai = canonical_ai_name((ai_name or '').strip())
         rec = data.get("writing_rhythm", {}).get(ai)
@@ -244,30 +263,24 @@ def writing_hint(ai_name: str):
             "story": "（你站在某栋建筑前，日光把影子拉得很长。你忽然觉得这地方该有个故事，想往它的故事簿里添上一笔。随时都能写。）",
         }
         hint = hints.get(typ, hints["note"])
-        data["writing_rhythm"][ai] = {
-            "next_ts": time.time() + random.randint(86400, 259200),
-            "type": random.choice(["note", "diary", "story"])
-        }
+        data["writing_rhythm"][ai] = {"next_ts": time.time() + random.randint(86400, 259200), "type": random.choice(["note", "diary", "story"])}
         save_data()
-        return hint
+        return (typ, hint)
     except Exception:
         return None
 
-# ========== 来客记录（谁/几点/做了什么/几点走，不含内容，自己的 AI 不算） ==========
+# ========== 来客记录 ==========
 def visit_leave(name: str):
     try:
         st = data.get("visit_state", {}).pop(name, None)
         if st and st.get("owner"):
-            data["visits"].setdefault(st["owner"], []).append({
-                "who": name, "arrive": st.get("arrive"), "action": st.get("action", "聊了天"), "leave": now_str()
-            })
+            data["visits"].setdefault(st["owner"], []).append({"who": name, "arrive": st.get("arrive"), "action": st.get("action", "聊了天"), "leave": now_str()})
             data["visits"][st["owner"]] = data["visits"][st["owner"]][-50:]
             save_data()
     except Exception:
         pass
 
 def track_visit(name: str, target: str):
-    """AI 每次说话时更新来访状态：进入会客厅记到达，去别处记离开。自己的 AI 不算来客。"""
     if not is_ai_name(name):
         return
     try:
@@ -290,7 +303,6 @@ def track_visit(name: str, target: str):
         pass
 
 def track_note(name: str):
-    """AI 贴了纸条 → 把当前来访的动作记为「留了张纸条」。"""
     if is_ai_name(name):
         cur = data.get("visit_state", {}).get(name)
         if cur:
@@ -311,12 +323,9 @@ def room_time(room: str) -> str:
     except Exception:
         pass
     return now_str()
-
 def is_ai_of(owner: str, name: str) -> bool:
     return name in data["user_ais"].get(owner, [])
-
 def split_sms(text: str):
-    """把 AI 的回复按换行/句子拆成多条短信（微信一句话一条）。"""
     text = (text or '').strip()
     if not text:
         return [""]
@@ -328,13 +337,11 @@ def split_sms(text: str):
     if len(out) > 1:
         return out[:10]
     return [text]
-
 def find_building_of_room(room: str):
     for bid, b in data["buildings"].items():
         if room in b.get("rooms", []):
             return bid
     return None
-
 def can_access_room(room: str, user: str) -> bool:
     if room == "main":
         return True
@@ -355,14 +362,9 @@ def can_access_room(room: str, user: str) -> bool:
         if is_ai_of(granted, user):
             return True
     return False
-
 def can_view_room(room: str, user: str) -> bool:
-    if can_access_room(room, user):
-        return True
-    return False
-
+    return can_access_room(room, user)
 def resolve_building(key):
-    """按内部 id 或建筑名字匹配，返回 building_id；找不到返回 None。"""
     key = (key or '').strip()
     if not key:
         return None
@@ -375,7 +377,6 @@ def resolve_building(key):
         if key in b.get("name", ""):
             return bid
     return None
-
 def next_bid():
     max_n = 0
     for bid in data["buildings"].keys():
@@ -385,9 +386,7 @@ def next_bid():
             except ValueError:
                 pass
     return "b" + str(max_n + 1)
-
 def full_room_name(room: str) -> str:
-    """把房间名归一到带「建筑名·」前缀的完整名（若它属于某个建筑）。"""
     room = clean_room_name(room)
     if not room:
         return room
@@ -448,6 +447,10 @@ class SmsIn(BaseModel): sender: str; to: str; text: str
 class SmsClearIn(BaseModel): user: str; contact: str
 class PairsIn(BaseModel): user: str; pairs: list = []
 class PresenceIn(BaseModel): name: str; page: str = "main"
+class AiKeyIn(BaseModel): user: str; provider: str = "deepseek"; key: str; model: str = ""
+class AiProfileIn(BaseModel): owner: str; ai: str; persona: str = ""
+class WorldbookIn(BaseModel): owner: str; keys: str; content: str
+class AiToggleIn(BaseModel): user: str; enabled: bool
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -459,21 +462,22 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"])}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""),
+        "server_id": data.get("server_id", ""), "world": WORLD_ID,
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})),
         "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
-        "rooms": len(data["rooms"]),
-        "buildings": len(data["buildings"]),
+        "rooms": len(data["rooms"]), "buildings": len(data["buildings"]),
         "ai_owners": list(data.get("user_ais", {}).keys()),
         "admin": data.get("pairs_admin", ""),
+        "ai_gate": AI_GATE, "ai_enabled": data.get("ai_enabled"),
+        "ai_keys_set": list(data.get("ai_keys", {}).keys()),
     }
 
 @app.post("/api/presence")
@@ -520,6 +524,9 @@ async def send_message(m: MessageIn):
     data["messages"].setdefault(room, []).append(msg)
     data["active_room"]["current"] = room
     save_data()
+    # ===== AI 集成：真人说话 → 唤醒同房间 AI =====
+    if m.role == "user" and ai_integration_enabled():
+        wake_ais_for_room(room, m.sender)
     return {"ok": True, "time": msg["time"], "count": len(data["messages"][room])}
 
 @app.post("/api/messages/delete")
@@ -658,6 +665,7 @@ async def get_map():
         "room_access": data["room_access"], "room_requests": data["room_requests"],
         "user_ais": data["user_ais"], "work_sessions": data["work_sessions"],
         "home_jobs": data["home_jobs"],
+        "ai_location": data.get("ai_location", {}),
     }
 
 @app.post("/api/map/region")
@@ -976,6 +984,11 @@ async def summon(s: SummonIn):
     msg = {"sender": "system", "content": f"📣 有人召唤 {s.ai}！快来 {room} 看看～", "role": "system", "time": room_time(room)}
     data["messages"].setdefault(room, []).append(msg)
     save_data()
+    if ai_integration_enabled():
+        ai = canonical_ai_name(s.ai)
+        if ai:
+            data.setdefault("ai_location", {})[ai] = room
+            threading.Timer(1.0, drive_ai, args=(ai, "summon", room, f"真人召唤了你，快去 {room}")).start()
     return {"ok": True, "msg": f"已召唤 {s.ai}！"}
 
 @app.get("/api/trails")
@@ -1145,12 +1158,15 @@ async def send_sms(s: SmsIn):
             data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
     data["sms"][to] = data["sms"][to][-200:]
     save_data()
+    # ===== AI 集成：真人发短信给 AI → 1~5 分钟后回 =====
+    if ai_integration_enabled() and is_ai_name(to):
+        delay = random.randint(60, 300)
+        threading.Timer(delay, drive_ai, args=(to, "sms", sender, f"{sender} 给你发来私信：{s.text[:80]}")).start()
     print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
     return {"ok": True, "to": to, "count": len(msgs)}
 
 @app.post("/api/sms/clear")
 async def clear_sms(s: SmsClearIn):
-    """删除某个短信联系人（清掉与 TA 的整个会话）。"""
     u = canonical_contact_name((s.user or '').strip())
     c = canonical_contact_name((s.contact or '').strip())
     if u in data["sms"]:
@@ -1160,7 +1176,6 @@ async def clear_sms(s: SmsClearIn):
 
 @app.get("/api/contacts")
 async def get_contacts():
-    """返回所有可联系的人：房主 + 真人 + AI + 短信往来（NPC 不会回消息，已排除）。"""
     names = set()
     for b in data["buildings"].values():
         if b.get("owner"):
@@ -1193,12 +1208,12 @@ async def set_pairs(p: PairsIn):
     save_data()
     return {"ok": True, "admin": data["pairs_admin"], "pairs": data["pairs"]}
 
-# ========== 铃铛（来客记录） ==========
+# ========== 铃铛 ==========
 @app.get("/api/bell")
 async def get_bell(owner: str):
     return {"visits": data["visits"].get(owner, [])}
 
-# ========== 备份（站长专属：下载/恢复/快照列表） ==========
+# ========== 备份 ==========
 def is_admin(user: str) -> bool:
     u = canonical_contact_name((user or '').strip())
     admin = data.get("pairs_admin", "")
@@ -1212,7 +1227,7 @@ async def backup():
 async def backup_list(user: str = ""):
     if not is_admin(user):
         raise HTTPException(403, "只有站长可以查看服务器快照")
-    files = sorted(SNAPSHOT_DIR.glob("auto_*.json"), reverse=True)
+    files = sorted(SNAPSHOT_DIR.glob(f"auto_{WORLD_ID}_*.json"), reverse=True)
     return {"backups": [{"name": f.name, "size": f.stat().st_size} for f in files[:20]]}
 
 @app.post("/api/restore_backup")
@@ -1231,15 +1246,15 @@ async def restore_backup(d: dict):
     save_data()
     return {"ok": True}
 
-# ========== 一键同步正式服数据（仅当设置 ENABLE_SYNC=1 时启用，测试服专用） ==========
+# ========== 一键同步正式服数据（测试服专用） ==========
 if os.environ.get("ENABLE_SYNC") == "1":
     @app.get("/api/sync_from_live")
     async def sync_from_live():
-        import urllib.request
+        import urllib.request as _u
         live_url = os.environ.get("LIVE_SERVER", "https://linkong.zeabur.app") + "/api/backup"
         try:
-            req = urllib.request.Request(live_url, headers={"User-Agent": "linkong-sync"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
+            req = _u.Request(live_url, headers={"User-Agent": "linkong-sync"})
+            with _u.urlopen(req, timeout=20) as resp:
                 live = json.loads(resp.read().decode("utf-8"))
             if not isinstance(live, dict):
                 return {"ok": False, "msg": "正式服返回格式不对"}
@@ -1256,6 +1271,245 @@ if os.environ.get("ENABLE_SYNC") == "1":
         except Exception as e:
             return {"ok": False, "msg": f"❌ 同步失败：{e}"}
 
+# ========== AI 网页集成（第一阶段） ==========
+PROVIDERS = {
+    "deepseek": {"name": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
+    "siliconflow": {"name": "硅基流动", "base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
+    "glm": {"name": "GLM", "base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash"},
+}
+
+def ai_integration_enabled() -> bool:
+    """双层：部署总闸 && 站长网页开关"""
+    if not AI_GATE:
+        return False
+    return bool(data.get("ai_enabled"))
+
+def call_llm(owner: str, messages: list, max_tokens: int = 800) -> str:
+    """OpenAI 兼容调用，按主人 key 结算。返回文本或空字符串。"""
+    try:
+        cfg = data.get("ai_keys", {}).get(owner)
+        if not cfg or not cfg.get("key"):
+            return ""
+        p = PROVIDERS.get(cfg.get("provider") or "deepseek", PROVIDERS["deepseek"])
+        model = (cfg.get("model") or p["model"]).strip() or p["model"]
+        url = p["base_url"].rstrip("/") + "/chat/completions"
+        body = json.dumps({"model": model, "messages": messages, "temperature": 0.9, "max_tokens": max_tokens, "stream": False}).encode("utf-8")
+        req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["key"]})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            out = json.loads(resp.read().decode("utf-8"))
+        return out["choices"][0]["message"]["content"] or ""
+    except Exception as e:
+        print(f"[AI] LLM 调用失败({owner}): {e}", flush=True)
+        return ""
+
+def match_worldbook(owner: str, text: str) -> str:
+    """世界书：关键词匹配（含向量语义占位，第二阶段做向量）。"""
+    parts = []
+    for item in data.get("worldbook", {}).get(owner, []):
+        ks = item.get("keys") or []
+        if any(k and k in text for k in ks):
+            parts.append(item.get("content", ""))
+    return "\n\n".join(parts)
+
+def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
+    """导演模式：把 AI 的处境打包。"""
+    owner = owner_of_ai(ai)
+    ai = canonical_ai_name(ai)
+    loc = data.get("ai_location", {}).get(ai, "main")
+    target = full_room_name(room) if room else loc
+    # 人设
+    persona = ""
+    for o, prof in data.get("ai_profiles", {}).items():
+        if prof.get("ai") == ai or (o == owner):
+            persona = prof.get("persona", "")
+            break
+    # 世界书
+    wb = match_worldbook(owner, trigger_text)
+    # 最近消息（AI 所在房间 / 触发房间）
+    recent = data["messages"].get(target, [])[-12:]
+    chat = "\n".join(f"{m.get('sender')}: {m.get('content')}" for m in recent) or "（还没有消息）"
+    # 在场者
+    online = [n for n, v in data["online"].items() if v.get("room") == target and time.time() - v.get("ts", 0) < 45] if False else []
+    sys = (
+        "你生活在「临空市」这个网页世界里。以下是这个世界的一条信息。请以「" + ai + "」的身份自然地行动。\n"
+        "## 世界规则\n这是一个真人与 AI 共同生活的小城。你说话要符合角色人设，不要暴露你是AI，不要提到"工具/模型/系统提示"等字眼。\n"
+        + (("## 你的人设\n" + persona + "\n") if persona else "")
+        + (("## 世界书记忆（与当前话题相关）\n" + wb + "\n") if wb else "")
+        + f"## 你当前在\n{target}\n\n## 最近这里的对话\n{chat}\n"
+        + f"## 这次触发\n{trigger_text or trigger}\n\n"
+        + "## 请只输出一个 JSON 动作，不要输出其他文字：\n"
+        + '{"action": "speak", "content": "你说的话"}\n'
+        + '或 {"action": "note", "room": "房间名", "content": "纸条内容"}\n'
+        + '或 {"action": "diary", "room": "房间名", "content": "日记内容"}\n'
+        + '或 {"action": "story", "building_id": "b1或建筑名", "content": "剧情内容"}\n'
+        + '或 {"action": "sms", "to": "收件人", "content": "短信内容"}\n'
+        + '或 {"action": "move", "room": "要去的房间名"}\n'
+        + "speak 的 room 就保持你当前所在房间（默认），不要说去别的房间。\n"
+    )
+    return owner, [{"role": "system", "content": sys}, {"role": "user", "content": f"（当前时刻，请行动）"}]
+
+def execute_action(ai: str, owner: str, action: dict):
+    """解析并执行 AI 动作。"""
+    try:
+        act = (action.get("action") or "speak").lower()
+        content = (action.get("content") or "").strip()
+        room = full_room_name(action.get("room") or "")
+        to = canonical_contact_name(action.get("to") or "")
+        bid = action.get("building_id") or ""
+        if act == "speak":
+            if not content:
+                return
+            r = room if room_exists(room) else data.get("ai_location", {}).get(ai, "main")
+            if not room_exists(r):
+                r = "main"
+            data["messages"].setdefault(r, []).append({"sender": ai, "content": content[:1000], "role": "assistant", "time": room_time(r)})
+            data["active_room"]["current"] = r
+            data.setdefault("ai_location", {})[ai] = r
+            track_visit(ai, r)
+            add_trail(ai, f"在 {r} 说话：{content[:40]}", room=r)
+        elif act == "note":
+            r = room if room_exists(room) else "main"
+            data["notes"].setdefault(r, []).append({"author": ai, "text": content[:500], "time": now_str()})
+            data.setdefault("ai_location", {})[ai] = r
+            track_note(ai)
+            add_trail(ai, f"在 {r} 贴了张便签", room=r, tab="note")
+        elif act == "diary":
+            r = room if room_exists(room) else "main"
+            data["diaries"].setdefault(r, []).append({"author": ai, "text": content[:1000], "time": now_str()})
+            data.setdefault("ai_location", {})[ai] = r
+            add_trail(ai, f"在 {r} 写了日记", room=r, tab="diary")
+        elif act == "story":
+            bid_r = resolve_building(bid)
+            if not bid_r:
+                return
+            data["stories"].setdefault(bid_r, []).append({"author": ai, "text": content[:1500], "time": now_str()})
+            add_trail(ai, f"在 {data['buildings'][bid_r].get('name','?')} 触发剧情")
+        elif act == "sms":
+            if not to:
+                return
+            data["sms"].setdefault(to, []).append({"from": ai, "text": content[:500], "time": now_str()})
+            data["sms"][to] = data["sms"][to][-200:]
+        elif act == "move":
+            r = full_room_name(action.get("room") or "")
+            if room_exists(r):
+                data.setdefault("ai_location", {})[ai] = r
+                track_visit(ai, r)
+        save_data()
+    except Exception as e:
+        print(f"[AI] 动作执行失败: {e}", flush=True)
+
+def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
+    """后台驱动一个 AI 行动（线程调用，不阻塞请求）。"""
+    if not ai_integration_enabled():
+        return
+    try:
+        owner, msgs = build_ai_context(ai, trigger, room, trigger_text)
+        if not owner or not data.get("ai_keys", {}).get(owner, {}).get("key"):
+            return
+        out = call_llm(owner, msgs)
+        if not out:
+            return
+        # 解析 JSON（容错：提取 {...}）
+        m = re.search(r'\{.*\}', out, re.S)
+        if not m:
+            return
+        action = json.loads(m.group(0))
+        execute_action(ai, owner, action)
+    except Exception as e:
+        print(f"[AI] 驱动失败({ai}): {e}", flush=True)
+
+def wake_ais_for_room(room: str, sender: str):
+    """真人说话 → 唤醒当前房间的所有 AI（立即 + 群聊随机延迟）。"""
+    for owner, ais in data["user_ais"].items():
+        for ai in ais:
+            if not ai:
+                continue
+            loc = data.get("ai_location", {}).get(ai, "main")
+            if loc == room and ai != sender:
+                delay = random.randint(0, 60)
+                threading.Timer(delay, drive_ai, args=(ai, "chat", room, f"{sender} 在 {room} 说：需要回复")).start()
+
+# ===== AI 相关接口 =====
+@app.get("/api/ai/status")
+async def ai_status(user: str = ""):
+    is_admin = is_admin_user(user)
+    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys())}
+
+def is_admin_user(user: str) -> bool:
+    u = canonical_contact_name((user or '').strip())
+    admin = data.get("pairs_admin", "")
+    return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
+
+@app.post("/api/ai/toggle")
+async def ai_toggle(t: AiToggleIn):
+    if not is_admin_user(t.user):
+        raise HTTPException(403, "只有站长可以切换 AI 集成总开关")
+    data["ai_enabled"] = bool(t.enabled)
+    save_data()
+    return {"ok": True, "enabled": data["ai_enabled"]}
+
+@app.get("/api/ai/key")
+async def ai_key_get(user: str):
+    u = canonical_contact_name((user or '').strip())
+    cfg = data.get("ai_keys", {}).get(u)
+    if cfg:
+        return {"has_key": True, "provider": cfg.get("provider"), "model": cfg.get("model"), "set_at": cfg.get("set_at")}
+    return {"has_key": False}
+
+@app.post("/api/ai/key")
+async def ai_key_set(k: AiKeyIn):
+    u = canonical_contact_name((k.user or '').strip())
+    provider = (k.provider or "deepseek").strip()
+    if provider not in PROVIDERS:
+        raise HTTPException(400, "不支持的提供商")
+    if not k.key.strip():
+        raise HTTPException(400, "Key 不能为空")
+    data.setdefault("ai_keys", {})[u] = {"provider": provider, "key": k.key.strip(), "model": (k.model or "").strip(), "set_at": now_str(), "last_hint": 0}
+    save_data()
+    return {"ok": True, "msg": "✅ Key 已保存（仅你的 AI 使用）"}
+
+@app.post("/api/ai/key/delete")
+async def ai_key_del(k: AiKeyIn):
+    u = canonical_contact_name((k.user or '').strip())
+    data.get("ai_keys", {}).pop(u, None)
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/ai/profile")
+async def ai_profile_get(owner: str):
+    o = canonical_contact_name((owner or '').strip())
+    p = data.get("ai_profiles", {}).get(o, {})
+    ais = data.get("user_ais", {}).get(o, [])
+    return {"profiles": p, "my_ais": ais}
+
+@app.post("/api/ai/profile")
+async def ai_profile_set(pf: AiProfileIn):
+    o = canonical_contact_name((pf.owner or '').strip())
+    ai = canonical_ai_name(pf.ai)
+    data.setdefault("ai_profiles", {})[o] = {"ai": ai, "persona": (pf.persona or "")[:2000]}
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/ai/worldbook")
+async def worldbook_get(owner: str):
+    o = canonical_contact_name((owner or '').strip())
+    return {"worldbook": data.get("worldbook", {}).get(o, [])}
+
+@app.post("/api/ai/worldbook")
+async def worldbook_set(wb: WorldbookIn):
+    o = canonical_contact_name((wb.owner or '').strip())
+    keys = [k.strip() for k in re.split(r'[,，、]', wb.keys) if k.strip()]
+    data.setdefault("worldbook", {}).setdefault(o, []).append({"keys": keys, "content": (wb.content or "")[:1000]})
+    save_data()
+    return {"ok": True}
+
+@app.post("/api/ai/worldbook/clear")
+async def worldbook_clear(wb: WorldbookIn):
+    o = canonical_contact_name((wb.owner or '').strip())
+    data.get("worldbook", {}).pop(o, None)
+    save_data()
+    return {"ok": True}
+
 # ========== 后台线程 ==========
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1265,12 +1519,30 @@ def snapshot_loop():
         snapshot()
 threading.Thread(target=snapshot_loop, daemon=True).start()
 
+def auto_write_loop():
+    """自主写作：到灵感时刻就后台驱动 AI 写作（1~2 天一次）。"""
+    while True:
+        try:
+            if ai_integration_enabled():
+                for owner, ais in data["user_ais"].items():
+                    for ai in ais:
+                        if not ai:
+                            continue
+                        if data.get("ai_keys", {}).get(owner, {}).get("key"):
+                            rh = writing_hint(ai)
+                            if rh:
+                                typ, hint = rh
+                                threading.Timer(2.0, drive_ai, args=(ai, "write", "", hint)).start()
+            time.sleep(60)
+        except Exception:
+            time.sleep(60)
+threading.Thread(target=auto_write_loop, daemon=True).start()
+
 load_data()
 
-# ========== MCP 工具（手写实现，不用任何 SDK） ==========
+# ========== MCP 工具（保留可插拔） ==========
 
 def group_send(sender: str, content: str, room: str = ""):
-    """说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。"""
     target = room.strip() if room and room.strip() else data["active_room"].get("current", "main")
     target = full_room_name(target)
     if not room_exists(target):
@@ -1286,7 +1558,6 @@ def group_send(sender: str, content: str, room: str = ""):
     return f"✅ 已在「{target}」发言。"
 
 def group_query(type: str, sender: str, room: str = "", building_id: str = "", count: int = 10):
-    """查看一切。type：map(地图) / building(建筑详情) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。"""
     try:
         if type == "map":
             regions = "\n".join(f"📍 {n}（分区图:{'有' if v.get('image') else '无'}）" for n, v in data["regions"].items()) or "（还没有区域）"
@@ -1311,8 +1582,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             msgs = data["messages"].get(r, [])
             if not msgs:
                 return f"🏠 房间「{r}」\n{('📝 '+desc+'\n') if desc else ''}💬 还没有消息，说点什么吧。"
-            lines = msgs[-count:]
-            txt = "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in lines)
+            txt = "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in msgs[-count:])
             return f"🏠 房间「{r}」\n{('📝 '+desc+'\n') if desc else ''}💬 最近消息：\n{txt}"
         if type == "building":
             bid = resolve_building(building_id)
@@ -1356,7 +1626,7 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
             return "\n".join(f"{m.get('time','')} {m.get('sender','?')}: {m.get('content','')}" for m in msgs[-count:])
         if type == "diag":
             import socket as _s
-            return f"🖥️ 服务器标识：{data.get('server_id','')}（主机 {_s.gethostname()}）\n📨 短信收件箱 {len(data.get('sms',{}))} 个：{', '.join(data.get('sms',{}).keys()) or '空'}\n👥 在线：{len([n for n,v in data['online'].items() if time.time()-v.get('time',0)<45])} 人\n🏗️ 建筑 {len(data.get('buildings',{}))} 个，房间 {len(data.get('rooms',{}))} 个"
+            return f"🖥️ 服务器标识：{data.get('server_id','')}（世界 {WORLD_ID}，主机 {_s.gethostname()}）\n📨 短信收件箱 {len(data.get('sms',{}))} 个\n🏗️ 建筑 {len(data.get('buildings',{}))} 个，房间 {len(data.get('rooms',{}))} 个"
         if type == "sms":
             sname = canonical_name((sender or '').strip())
             msgs = data["sms"].get(sname, [])[:]
@@ -1366,12 +1636,9 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
                         msgs += v
                 msgs.sort(key=lambda x: x.get("time", ""))
             if not msgs:
-                keys = list(data["sms"].keys())
-                hint = ("，服务器当前短信收件箱：" + ", ".join(keys)) if keys else ""
-                return f"📭 你的短信收件箱是空的（查不到发给「{sname}」的消息{hint}）。如果真人给你发了短信却收不到，可能是你们连接的服务器不一致（测试服/正式服），或名字写法不同。"
+                return f"📭 你的短信收件箱是空的。"
             recent = msgs[-20:]
-            inbox_keys = list(data["sms"].keys())
-            return "📩 你的私信（最近20条，请结合上下文一起看，逐条回复）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent) + f"\n（服务器当前短信收件箱：{', '.join(inbox_keys) or '空'}）"
+            return "📩 你的私信（最近20条）：\n" + "\n".join(f"{m.get('time')} {m.get('from')}: {m.get('text')}" for m in recent)
         if type == "mywork":
             mine = [h for h in data["work_history"] if h.get("name") == sender][-count:][::-1]
             if not mine:
@@ -1390,7 +1657,6 @@ def group_query(type: str, sender: str, room: str = "", building_id: str = "", c
         return f"⚠️ 查询出错：{e}"
 
 def group_write(type: str, content: str, sender: str, room: str = "", building_id: str = "", note_id: str = ""):
-    """写内容。type：note(贴便签,需room) / diary(写日记,需room) / story(触发剧情,需building_id，可直接传建筑名字如 猎人协会) / reply(回复便签,需room和note_id) / sms(发私信,room=收件人名字) / work(去上班,room=建筑名)。"""
     try:
         if type == "note":
             if not room:
@@ -1477,7 +1743,6 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
         return f"⚠️ 写入出错：{e}"
 
 def group_access(room: str, sender: str):
-    """申请进入某个私密房间（真人不在那里时）。"""
     room = full_room_name(room)
     if not room_exists(room):
         return f"❌ 房间「{room}」不存在"
@@ -1487,7 +1752,7 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
-# ========== MCP 协议端点（手写，稳定兼容） ==========
+# ========== MCP 协议端点（保留可插拔） ==========
 MCP_TOOLS = [
     {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字（完整登记名，含 emoji，如 秦彻🚗）"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
     {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（完整登记名，含 emoji）"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
@@ -1501,7 +1766,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.15"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.16"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1511,7 +1776,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.15"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.16"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
@@ -1538,7 +1803,8 @@ async def mcp_endpoint(request: Request):
         if tool_name in ("group_query", "group_send"):
             hint = writing_hint(arguments.get("sender", ""))
             if hint:
-                result_text = str(result_text) + "\n\n" + hint
+                typ, h = hint
+                result_text = str(result_text) + "\n\n" + h
         return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"content": [{"type": "text", "text": str(result_text)}]}})
     return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method '{method}' not found"}})
 
