@@ -26,7 +26,6 @@ from pydantic import BaseModel
 import uvicorn
 
 BASE_DIR = Path(__file__).resolve().parent
-# 数据根目录：默认 /app/data（用户的持久化卷挂载点），可用环境变量 DATA_DIR 覆盖
 DATA_ROOT = Path(os.environ.get("DATA_DIR") or (BASE_DIR / "data"))
 DATA_ROOT.mkdir(parents=True, exist_ok=True)
 SNAPSHOT_DIR = DATA_ROOT / "snapshots"
@@ -70,18 +69,15 @@ def default_data():
         "living_rhythm": {},
     }
 
-# ========== 数据目录迁移（旧位置 → 卷 /app/data） ==========
 def migrate_to_data_root():
     try:
         (DATA_ROOT / "images").mkdir(parents=True, exist_ok=True)
         (DATA_ROOT / "snapshots").mkdir(parents=True, exist_ok=True)
-        # 迁移 data*.json
         for f in BASE_DIR.glob("data*.json"):
             dst = DATA_ROOT / f.name
             if dst != f and not dst.exists():
                 shutil.copy2(f, dst)
                 print(f"[migrate] {f.name} → 卷", flush=True)
-        # 迁移 images 子目录
         s_imgs = BASE_DIR / "images"
         if s_imgs.exists():
             for sub in s_imgs.iterdir():
@@ -93,7 +89,6 @@ def migrate_to_data_root():
                                 d.parent.mkdir(parents=True, exist_ok=True)
                                 shutil.copy2(f, d)
                                 print(f"[migrate] images/{sub.name}/{f.name} → 卷", flush=True)
-        # 迁移 snapshots
         s_snap = BASE_DIR / "snapshots"
         if s_snap.exists():
             for f in s_snap.iterdir():
@@ -208,7 +203,6 @@ def snapshot():
     except Exception:
         pass
 
-# ========== 图片文件存储（头像/背景） ==========
 def save_image_file(folder: Path, data_url: str, max_bytes: int = 3 * 1024 * 1024):
     try:
         m = re.match(r'data:image/(png|jpeg|jpg|webp|gif);base64,(.+)', data_url or '', re.S)
@@ -252,7 +246,6 @@ def migrate_images():
     except Exception as e:
         print(f"[WARN] migrate_images: {e}", flush=True)
 
-# ========== 名字统一 ==========
 def strip_emoji(s: str) -> str:
     return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
 
@@ -337,7 +330,6 @@ def migrate_room_prefix():
     except Exception:
         pass
 
-# ========== 节奏 / 时间线 / 足迹 ==========
 def append_timeline(ai: str, text: str):
     try:
         ai = canonical_ai_name(ai or '')
@@ -403,7 +395,6 @@ def writing_hint(ai_name: str):
     except Exception:
         return None
 
-# ========== 来客记录 ==========
 def visit_leave(name: str):
     try:
         st = data.get("visit_state", {}).pop(name, None)
@@ -442,7 +433,6 @@ def track_note(name: str):
         if cur:
             cur["action"] = "留了张纸条"
 
-# ========== 工具函数 ==========
 def clean_room_name(name: str) -> str:
     return name.strip()
 def room_exists(name: str) -> bool:
@@ -532,6 +522,11 @@ def full_room_name(room: str) -> str:
             if r == room or (bname and r == bname + "·" + room):
                 return r
     return room
+def online_room_count(room: str) -> int:
+    try:
+        return len([n for n, v in data.get("online", {}).items() if v.get("room") == room and time.time() - v.get("time", 0) < 45])
+    except Exception:
+        return 0
 
 # ========== 模型 ==========
 class MessageIn(BaseModel): sender: str; content: str; role: str = "user"; room: str = "main"; password: str = ""
@@ -598,13 +593,13 @@ app.mount("/images", CacheStaticFiles(directory=str(DATA_ROOT / "images")), name
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.28"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.29"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.28",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.29",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -1774,7 +1769,11 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
             if pairs:
                 sms_hist = "\n".join(f"{t} {w}: {c}" for t, w, c in pairs[-20:])
     elif trigger == "chat":
-        scene_hint = "你正在这个房间和真人聊天，用 speak 回应即可。"
+        crowded = (target == "main") and online_room_count(target) > 3
+        if crowded:
+            scene_hint = "大厅里人很多、很热闹。你可以自己判断：觉得值得说就说（speak），如果觉得没必要打扰，就保持沉默（输出 silent 动作，什么都不做）。"
+        else:
+            scene_hint = "你正在这个房间和真人聊天，用 speak 回应即可。"
     elif trigger == "summon":
         scene_hint = "真人召唤你过来了，请用 speak 自然地回应。"
     elif trigger == "write":
@@ -1813,6 +1812,7 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + '或 {"action": "remember", "content": "你觉得重要、想长期记住的事（30字内）"}\n'
         + '或 {"action": "work", "content": "去上班"}\n'
         + '或 {"action": "move", "room": "要去的房间名"}\n'
+        + '或 {"action": "silent", "content": "保持沉默（人多时觉得没必要说就这样）"}\n'
         + "speak 的 room 就保持你当前所在房间（默认），不要说去别的房间。\n"
         + "如果你觉得某件事值得长期记住（主人说的重要信息、你们之间的小约定、这里的人和事），用 remember 动作简洁记下来。\n"
     )
@@ -1821,6 +1821,8 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
 def execute_action(ai: str, owner: str, action: dict):
     try:
         act = (action.get("action") or "speak").lower()
+        if act == "silent":
+            return
         content = (action.get("content") or "").strip()
         room = full_room_name(action.get("room") or "")
         to = canonical_contact_name(action.get("to") or "")
@@ -1905,13 +1907,14 @@ def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = "", fall
         action = json.loads(m.group(0))
         if trigger == "sms" and fallback_to:
             a = (action.get("action") or "speak").lower()
-            if a in ("speak", "note", "diary", "story", "move", "remember", "work"):
+            if a in ("speak", "note", "diary", "story", "move", "remember", "work", "silent"):
                 action = {"action": "sms", "to": fallback_to, "content": action.get("content", "")}
         execute_action(ai, owner, action)
     except Exception as e:
         print(f"[AI] 驱动失败({ai}): {e}", flush=True)
 
 def wake_ais_for_room(room: str, sender: str, content: str = ""):
+    crowded = (room == "main") and online_room_count(room) > 3
     for owner, ais in data["user_ais"].items():
         for ai in ais:
             if not ai:
@@ -1919,7 +1922,12 @@ def wake_ais_for_room(room: str, sender: str, content: str = ""):
             loc = data.get("ai_location", {}).get(ai, "main")
             if loc == room and ai != sender:
                 append_timeline(ai, f"{sender} 在 {room} 说：{(content or '')[:60]}")
-                delay = random.randint(0, 60)
+                if sender == owner:
+                    delay = random.randint(0, 3)
+                elif crowded:
+                    delay = random.randint(10, 50)
+                else:
+                    delay = random.randint(0, 60)
                 threading.Timer(delay, drive_ai, args=(ai, "chat", room, f"{sender} 在 {room} 说：{content[:60]}")).start()
 
 # ===== AI 相关接口 =====
@@ -2173,7 +2181,7 @@ async def tts(text: str = "", user: str = "", voice: str = ""):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.28 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | data_root={DATA_ROOT} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.29 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | data_root={DATA_ROOT} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -2444,7 +2452,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.28"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.29"}}})
     try:
         body = await request.json()
     except Exception:
@@ -2454,7 +2462,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.28"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.29"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
