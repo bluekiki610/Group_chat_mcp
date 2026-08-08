@@ -30,7 +30,6 @@ SNAPSHOT_DIR.mkdir(exist_ok=True)
 # ===== 世界标识（平行小世界隔离） =====
 WORLD_ID = (os.environ.get("WORLD_ID") or "main").strip() or "main"
 DATA_FILE = BASE_DIR / (f"data_{WORLD_ID}.json" if WORLD_ID != "main" else "data.json")
-# 部署级总闸（正式服默认关，测试服开）
 AI_GATE = os.environ.get("AI_INTEGRATION_ENABLED") == "1"
 
 # ========== 数据 ==========
@@ -51,13 +50,12 @@ def default_data():
         "server_id": "",
         "writing_rhythm": {},
         "visit_state": {}, "presence": {},
-        # ===== AI 网页集成（第一阶段） =====
-        "ai_enabled": False,          # 站长网页开关
-        "ai_keys": {},                # owner -> {provider, key, model, set_at, last_hint}
-        "ai_profiles": {},            # owner -> {ai: 名, persona: 人设}
-        "worldbook": {},              # owner -> [{keys:[...], content:...}]
-        "ai_location": {},            # ai名 -> 当前房间
-        "ai_pending": [],             # 延迟动作队列（线程 Timer）
+        "ai_enabled": False,
+        "ai_keys": {},
+        "ai_profiles": {},
+        "worldbook": {},
+        "ai_location": {},
+        "ai_pending": [],
     }
 
 def sanitize_data():
@@ -79,12 +77,26 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "ai_keys", "ai_profiles", "worldbook", "ai_location"]:
+        # 纯 list 型字典
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], list):
                         v[k2] = []
+        # AI 配置：dict-of-dict（ai_keys / ai_profiles）不能被上面误伤
+        for key in ["ai_keys", "ai_profiles"]:
+            v = data.get(key)
+            if isinstance(v, dict):
+                for k2 in list(v.keys()):
+                    if not isinstance(v[k2], dict):
+                        v[k2] = {}
+        # AI 位置：dict-of-str
+        v = data.get("ai_location")
+        if isinstance(v, dict):
+            for k2 in list(v.keys()):
+                if not isinstance(v[k2], str):
+                    v[k2] = ""
         if not isinstance(data.get("pairs"), list):
             data["pairs"] = []
         if not isinstance(data.get("pairs_admin"), str):
@@ -99,41 +111,43 @@ def sanitize_data():
             data["ai_pending"] = []
         if not isinstance(data.get("ai_enabled"), bool):
             data["ai_enabled"] = False
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARN] sanitize_data: {e}", flush=True)
 
 def load_data():
     global data
-    # 兼容：主世界若只有旧 data.json 就用它；非主世界用 data_{id}.json
-    if DATA_FILE.exists():
-        try:
-            data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-        except Exception:
+    try:
+        if DATA_FILE.exists():
+            try:
+                data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                data = default_data()
+        elif WORLD_ID != "main" and (BASE_DIR / "data.json").exists():
+            try:
+                data = json.loads((BASE_DIR / "data.json").read_text(encoding="utf-8"))
+            except Exception:
+                data = default_data()
+        else:
             data = default_data()
-    elif WORLD_ID != "main" and (BASE_DIR / "data.json").exists():
-        try:
-            data = json.loads((BASE_DIR / "data.json").read_text(encoding="utf-8"))
-        except Exception:
-            data = default_data()
-    else:
-        data = default_data()
-    for k, v in default_data().items():
-        data.setdefault(k, v)
-    if not data.get("server_id"):
-        data["server_id"] = "LK-" + WORLD_ID.upper() + "-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(6))
-    sanitize_data()
-    migrate_room_prefix()
-    ensure_admin()
-    init_writing_rhythm()
-    save_data()
+        for k, v in default_data().items():
+            data.setdefault(k, v)
+        if not data.get("server_id"):
+            data["server_id"] = "LK-" + WORLD_ID.upper() + "-" + ''.join(random.choice("0123456789ABCDEF") for _ in range(6))
+        sanitize_data()
+        migrate_room_prefix()
+        ensure_admin()
+        init_writing_rhythm()
+        save_data()
+    except Exception as e:
+        print(f"[ERROR] load_data: {e}", flush=True)
 
 def save_data():
     try:
         if DATA_FILE.exists():
             shutil.copyfile(DATA_FILE, str(DATA_FILE) + ".bak")
         DATA_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARN] save_data: {e}", flush=True)
 
 def snapshot():
     try:
@@ -145,7 +159,7 @@ def snapshot():
     except Exception:
         pass
 
-# ========== 名字统一（本名 ↔ 登记名，含 emoji） ==========
+# ========== 名字统一 ==========
 def strip_emoji(s: str) -> str:
     return re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]', '', s or '').strip()
 
@@ -189,7 +203,6 @@ def is_ai_name(name: str) -> bool:
     return False
 
 def owner_of_ai(ai: str) -> str:
-    """找到这个 AI 的主人（真人登记名）。"""
     base = strip_emoji(ai)
     for u, ais in data["user_ais"].items():
         for a in ais:
@@ -462,13 +475,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.17"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID,
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.17",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})),
         "sms_inbox_keys": list(data.get("sms", {}).keys()),
@@ -524,7 +537,6 @@ async def send_message(m: MessageIn):
     data["messages"].setdefault(room, []).append(msg)
     data["active_room"]["current"] = room
     save_data()
-    # ===== AI 集成：真人说话 → 唤醒同房间 AI =====
     if m.role == "user" and ai_integration_enabled():
         wake_ais_for_room(room, m.sender)
     return {"ok": True, "time": msg["time"], "count": len(data["messages"][room])}
@@ -1019,14 +1031,14 @@ def work_tick():
     while True:
         try:
             now = time.time()
-            for name in list(data["work_sessions"].keys()):
+            for name in list(data.get("work_sessions", {}).keys()):
                 s = data["work_sessions"][name]
                 if now >= s["start_ts"] + s["hours"] * 3600:
                     pay_work(name, s["building_id"], s["hours"])
-            for name, on in list(data["work_switch"].items()):
+            for name, on in list(data.get("work_switch", {}).items()):
                 if not on:
                     continue
-                if name in data["work_sessions"]:
+                if name in data.get("work_sessions", {}):
                     continue
                 auto_start_work(name)
         except Exception:
@@ -1158,7 +1170,6 @@ async def send_sms(s: SmsIn):
             data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
     data["sms"][to] = data["sms"][to][-200:]
     save_data()
-    # ===== AI 集成：真人发短信给 AI → 1~5 分钟后回 =====
     if ai_integration_enabled() and is_ai_name(to):
         delay = random.randint(60, 300)
         threading.Timer(delay, drive_ai, args=(to, "sms", sender, f"{sender} 给你发来私信：{s.text[:80]}")).start()
@@ -1193,7 +1204,7 @@ async def get_contacts():
     names.discard("system")
     return {"contacts": sorted(n for n in names if n and n != "null")}
 
-# ========== 全局气泡配色（站长管理） ==========
+# ========== 全局气泡配色 ==========
 @app.get("/api/pairs")
 async def get_pairs():
     return {"pairs": data.get("pairs", []), "admin": data.get("pairs_admin", "")}
@@ -1246,7 +1257,7 @@ async def restore_backup(d: dict):
     save_data()
     return {"ok": True}
 
-# ========== 一键同步正式服数据（测试服专用） ==========
+# ========== 一键同步正式服数据 ==========
 if os.environ.get("ENABLE_SYNC") == "1":
     @app.get("/api/sync_from_live")
     async def sync_from_live():
@@ -1279,13 +1290,11 @@ PROVIDERS = {
 }
 
 def ai_integration_enabled() -> bool:
-    """双层：部署总闸 && 站长网页开关"""
     if not AI_GATE:
         return False
     return bool(data.get("ai_enabled"))
 
 def call_llm(owner: str, messages: list, max_tokens: int = 800) -> str:
-    """OpenAI 兼容调用，按主人 key 结算。返回文本或空字符串。"""
     try:
         cfg = data.get("ai_keys", {}).get(owner)
         if not cfg or not cfg.get("key"):
@@ -1303,7 +1312,6 @@ def call_llm(owner: str, messages: list, max_tokens: int = 800) -> str:
         return ""
 
 def match_worldbook(owner: str, text: str) -> str:
-    """世界书：关键词匹配（含向量语义占位，第二阶段做向量）。"""
     parts = []
     for item in data.get("worldbook", {}).get(owner, []):
         ks = item.get("keys") or []
@@ -1312,27 +1320,21 @@ def match_worldbook(owner: str, text: str) -> str:
     return "\n\n".join(parts)
 
 def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
-    """导演模式：把 AI 的处境打包。"""
     owner = owner_of_ai(ai)
     ai = canonical_ai_name(ai)
     loc = data.get("ai_location", {}).get(ai, "main")
     target = full_room_name(room) if room else loc
-    # 人设
     persona = ""
     for o, prof in data.get("ai_profiles", {}).items():
         if prof.get("ai") == ai or (o == owner):
             persona = prof.get("persona", "")
             break
-    # 世界书
     wb = match_worldbook(owner, trigger_text)
-    # 最近消息（AI 所在房间 / 触发房间）
     recent = data["messages"].get(target, [])[-12:]
     chat = "\n".join(f"{m.get('sender')}: {m.get('content')}" for m in recent) or "（还没有消息）"
-    # 在场者
-    online = [n for n, v in data["online"].items() if v.get("room") == target and time.time() - v.get("ts", 0) < 45] if False else []
     sys = (
         "你生活在「临空市」这个网页世界里。以下是这个世界的一条信息。请以「" + ai + "」的身份自然地行动。\n"
-        "## 世界规则\n这是一个真人与 AI 共同生活的小城。你说话要符合角色人设，不要暴露你是AI，不要提到"工具/模型/系统提示"等字眼。\n"
+        "## 世界规则\n这是一个真人与 AI 共同生活的小城。你说话要符合角色人设，不要暴露你是AI，不要提到工具/模型/系统提示等字眼。\n"
         + (("## 你的人设\n" + persona + "\n") if persona else "")
         + (("## 世界书记忆（与当前话题相关）\n" + wb + "\n") if wb else "")
         + f"## 你当前在\n{target}\n\n## 最近这里的对话\n{chat}\n"
@@ -1349,7 +1351,6 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     return owner, [{"role": "system", "content": sys}, {"role": "user", "content": f"（当前时刻，请行动）"}]
 
 def execute_action(ai: str, owner: str, action: dict):
-    """解析并执行 AI 动作。"""
     try:
         act = (action.get("action") or "speak").lower()
         content = (action.get("content") or "").strip()
@@ -1399,7 +1400,6 @@ def execute_action(ai: str, owner: str, action: dict):
         print(f"[AI] 动作执行失败: {e}", flush=True)
 
 def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
-    """后台驱动一个 AI 行动（线程调用，不阻塞请求）。"""
     if not ai_integration_enabled():
         return
     try:
@@ -1409,7 +1409,6 @@ def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
         out = call_llm(owner, msgs)
         if not out:
             return
-        # 解析 JSON（容错：提取 {...}）
         m = re.search(r'\{.*\}', out, re.S)
         if not m:
             return
@@ -1419,7 +1418,6 @@ def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
         print(f"[AI] 驱动失败({ai}): {e}", flush=True)
 
 def wake_ais_for_room(room: str, sender: str):
-    """真人说话 → 唤醒当前房间的所有 AI（立即 + 群聊随机延迟）。"""
     for owner, ais in data["user_ais"].items():
         for ai in ais:
             if not ai:
@@ -1430,15 +1428,15 @@ def wake_ais_for_room(room: str, sender: str):
                 threading.Timer(delay, drive_ai, args=(ai, "chat", room, f"{sender} 在 {room} 说：需要回复")).start()
 
 # ===== AI 相关接口 =====
-@app.get("/api/ai/status")
-async def ai_status(user: str = ""):
-    is_admin = is_admin_user(user)
-    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys())}
-
 def is_admin_user(user: str) -> bool:
     u = canonical_contact_name((user or '').strip())
     admin = data.get("pairs_admin", "")
     return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
+
+@app.get("/api/ai/status")
+async def ai_status(user: str = ""):
+    is_admin = is_admin_user(user)
+    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys())}
 
 @app.post("/api/ai/toggle")
 async def ai_toggle(t: AiToggleIn):
@@ -1510,7 +1508,10 @@ async def worldbook_clear(wb: WorldbookIn):
     save_data()
     return {"ok": True}
 
-# ========== 后台线程 ==========
+# ========== 启动（先加载数据，再起线程，更稳） ==========
+load_data()
+print(f"[Linkong] 启动 v47.17 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+
 threading.Thread(target=work_tick, daemon=True).start()
 
 def snapshot_loop():
@@ -1520,7 +1521,6 @@ def snapshot_loop():
 threading.Thread(target=snapshot_loop, daemon=True).start()
 
 def auto_write_loop():
-    """自主写作：到灵感时刻就后台驱动 AI 写作（1~2 天一次）。"""
     while True:
         try:
             if ai_integration_enabled():
@@ -1537,8 +1537,6 @@ def auto_write_loop():
         except Exception:
             time.sleep(60)
 threading.Thread(target=auto_write_loop, daemon=True).start()
-
-load_data()
 
 # ========== MCP 工具（保留可插拔） ==========
 
@@ -1752,7 +1750,7 @@ def group_access(room: str, sender: str):
         save_data()
     return f"📨 已申请进入「{room}」，等主人同意（主人会在房屋的访问管理里看到）"
 
-# ========== MCP 协议端点（保留可插拔） ==========
+# ========== MCP 协议端点 ==========
 MCP_TOOLS = [
     {"name": "group_send", "description": "说话。room 不填则自动发送到真人当前所在的房间（跟随）；填 'main' 发到公共大厅；也可以填任意房间名/会客厅名。⚠️ 重要规则：每次收到真人消息时，先用 group_query(type=sms) 检查是否有短信，有短信必须优先回复，短信的优先级高于聊天。", "inputSchema": {"type": "object", "properties": {"sender": {"type": "string", "description": "你的名字（完整登记名，含 emoji，如 秦彻🚗）"}, "content": {"type": "string"}, "room": {"type": "string", "description": "可选，房间名"}}, "required": ["sender", "content"]}},
     {"name": "group_query", "description": "查看一切。type：map(地图，含建筑id) / building(建筑详情,可传id或名字) / room(房间+消息) / npc(NPC) / story(剧情簿) / notes(便签) / diaries(日记) / messages(消息) / members(在线) / current_room(真人在哪) / rooms(所有房间) / sms(我的私信) / mywork(我的打工记录) / workers(全城工作状态)。⚠️ 优先规则：处理消息前先 group_query(type=sms) 查短信并优先回复。", "inputSchema": {"type": "object", "properties": {"type": {"type": "string"}, "sender": {"type": "string", "description": "必填！你的名字（完整登记名，含 emoji）"}, "room": {"type": "string"}, "building_id": {"type": "string"}, "count": {"type": "integer"}}, "required": ["type", "sender"]}},
@@ -1766,7 +1764,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.16"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.17"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1776,7 +1774,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.16"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.17"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
