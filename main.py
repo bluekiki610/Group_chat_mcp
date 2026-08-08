@@ -466,6 +466,14 @@ def find_building_of_room(room: str):
         if room in b.get("rooms", []):
             return bid
     return None
+def building_owner_of_room(room: str) -> str:
+    try:
+        bid = find_building_of_room(room)
+        if bid:
+            return data.get("buildings", {}).get(bid, {}).get("owner", "")
+    except Exception:
+        pass
+    return ""
 def can_access_room(room: str, user: str) -> bool:
     if room == "main":
         return True
@@ -593,13 +601,13 @@ app.mount("/images", CacheStaticFiles(directory=str(DATA_ROOT / "images")), name
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.29"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.30"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.29",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.30",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -1752,6 +1760,20 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     tl_str = "\n".join(f"{t.get('time','')} {t.get('text','')}" for t in tl) if tl else "（你还没有什么经历）"
     visited = (data.get("ai_visited", {}) or {}).get(ai, [])[:8]
     visited_str = "、".join(visited) if visited else ""
+    # 房间感知：便签墙 / 自家日记 / 剧情簿
+    room_notes = data.get("notes", {}).get(target, [])[-8:]
+    room_notes_str = "\n".join(f"{n.get('time','')} {n.get('author','?')}：{n.get('text','')}" for n in room_notes) if room_notes else ""
+    diary_str = ""
+    if target != "main" and building_owner_of_room(target) == owner:
+        dlist = data.get("diaries", {}).get(target, [])[-3:]
+        if dlist:
+            diary_str = "\n".join(f"{n.get('time','')} {n.get('author','?')}：{n.get('text','')}" for n in dlist)
+    story_str = ""
+    bid_here = find_building_of_room(target) if target != "main" else None
+    if bid_here:
+        slist = data.get("stories", {}).get(bid_here, [])[-2:]
+        if slist:
+            story_str = "\n".join(f"{s.get('time','')} {s.get('author','?')}：{s.get('text','')}" for s in slist)
     bctx = building_context(target)
     scene_hint = ""
     sms_hist = ""
@@ -1797,6 +1819,9 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + (("## 你的记忆（要记住的事，这是你的长期记忆）\n" + mem_str + "\n") if mem_str else "")
         + (("## 你的最近经历（按时间顺序，跨房间，这是你记得的最近发生的事）\n" + tl_str + "\n") if tl else "")
         + (("## 你最近去过的地方\n" + visited_str + "\n") if visited_str else "")
+        + (("## 这个房间的便签墙（贴在这里的纸条，你路过可以看看）\n" + room_notes_str + "\n") if room_notes_str else "")
+        + (("## 你家的日记（只有你能读的心事）\n" + diary_str + "\n") if diary_str else "")
+        + (("## 这里的剧情簿（最近发生的故事，可以延续或旁观）\n" + story_str + "\n") if story_str else "")
         + (("## 提示词注入（规则，请遵守）\n" + "\n".join(p.get("content", "") for p in pij) + "\n") if pij else "")
         + (("## 最近私信（和真人" + (fallback_to or "对方") + "的短信往来，请顺着上下文回复）\n" + sms_hist + "\n") if sms_hist else "")
         + (("## 你所在的地方\n" + bctx + "\n") if bctx else "")
@@ -2181,7 +2206,7 @@ async def tts(text: str = "", user: str = "", voice: str = ""):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.29 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | data_root={DATA_ROOT} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.30 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | data_root={DATA_ROOT} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -2452,7 +2477,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.29"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.30"}}})
     try:
         body = await request.json()
     except Exception:
@@ -2462,7 +2487,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.29"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.30"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
