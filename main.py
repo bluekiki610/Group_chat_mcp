@@ -460,6 +460,8 @@ class AiKeyIn(BaseModel): user: str; provider: str = "deepseek"; key: str = ""; 
 class AiProfileIn(BaseModel): owner: str; ai: str; persona: str = ""
 class WorldbookIn(BaseModel): owner: str; keys: str; content: str
 class AiToggleIn(BaseModel): user: str; enabled: bool
+class AdminNameIn(BaseModel): user: str; from_name: str; to_name: str
+class AdminDelIn(BaseModel): user: str; name: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -471,13 +473,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.18"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.19"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.18",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.19",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -489,6 +491,179 @@ async def diag():
         "ai_keys_set": list(data.get("ai_keys", {}).keys()),
         "ai_locations": data.get("ai_location", {}),
     }
+
+# ========== 管理员：名字清理 ==========
+def is_admin(user: str) -> bool:
+    u = canonical_contact_name((user or '').strip())
+    admin = data.get("pairs_admin", "")
+    return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
+
+def all_known_names():
+    names = set()
+    for u in data["user_ais"].keys():
+        if u:
+            names.add(u)
+    for b in data["buildings"].values():
+        if b.get("owner"):
+            names.add(b["owner"])
+    return names
+
+def scan_dirty_names():
+    known = all_known_names()
+    found = {}
+    def add(n):
+        if not n or n == "system" or n in known:
+            return
+        found[n] = True
+    for u in data.get("user_ais", {}):
+        add(u)
+    for b in data.get("buildings", {}).values():
+        add(b.get("owner", ""))
+    for box in data.get("sms", {}):
+        add(box)
+    for box in data.get("sms", {}).values():
+        for m in box:
+            add(m.get("from", ""))
+    for box in data.get("messages", {}).values():
+        for m in box:
+            add(m.get("sender", ""))
+    for box in data.get("notes", {}).values():
+        for n in box:
+            add(n.get("author", ""))
+    for box in data.get("diaries", {}).values():
+        for n in box:
+            add(n.get("author", ""))
+    for box in data.get("stories", {}).values():
+        for n in box:
+            add(n.get("author", ""))
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars"]:
+        for n in data.get(k, {}):
+            add(n)
+    for h in data.get("work_history", []):
+        add(h.get("name", ""))
+    for owner in data.get("visits", {}):
+        add(owner)
+    result = []
+    for n in found:
+        base = strip_emoji(n)
+        suggest = ""
+        if base:
+            for k in sorted(known):
+                if strip_emoji(k) == base:
+                    suggest = k
+                    break
+        result.append({"name": n, "suggest_merge": suggest})
+    result.sort(key=lambda x: x["name"])
+    return result
+
+def replace_name_in_data(from_name: str, to_name: str):
+    """把 from_name 的所有出现替换为 to_name（to 为空则删除）。"""
+    if from_name in data.get("user_ais", {}):
+        if to_name:
+            data["user_ais"][to_name] = list(dict.fromkeys(data["user_ais"].get(to_name, []) + data["user_ais"].pop(from_name, []))))
+        else:
+            data["user_ais"].pop(from_name, None)
+    for b in data.get("buildings", {}).values():
+        if b.get("owner") == from_name:
+            b["owner"] = to_name if to_name else ""
+    if from_name in data.get("sms", {}):
+        if to_name:
+            data["sms"][to_name] = data["sms"].get(to_name, []) + data["sms"].pop(from_name, [])
+        else:
+            data["sms"].pop(from_name, None)
+    for box in data.get("sms", {}).values():
+        for m in box:
+            if m.get("from") == from_name:
+                m["from"] = to_name
+    for box in data.get("messages", {}).values():
+        for m in box:
+            if m.get("sender") == from_name:
+                m["sender"] = to_name
+    for box in data.get("notes", {}).values():
+        for n in box:
+            if n.get("author") == from_name:
+                n["author"] = to_name
+    for box in data.get("diaries", {}).values():
+        for n in box:
+            if n.get("author") == from_name:
+                n["author"] = to_name
+    for box in data.get("stories", {}).values():
+        for n in box:
+            if n.get("author") == from_name:
+                n["author"] = to_name
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars"]:
+        if from_name in data.get(k, {}):
+            if to_name:
+                data[k][to_name] = data[k].pop(from_name)
+            else:
+                data[k].pop(from_name, None)
+    for h in data.get("work_history", []):
+        if h.get("name") == from_name:
+            h["name"] = to_name
+    if from_name in data.get("visits", {}):
+        if to_name:
+            data["visits"][to_name] = data["visits"].get(to_name, []) + data["visits"].pop(from_name, [])
+        else:
+            data["visits"].pop(from_name, None)
+    for vs in data.get("visits", {}).values():
+        for v in vs:
+            if v.get("who") == from_name:
+                v["who"] = to_name
+    if from_name in data.get("visit_state", {}):
+        if to_name:
+            data["visit_state"][to_name] = data["visit_state"].pop(from_name)
+        else:
+            data["visit_state"].pop(from_name, None)
+    if from_name in data.get("presence", {}):
+        if to_name:
+            data["presence"][to_name] = data["presence"].pop(from_name)
+        else:
+            data["presence"].pop(from_name, None)
+    # AI 名（user_ais 值）也归一
+    for u, ais in data.get("user_ais", {}).items():
+        for i in range(len(ais)):
+            if ais[i] == from_name:
+                ais[i] = to_name
+    # 气泡配色
+    for p in data.get("pairs", []):
+        p["names"] = [to_name if (x == from_name) else x for x in p.get("names", [])]
+        if p.get("owner") == from_name:
+            p["owner"] = to_name
+    if not to_name:
+        data.get("pairs", []);
+        data["pairs"] = [p for p in data.get("pairs", []) if p.get("names") and any(n for n in p.get("names", []))]
+    save_data()
+
+@app.get("/api/admin/dirty_names")
+async def dirty_names(user: str = ""):
+    if not is_admin(user):
+        raise HTTPException(403, "只有站长可以查看")
+    return {"names": scan_dirty_names()}
+
+@app.post("/api/admin/merge_name")
+async def merge_name(m: AdminNameIn):
+    if not is_admin(m.user):
+        raise HTTPException(403, "只有站长可以合并名字")
+    f = (m.from_name or "").strip()
+    t = (m.to_name or "").strip()
+    if not f or not t:
+        raise HTTPException(400, "缺少名字")
+    if f == t:
+        return {"ok": True}
+    replace_name_in_data(f, t)
+    return {"ok": True, "msg": f"已把「{f}」合并到「{t}」"}
+
+@app.post("/api/admin/delete_name")
+async def delete_name(d: AdminDelIn):
+    if not is_admin(d.user):
+        raise HTTPException(403, "只有站长可以删除名字")
+    n = (d.name or "").strip()
+    if not n:
+        raise HTTPException(400, "缺少名字")
+    if n == data.get("pairs_admin"):
+        raise HTTPException(403, "不能删除站长")
+    replace_name_in_data(n, "")
+    return {"ok": True, "msg": f"已彻底删除「{n}」的所有数据"}
 
 @app.post("/api/presence")
 async def set_presence(p: PresenceIn):
@@ -1222,11 +1397,6 @@ async def get_bell(owner: str):
     return {"visits": data["visits"].get(owner, [])}
 
 # ========== 备份 ==========
-def is_admin(user: str) -> bool:
-    u = canonical_contact_name((user or '').strip())
-    admin = data.get("pairs_admin", "")
-    return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
-
 @app.get("/api/backup")
 async def backup():
     return data
@@ -1426,9 +1596,7 @@ def wake_ais_for_room(room: str, sender: str):
 
 # ===== AI 相关接口 =====
 def is_admin_user(user: str) -> bool:
-    u = canonical_contact_name((user or '').strip())
-    admin = data.get("pairs_admin", "")
-    return bool(u and admin and (u == admin or strip_emoji(u) == strip_emoji(admin)))
+    return is_admin(user)
 
 @app.get("/api/ai/status")
 async def ai_status(user: str = ""):
@@ -1475,7 +1643,6 @@ async def ai_key_del(k: AiKeyIn):
 
 @app.post("/api/ai/models")
 async def ai_models(k: AiKeyIn):
-    """拉取某个提供商的可用模型列表（用该用户自己的 key）。"""
     u = canonical_contact_name((k.user or '').strip())
     provider = (k.provider or "deepseek").strip()
     if provider not in PROVIDERS:
@@ -1531,7 +1698,7 @@ async def worldbook_clear(wb: WorldbookIn):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.18 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.19 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1784,7 +1951,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.18"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.19"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1794,7 +1961,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.18"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.19"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
