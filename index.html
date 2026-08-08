@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.16</title>
+<title>人❤️机の小窝 · 临空市 v47.17</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -245,6 +245,7 @@ textarea.input { color:#e6f1ff; }
           <div class="set-item" onclick="openSettingsGroup('general')"><span class="si-ic">👤</span><span class="si-t"><b>我的信息与 AI</b><small>名字 · 头像 · 我的AI</small></span><span class="si-arr">›</span></div>
           <div class="set-item" onclick="openSettingsGroup('voice')"><span class="si-ic">🔊</span><span class="si-t"><b>语音与朗读</b><small>系统语音 · API TTS</small></span><span class="si-arr">›</span></div>
           <div class="set-item" onclick="openSettingsGroup('time')"><span class="si-ic">⏰</span><span class="si-t"><b>时间</b><small>房间时间模式</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('admin_lock')"><span class="si-ic">🔒</span><span class="si-t"><b>编辑权限</b><small>访客只读 · 解锁编辑</small></span><span class="si-arr">›</span></div>
         </div>
         <div class="set-group"><label>AI 与记忆</label>
           <div class="set-item" onclick="openSettingsGroup('ai_model')"><span class="si-ic">🔑</span><span class="si-t"><b>模型与服务</b><small>API Key · 模型 · 拉取列表</small></span><span class="si-arr">›</span></div>
@@ -259,7 +260,6 @@ textarea.input { color:#e6f1ff; }
           <div class="set-item" onclick="openSettingsGroup('admin_clean')"><span class="si-ic">🧹</span><span class="si-t"><b>数据清理</b><small>清除错误用户名</small></span><span class="si-arr">›</span></div>
           <div class="set-item" onclick="openSettingsGroup('admin_backup')"><span class="si-ic">🗄️</span><span class="si-t"><b>备份与快照</b><small>下载 · 恢复 · 服务器快照</small></span><span class="si-arr">›</span></div>
           <div class="set-item" onclick="openSettingsGroup('admin_style')"><span class="si-ic">🎨</span><span class="si-t"><b>气泡配色</b><small>全局聊天配色</small></span><span class="si-arr">›</span></div>
-          <div class="set-item" onclick="openSettingsGroup('admin_lock')"><span class="si-ic">🔒</span><span class="si-t"><b>编辑权限</b><small>访客只读开关</small></span><span class="si-arr">›</span></div>
         </div>
       </div>
       <div id="settingsGroups" style="display:none">
@@ -496,9 +496,9 @@ function renderStyleGroup(body){
 function renderLockGroup(body){
   body.innerHTML='';
   var html='<div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁/设置</button></div><div class="tip" id="editLockTip"></div>';
-  grpCard(body,'🔒 编辑权限（访客只读）',html);
+  grpCard(body,'🔒 编辑权限（访客只读）','<div class="tip" style="margin-bottom:6px">站长开启访客只读后，编辑者在这里输入密码解锁；还没设置过的话，输入一个新密码即可开启只读模式。</div>'+html);
   var lk=document.getElementById('editLockTip');
-  if(!editLocked) lk.textContent='还没设置密码：点「解锁/设置」输入一个密码，之后游客只能看不能改（你自己也要输密码才能编辑，请记好！）';
+  if(!editLocked) lk.textContent='还没设置密码：点「解锁/设置」输入一个密码，之后游客只能看不能改（编辑者也要输密码才能编辑，请记好！）';
   else if(editUnlocked) lk.textContent='你是编辑者（已解锁）。清空密码刷新可回到访客模式。';
   else lk.textContent='访客只读模式：需要编辑密码才能建造/修改。';
 }
