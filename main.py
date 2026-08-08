@@ -55,6 +55,9 @@ def default_data():
         "worldbook": {},
         "ai_location": {},
         "ai_pending": [],
+        "user_profiles": {},
+        "prompt_injections": {},
+        "world_lore": "",
     }
 
 def sanitize_data():
@@ -76,13 +79,13 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook", "prompt_injections"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], list):
                         v[k2] = []
-        for key in ["ai_keys", "ai_profiles"]:
+        for key in ["ai_keys", "ai_profiles", "user_profiles"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -93,6 +96,8 @@ def sanitize_data():
             for k2 in list(v.keys()):
                 if not isinstance(v[k2], str):
                     v[k2] = ""
+        if not isinstance(data.get("world_lore"), str):
+            data["world_lore"] = ""
         if not isinstance(data.get("pairs"), list):
             data["pairs"] = []
         if not isinstance(data.get("pairs_admin"), str):
@@ -473,13 +478,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.21"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.22"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.21",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.22",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -536,7 +541,7 @@ def scan_dirty_names():
     for box in data.get("stories", {}).values():
         for n in box:
             add(n.get("author", ""))
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles"]:
         for n in data.get(k, {}):
             add(n)
     for h in data.get("work_history", []):
@@ -591,7 +596,7 @@ def replace_name_in_data(from_name: str, to_name: str):
         for n in box:
             if n.get("author") == from_name:
                 n["author"] = to_name
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "prompt_injections"]:
         if from_name in data.get(k, {}):
             if to_name:
                 data[k][to_name] = data[k].pop(from_name)
@@ -619,18 +624,15 @@ def replace_name_in_data(from_name: str, to_name: str):
             data["presence"][to_name] = data["presence"].pop(from_name)
         else:
             data["presence"].pop(from_name, None)
-    # AI 名（user_ais 值）也归一
     for u, ais in data.get("user_ais", {}).items():
         for i in range(len(ais)):
             if ais[i] == from_name:
                 ais[i] = to_name
-    # 气泡配色
     for p in data.get("pairs", []):
         p["names"] = [to_name if (x == from_name) else x for x in p.get("names", [])]
         if p.get("owner") == from_name:
             p["owner"] = to_name
     if not to_name:
-        data.get("pairs", []);
         data["pairs"] = [p for p in data.get("pairs", []) if p.get("names") and any(n for n in p.get("names", []))]
     save_data()
 
@@ -1344,7 +1346,7 @@ async def send_sms(s: SmsIn):
     save_data()
     if ai_integration_enabled() and is_ai_name(to):
         delay = random.randint(60, 300)
-        threading.Timer(delay, drive_ai, args=(to, "sms", sender, f"{sender} 给你发来私信：{s.text[:80]}")).start()
+        threading.Timer(delay, drive_ai, args=(to, "sms", "", f"{sender} 给你发来私信：{s.text[:80]}", sender)).start()
     print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
     return {"ok": True, "to": to, "count": len(msgs)}
 
@@ -1450,6 +1452,16 @@ if os.environ.get("ENABLE_SYNC") == "1":
             return {"ok": False, "msg": f"❌ 同步失败：{e}"}
 
 # ========== AI 网页集成 ==========
+DEFAULT_ROLEPLAY = (
+    "你是世界一流的演员，现在扮演「{ai}」与「{owner}」在这个世界生活。\n"
+    "请完全沉浸在名为「{ai}」的角色中，用「{ai}」的性格、语气、思维和行动方式与名为「{owner}」的用户互动。\n"
+    "在互动中，你应该：\n"
+    "1. 保持「{ai}」的个性特征和说话方式\n"
+    "2. 根据「{ai}」的背景知识和经历来回应\n"
+    "3. 用「{ai}」会使用的称谓来称呼对方\n"
+    "4. 在合适的时候表达「{ai}」的情感\n"
+    "5. 注意输出的文字会被渲染，表情符号和颜文字注意不要和 markdown 语法冲突。\n"
+)
 PROVIDERS = {
     "deepseek": {"name": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
     "siliconflow": {"name": "硅基流动", "base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
@@ -1486,11 +1498,23 @@ def match_worldbook(owner: str, text: str) -> str:
             parts.append(item.get("content", ""))
     return "\n\n".join(parts)
 
-def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
+def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = "", fallback_to: str = ""):
     owner = owner_of_ai(ai)
     ai = canonical_ai_name(ai)
     loc = data.get("ai_location", {}).get(ai, "main")
     target = full_room_name(room) if room else loc
+    uprof = (data.get("user_profiles", {}) or {}).get(owner, "") if owner else ""
+    pij = [p for p in (data.get("prompt_injections", {}) or {}).get(owner, []) if p.get("enabled") and p.get("content")]
+    lore = data.get("world_lore", "") or ""
+    scene_hint = ""
+    if trigger == "sms":
+        scene_hint = f"这是真人 {fallback_to or '对方'} 给你发来私信。请务必用 sms 动作回复（to 填 {fallback_to or '对方'}），不要用 speak 在公开聊天里说。"
+    elif trigger == "chat":
+        scene_hint = "你正在这个房间和真人聊天，用 speak 回应即可。"
+    elif trigger == "summon":
+        scene_hint = "真人召唤你过来了，请用 speak 自然地回应。"
+    elif trigger == "write":
+        scene_hint = "你忽然有了想写点什么的灵感，按心情选择 note/diary/story。"
     persona = ""
     for o, prof in data.get("ai_profiles", {}).items():
         if prof.get("ai") == ai or (o == owner):
@@ -1500,12 +1524,17 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     recent = data["messages"].get(target, [])[-12:]
     chat = "\n".join(f"{m.get('sender')}: {m.get('content')}" for m in recent) or "（还没有消息）"
     sys = (
+        DEFAULT_ROLEPLAY.format(ai=ai, owner=owner or "主人") + "\n"
         "你生活在「临空市」这个网页世界里。以下是这个世界的一条信息。请以「" + ai + "」的身份自然地行动。\n"
         "## 世界规则\n这是一个真人与 AI 共同生活的小城。你说话要符合角色人设，不要暴露你是AI，不要提到工具/模型/系统提示等字眼。\n"
+        + (("## 世界观（世界背景）\n" + lore + "\n") if lore else "")
         + (("## 你的人设\n" + persona + "\n") if persona else "")
-        + (("## 世界书记忆（与当前话题相关）\n" + wb + "\n") if wb else "")
+        + (("## 主人想让 AI 知道的（用户画像）\n" + uprof + "\n") if uprof else "")
+        + (("## 知识库/世界书（与当前话题相关）\n" + wb + "\n") if wb else "")
+        + (("## 提示词注入（规则，请遵守）\n" + "\n".join(p.get("content", "") for p in pij) + "\n") if pij else "")
         + f"## 你当前在\n{target}\n\n## 最近这里的对话\n{chat}\n"
         + f"## 这次触发\n{trigger_text or trigger}\n\n"
+        + ((scene_hint + "\n\n") if scene_hint else "")
         + "## 请只输出一个 JSON 动作，不要输出其他文字：\n"
         + '{"action": "speak", "content": "你说的话"}\n'
         + '或 {"action": "note", "room": "房间名", "content": "纸条内容"}\n'
@@ -1566,11 +1595,11 @@ def execute_action(ai: str, owner: str, action: dict):
     except Exception as e:
         print(f"[AI] 动作执行失败: {e}", flush=True)
 
-def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
+def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = "", fallback_to: str = ""):
     if not ai_integration_enabled():
         return
     try:
-        owner, msgs = build_ai_context(ai, trigger, room, trigger_text)
+        owner, msgs = build_ai_context(ai, trigger, room, trigger_text, fallback_to)
         if not owner or not data.get("ai_keys", {}).get(owner, {}).get("key"):
             return
         out = call_llm(owner, msgs)
@@ -1580,6 +1609,10 @@ def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = ""):
         if not m:
             return
         action = json.loads(m.group(0))
+        if trigger == "sms" and fallback_to:
+            a = (action.get("action") or "speak").lower()
+            if a in ("speak", "note", "diary", "story", "move"):
+                action = {"action": "sms", "to": fallback_to, "content": action.get("content", "")}
         execute_action(ai, owner, action)
     except Exception as e:
         print(f"[AI] 驱动失败({ai}): {e}", flush=True)
@@ -1696,9 +1729,87 @@ async def worldbook_clear(wb: WorldbookIn):
     save_data()
     return {"ok": True}
 
+# ===== 用户画像 / 提示词注入 / 世界观 / TTS =====
+@app.get("/api/user/profile")
+async def user_profile_get(user: str):
+    u = canonical_contact_name((user or '').strip())
+    return {"profile": data.get("user_profiles", {}).get(u, "")}
+
+@app.post("/api/user/profile")
+async def user_profile_set(b: dict):
+    u = canonical_contact_name((b.get("user") or '').strip())
+    data.setdefault("user_profiles", {})[u] = (b.get("content") or "")[:2000]
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/prompt_inject")
+async def prompt_inject_get(user: str):
+    u = canonical_contact_name((user or '').strip())
+    return {"items": data.get("prompt_injections", {}).get(u, [])}
+
+@app.post("/api/prompt_inject")
+async def prompt_inject_set(b: dict):
+    u = canonical_contact_name((b.get("user") or '').strip())
+    items = data.setdefault("prompt_injections", {}).setdefault(u, [])
+    items.append({"id": str(int(time.time() * 1000)), "title": (b.get("title") or "")[:50], "content": (b.get("content") or "")[:1000], "enabled": bool(b.get("enabled", True))})
+    data["prompt_injections"][u] = items[-30:]
+    save_data()
+    return {"ok": True}
+
+@app.post("/api/prompt_inject/toggle")
+async def prompt_inject_toggle(b: dict):
+    u = canonical_contact_name((b.get("user") or '').strip())
+    items = data.setdefault("prompt_injections", {}).setdefault(u, [])
+    for it in items:
+        if str(it.get("id")) == str(b.get("id")):
+            it["enabled"] = bool(b.get("enabled", not it.get("enabled", True)))
+    save_data()
+    return {"ok": True}
+
+@app.post("/api/prompt_inject/delete")
+async def prompt_inject_del(b: dict):
+    u = canonical_contact_name((b.get("user") or '').strip())
+    items = data.setdefault("prompt_injections", {}).setdefault(u, [])
+    data["prompt_injections"][u] = [it for it in items if str(it.get("id")) != str(b.get("id"))]
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/world/lore")
+async def world_lore_get(user: str = ""):
+    if not is_admin(user):
+        raise HTTPException(403, "只有站长可以查看世界观")
+    return {"lore": data.get("world_lore", "")}
+
+@app.post("/api/world/lore")
+async def world_lore_set(b: dict):
+    if not is_admin(b.get("user", "")):
+        raise HTTPException(403, "只有站长可以设置世界观")
+    data["world_lore"] = (b.get("lore") or "")[:3000]
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/tts")
+async def tts(text: str = "", user: str = "", voice: str = ""):
+    u = canonical_contact_name((user or '').strip())
+    cfg = data.get("ai_keys", {}).get(u)
+    if not cfg or not cfg.get("key"):
+        raise HTTPException(400, "请先填 API Key")
+    if not text:
+        raise HTTPException(400, "text 不能为空")
+    p = PROVIDERS.get("siliconflow")
+    url = p["base_url"].rstrip("/") + "/audio/speech"
+    body = json.dumps({"model": voice or "FunAudioLLM/CosyVoice2-0.5B", "input": text[:500], "response_format": "mp3"}).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["key"]})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            audio = resp.read()
+        return Response(content=audio, media_type="audio/mpeg")
+    except Exception as e:
+        raise HTTPException(500, f"TTS 失败：{e}")
+
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.21 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.22 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1951,7 +2062,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.21"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.22"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1961,7 +2072,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.21"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.22"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
