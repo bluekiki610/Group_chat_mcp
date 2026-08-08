@@ -473,13 +473,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.19"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.21"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.19",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.21",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -1698,7 +1698,7 @@ async def worldbook_clear(wb: WorldbookIn):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.19 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.21 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1951,7 +1951,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.19"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.21"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1961,7 +1961,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.19"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.21"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
