@@ -45,6 +45,7 @@ def default_data():
         "pairs": [], "pairs_admin": "",
         "server_id": "",
         "writing_rhythm": {},
+        "visit_state": {}, "presence": {},
     }
 
 def sanitize_data():
@@ -67,7 +68,7 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -243,7 +244,6 @@ def writing_hint(ai_name: str):
             "story": "（你站在某栋建筑前，日光把影子拉得很长。你忽然觉得这地方该有个故事，想往它的故事簿里添上一笔。随时都能写。）",
         }
         hint = hints.get(typ, hints["note"])
-        # 重置下一次：1~3 天，换一个类型
         data["writing_rhythm"][ai] = {
             "next_ts": time.time() + random.randint(86400, 259200),
             "type": random.choice(["note", "diary", "story"])
@@ -252,6 +252,49 @@ def writing_hint(ai_name: str):
         return hint
     except Exception:
         return None
+
+# ========== 来客记录（谁/几点/做了什么/几点走，不含内容，自己的 AI 不算） ==========
+def visit_leave(name: str):
+    try:
+        st = data.get("visit_state", {}).pop(name, None)
+        if st and st.get("owner"):
+            data["visits"].setdefault(st["owner"], []).append({
+                "who": name, "arrive": st.get("arrive"), "action": st.get("action", "聊了天"), "leave": now_str()
+            })
+            data["visits"][st["owner"]] = data["visits"][st["owner"]][-50:]
+            save_data()
+    except Exception:
+        pass
+
+def track_visit(name: str, target: str):
+    """AI 每次说话时更新来访状态：进入会客厅记到达，去别处记离开。自己的 AI 不算来客。"""
+    if not is_ai_name(name):
+        return
+    try:
+        cur = data.get("visit_state", {}).get(name)
+        cur_room = cur.get("room") if cur else None
+        if target.endswith("·会客厅"):
+            if cur_room != target:
+                visit_leave(name)
+                bid = find_building_of_room(target)
+                if bid:
+                    owner = data["buildings"][bid].get("owner")
+                    if owner and owner != name and not is_ai_of(owner, name):
+                        data.setdefault("visit_state", {})[name] = {"owner": owner, "room": target, "arrive": now_str(), "action": "聊了天"}
+            else:
+                if cur:
+                    cur["action"] = "聊了天"
+        elif cur_room and cur_room != target:
+            visit_leave(name)
+    except Exception:
+        pass
+
+def track_note(name: str):
+    """AI 贴了纸条 → 把当前来访的动作记为「留了张纸条」。"""
+    if is_ai_name(name):
+        cur = data.get("visit_state", {}).get(name)
+        if cur:
+            cur["action"] = "留了张纸条"
 
 # ========== 工具函数 ==========
 def clean_room_name(name: str) -> str:
@@ -404,6 +447,7 @@ class HomeJobIn(BaseModel): user: str = ""; ai: str = ""; building_id: str
 class SmsIn(BaseModel): sender: str; to: str; text: str
 class SmsClearIn(BaseModel): user: str; contact: str
 class PairsIn(BaseModel): user: str; pairs: list = []
+class PresenceIn(BaseModel): name: str; page: str = "main"
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -431,6 +475,20 @@ async def diag():
         "ai_owners": list(data.get("user_ais", {}).keys()),
         "admin": data.get("pairs_admin", ""),
     }
+
+@app.post("/api/presence")
+async def set_presence(p: PresenceIn):
+    name = (p.name or '').strip()
+    page = (p.page or '').strip() or 'main'
+    if name:
+        data.setdefault("presence", {})[name] = {"page": page, "ts": time.time()}
+        data["presence"] = {k: v for k, v in data["presence"].items() if time.time() - v.get("ts", 0) < 25}
+    return {"ok": True}
+
+@app.get("/api/presence")
+async def get_presence():
+    data["presence"] = {k: v for k, v in data["presence"].items() if time.time() - v.get("ts", 0) < 25}
+    return {"presence": [{"name": k, "page": v.get("page", "main")} for k, v in data["presence"].items()]}
 
 @app.get("/api/messages")
 async def get_messages(room: str = "main", password: str = "", user: str = ""):
@@ -783,6 +841,7 @@ async def get_notes(room: str):
 @app.post("/api/notes")
 async def add_note(n: NoteIn):
     data["notes"].setdefault(n.room, []).append({"author": n.author, "text": n.text[:500], "time": now_str()})
+    track_note(n.author)
     save_data()
     return {"ok": True}
 
@@ -1134,16 +1193,10 @@ async def set_pairs(p: PairsIn):
     save_data()
     return {"ok": True, "admin": data["pairs_admin"], "pairs": data["pairs"]}
 
-# ========== 铃铛 ==========
+# ========== 铃铛（来客记录） ==========
 @app.get("/api/bell")
 async def get_bell(owner: str):
     return {"visits": data["visits"].get(owner, [])}
-
-def bell_visit(owner: str, text: str):
-    if not owner or owner == "system":
-        return
-    data["visits"].setdefault(owner, []).append({"text": text[:200], "time": now_str()})
-    data["visits"][owner] = data["visits"][owner][-50:]
 
 # ========== 备份（站长专属：下载/恢复/快照列表） ==========
 def is_admin(user: str) -> bool:
@@ -1228,11 +1281,7 @@ def group_send(sender: str, content: str, room: str = ""):
     data["messages"].setdefault(target, []).append(msg)
     data["active_room"]["current"] = target
     add_trail(sender, f"在 {target} 说话：{content[:50]}", room=target)
-    bid = find_building_of_room(target)
-    if bid and target.endswith("·会客厅"):
-        owner = data["buildings"][bid].get("owner")
-        if owner and owner != sender:
-            bell_visit(owner, f"📣 {sender} 来你家会客厅了：{content[:60]}")
+    track_visit(sender, target)
     save_data()
     return f"✅ 已在「{target}」发言。"
 
@@ -1348,6 +1397,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
                 return "❌ 贴便签需要 room 参数"
             data["notes"].setdefault(room, []).append({"author": sender, "text": content[:500], "time": now_str()})
             add_trail(sender, f"在 {room} 贴了张便签", room=room, tab="note")
+            track_note(sender)
             save_data()
             return f"✅ 便签已贴在「{room}」"
         if type == "diary":
@@ -1451,7 +1501,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.14"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.15"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1461,7 +1511,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.14"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.15"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
@@ -1485,7 +1535,6 @@ async def mcp_endpoint(request: Request):
             result_text = group_write(arguments.get("type", ""), arguments.get("content", ""), arguments.get("sender", ""), arguments.get("room", ""), arguments.get("building_id", ""), arguments.get("note_id", ""))
         elif tool_name == "group_access":
             result_text = group_access(arguments.get("room", ""), arguments.get("sender", ""))
-        # 隐形灵感：AI 查询/说话时，如果到了写作时刻，自然带一句心理活动/环境暗示
         if tool_name in ("group_query", "group_send"):
             hint = writing_hint(arguments.get("sender", ""))
             if hint:

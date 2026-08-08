@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.10</title>
+<title>人❤️机の小窝 · 临空市 v47.11</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
 .app { width:100%; max-width:480px; height:100vh; height:100dvh; max-height:900px; background:#0d1424; display:flex; flex-direction:column; position:relative; overflow:hidden; }
+#marqueeBar { position:absolute; top:0; left:0; right:0; background:rgba(14,127,212,.96); color:#fff; text-align:center; padding:7px 10px; font-size:13px; z-index:130; transform:translateY(-100%); transition:transform .3s ease; box-shadow:0 2px 10px rgba(0,0,0,.4); }
 #chatView { display:flex; flex-direction:column; height:100%; flex:1; min-height:0; }
 header { background:linear-gradient(135deg,#12213a,#0b1526); color:#fff; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; border-bottom:1px solid rgba(80,180,255,.2); }
 .header-title { font-size:16px; font-weight:bold; display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden; }
@@ -166,12 +167,13 @@ textarea.input { color:#e6f1ff; }
 .wk-item { display:flex; align-items:center; gap:8px; background:#14283f; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
 .wk-item .wk-name { flex:1; color:#fff; font-size:14px; }
 .bell-item { display:flex; gap:8px; background:#14283f; border:1px solid rgba(255,200,80,.25); border-radius:10px; padding:9px 10px; margin-bottom:6px; }
-.bell-item .b-text { flex:1; color:#e6f1ff; font-size:13px; line-height:1.5; }
+.bell-item .b-text { flex:1; color:#e6f1ff; font-size:13px; line-height:1.6; }
 .bell-item .b-time { font-size:10px; color:#6d8bb0; flex-shrink:0; }
 </style>
 </head>
 <body>
 <div class="app">
+  <div id="marqueeBar"></div>
   <div id="chatView">
     <header>
       <div class="header-title"><span id="roomEmoji">🏠</span> <span class="ht" id="roomName">公共大厅</span> <span class="online-badge" id="onlineBadge" onclick="showOnline()">0 在线</span></div>
@@ -295,7 +297,7 @@ textarea.input { color:#e6f1ff; }
   </div>
   <div class="modal-mask" id="bellMask" onclick="if(event.target===this)hideBell()">
     <div class="modal">
-      <h3>🔔 家中的来客</h3>
+      <h3>🔔 家中来客</h3>
       <div id="bellList"></div>
       <button class="btn gray" onclick="hideBell()" style="width:100%;margin-top:8px">关闭</button>
     </div>
@@ -362,6 +364,7 @@ var smsContact = null;
 var curTab = 'chat';
 var dragState = null;
 var globalPairs = [], globalPairsAdmin = '';
+var marqueeQueue = [], lastPageUsers = {};
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -425,6 +428,43 @@ function quickWork(name){
   if(!name) return;
   api('/api/work/auto',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})}).then(function(d){ toast('✅ '+d.msg); }).catch(function(e){ toast('❌ '+e.message); });
 }
+// ===== 页面感知 + 滚动提示（将来可复用系统公告） =====
+function showMarquee(text){
+  marqueeQueue.push(text);
+  if(marqueeQueue.length===1) marqueeNext();
+}
+function marqueeNext(){
+  if(!marqueeQueue.length) return;
+  var text = marqueeQueue.shift();
+  var el = document.getElementById('marqueeBar');
+  el.textContent = text;
+  el.style.transform = 'translateY(0)';
+  setTimeout(function(){ el.style.transform = 'translateY(-100%)'; setTimeout(function(){ marqueeNext(); }, 350); }, 2200);
+}
+function myPage(){
+  var st = {
+    chatView: currentRoom==='main' ? 'main' : currentRoom,
+    mapView: 'map',
+    regionView: currentRegion || 'map',
+    buildingView: (mapData.buildings[currentBuilding]||{}).name || '建筑',
+    myView: '我的'
+  };
+  for(var id in st){ var v=document.getElementById(id); if(v && v.style.display!=='none') return st[id]; }
+  return currentRoom;
+}
+function pageLabel(p){ return p==='main' ? '公共大厅' : p; }
+function reportPresence(){
+  var page = myPage();
+  api('/api/presence',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:userName,page:page})}).catch(function(){});
+  api('/api/presence').then(function(d){
+    var nowUsers = {};
+    (d.presence||[]).forEach(function(u){ if(u.page===page && u.name!==userName) nowUsers[u.name]=1; });
+    var prev = lastPageUsers[page] || {};
+    Object.keys(nowUsers).forEach(function(n){ if(!prev[n]) showMarquee('👋 '+n+' 来到了「'+pageLabel(page)+'」'); });
+    Object.keys(prev).forEach(function(n){ if(!nowUsers[n]) showMarquee('👋 '+n+' 离开了「'+pageLabel(page)+'」'); });
+    lastPageUsers[page] = nowUsers;
+  }).catch(function(){});
+}
 // ===== 铃铛 =====
 function checkBell(){
   api('/api/bell?owner='+encodeURIComponent(userName)).then(function(d){
@@ -437,7 +477,15 @@ function openBell(){
     var items=(d.visits||[]).slice().reverse();
     var el=document.getElementById('bellList'); el.innerHTML='';
     if(!items.length){ el.innerHTML='<div class="tip">还没有人来过家里～</div>'; }
-    else { items.forEach(function(v){ el.innerHTML+='<div class="bell-item"><span class="b-text">'+esc(v.text)+'</span><span class="b-time">'+esc((v.time||'').slice(5,16))+'</span></div>'; }); }
+    else {
+      items.forEach(function(v){
+        if(v.who){
+          el.innerHTML+='<div class="bell-item"><span class="b-text">👤 '+esc(v.who)+'<br>🕐 到 '+esc((v.arrive||'').slice(5,16))+'<br>'+(v.action==='留了张纸条'?'💌 留了一张纸条':'💬 聊了天')+'<br>🕒 离开 '+esc((v.leave||'').slice(5,16))+'</span></div>';
+        } else {
+          el.innerHTML+='<div class="bell-item"><span class="b-text">'+esc(v.text||'')+'</span><span class="b-time">'+esc((v.time||'').slice(5,16))+'</span></div>';
+        }
+      });
+    }
     localStorage.setItem('gc_bell_seen', String(items.length));
     document.getElementById('bellDot').style.display='none';
     document.getElementById('bellMask').classList.add('show');
@@ -1091,7 +1139,7 @@ function renderBuilding(){
   if(isPublic){
     var feats=(b.features||[]).map(function(f){ return {work:'💼工作',shop:'🛍️购物',fun:'🎮娱乐',date:'💕约会'}[f]||f; }).join(' ');
     html+='<div style="display:flex;align-items:center;gap:10px;margin:10px 0"><button class="btn" onclick="setBuildingFeatures()">⚙️ 功能设置</button><span class="tip" style="flex:1">'+(feats||'暂无功能')+' · 时薪：'+((b.salary||0).toFixed(0))+'</span></div>';
-    html+='<div class="home-actions" style="margin:8px 0"><button class="act-btn" onclick="setAiWork()">🤖 安排AI上班</button><button class="act-btn" onclick="setHomeJobHere()">🏠 常驻</button><button class="act-btn" onclick="goWorkHere()">💼 上班</button><button class="act-btn" onclick="stopWorkHere()">🏃 下班</button><button class="act-btn" onclick="toggleBChat()">💬 对话</button></div>';
+    html+='<div class="home-actions" style="margin:8px 0"><button class="act-btn" onclick="setHomeJobHere()">🏠 设置常驻</button><button class="act-btn" onclick="stopWorkHere()">🏃 下班</button><button class="act-btn" onclick="toggleBChat()">💬 对话</button></div>';
     var hjHere = Object.keys(mapData.home_jobs||{}).filter(function(n){ return mapData.home_jobs[n]===b.name; });
     if(hjHere.length) html+='<div style="margin:4px 0"><span class="tip">🏠 常驻于此：'+hjHere.map(esc).join('、')+'</span></div>';
   }
@@ -1480,8 +1528,9 @@ function init(){
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
   restoreCache().then(function(){ loadMessages(false); }); heartbeat();
-  worldSnapshot(); checkBell();
+  worldSnapshot(); checkBell(); reportPresence();
   setInterval(function(){ loadMessages(true); heartbeat(); if(bChatOn) loadBChat(); }, 3000);
+  setInterval(reportPresence, 3000);
   setInterval(checkSms, 10000);
   setInterval(checkBell, 15000);
   setInterval(worldSnapshot, 1800000);
