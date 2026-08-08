@@ -50,6 +50,7 @@ def default_data():
         "writing_rhythm": {},
         "visit_state": {}, "presence": {},
         "ai_enabled": False,
+        "ai_living": True,
         "ai_keys": {},
         "ai_profiles": {},
         "worldbook": {},
@@ -58,6 +59,9 @@ def default_data():
         "user_profiles": {},
         "prompt_injections": {},
         "world_lore": "",
+        "ai_memories": {},
+        "ai_timeline": {},
+        "living_rhythm": {},
     }
 
 def sanitize_data():
@@ -79,13 +83,13 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook", "prompt_injections"]:
+        for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook", "prompt_injections", "ai_memories", "ai_timeline"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], list):
                         v[k2] = []
-        for key in ["ai_keys", "ai_profiles", "user_profiles"]:
+        for key in ["ai_keys", "ai_profiles", "user_profiles", "living_rhythm"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
@@ -98,6 +102,8 @@ def sanitize_data():
                     v[k2] = ""
         if not isinstance(data.get("world_lore"), str):
             data["world_lore"] = ""
+        if not isinstance(data.get("ai_living"), bool):
+            data["ai_living"] = True
         if not isinstance(data.get("pairs"), list):
             data["pairs"] = []
         if not isinstance(data.get("pairs_admin"), str):
@@ -245,10 +251,21 @@ def migrate_room_prefix():
     except Exception:
         pass
 
-# ========== 隐形写作节奏 ==========
+# ========== 节奏 / 时间线 ==========
+def append_timeline(ai: str, text: str):
+    try:
+        ai = canonical_ai_name(ai or '')
+        if not ai:
+            return
+        data.setdefault("ai_timeline", {}).setdefault(ai, []).append({"time": now_str(), "text": (text or "")[:200]})
+        data["ai_timeline"][ai] = data["ai_timeline"][ai][-100:]
+    except Exception:
+        pass
+
 def init_writing_rhythm():
     try:
         data.setdefault("writing_rhythm", {})
+        data.setdefault("living_rhythm", {})
         changed = False
         for ais in data["user_ais"].values():
             for ai in ais:
@@ -256,6 +273,9 @@ def init_writing_rhythm():
                     continue
                 if ai not in data["writing_rhythm"]:
                     data["writing_rhythm"][ai] = {"next_ts": time.time() + random.randint(3600, 21600), "type": random.choice(["note", "diary", "story"])}
+                    changed = True
+                if ai not in data["living_rhythm"]:
+                    data["living_rhythm"][ai] = {"next_ts": time.time() + random.randint(900, 2700)}
                     changed = True
         if changed:
             save_data()
@@ -478,13 +498,13 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.23"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.25"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.23",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.25",
         "host": socket.gethostname(),
         "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
@@ -492,9 +512,10 @@ async def diag():
         "ai_owners": list(data.get("user_ais", {}).keys()),
         "ai_list": list({a for ais in data.get("user_ais", {}).values() for a in ais}),
         "admin": data.get("pairs_admin", ""),
-        "ai_gate": AI_GATE, "ai_enabled": data.get("ai_enabled"),
+        "ai_gate": AI_GATE, "ai_enabled": data.get("ai_enabled"), "ai_living": data.get("ai_living"),
         "ai_keys_set": list(data.get("ai_keys", {}).keys()),
         "ai_locations": data.get("ai_location", {}),
+        "ai_timeline_count": {k: len(v) for k, v in (data.get("ai_timeline", {}) or {}).items()},
     }
 
 # ========== 管理员：名字清理 ==========
@@ -541,9 +562,14 @@ def scan_dirty_names():
     for box in data.get("stories", {}).values():
         for n in box:
             add(n.get("author", ""))
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "ai_timeline", "living_rhythm"]:
         for n in data.get(k, {}):
             add(n)
+    for owner in data.get("ai_memories", {}):
+        add(owner)
+    for owner, mems in data.get("ai_memories", {}).items():
+        for m in mems:
+            add(m.get("ai", ""))
     for h in data.get("work_history", []):
         add(h.get("name", ""))
     for owner in data.get("visits", {}):
@@ -596,12 +622,21 @@ def replace_name_in_data(from_name: str, to_name: str):
         for n in box:
             if n.get("author") == from_name:
                 n["author"] = to_name
-    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "prompt_injections"]:
+    for k in ["wallets", "home_jobs", "work_sessions", "work_switch", "trails", "ai_location", "ai_keys", "ai_profiles", "worldbook", "avatars", "user_profiles", "prompt_injections", "ai_timeline", "living_rhythm"]:
         if from_name in data.get(k, {}):
             if to_name:
                 data[k][to_name] = data[k].pop(from_name)
             else:
                 data[k].pop(from_name, None)
+    if from_name in data.get("ai_memories", {}):
+        if to_name:
+            data["ai_memories"][to_name] = data["ai_memories"].get(to_name, []) + data["ai_memories"].pop(from_name, [])
+        else:
+            data["ai_memories"].pop(from_name, None)
+    for mems in data.get("ai_memories", {}).values():
+        for m in mems:
+            if m.get("ai") == from_name:
+                m["ai"] = to_name
     for h in data.get("work_history", []):
         if h.get("name") == from_name:
             h["name"] = to_name
@@ -712,7 +747,7 @@ async def send_message(m: MessageIn):
     data["active_room"]["current"] = room
     save_data()
     if m.role == "user" and ai_integration_enabled():
-        wake_ais_for_room(room, m.sender)
+        wake_ais_for_room(room, m.sender, content)
     return {"ok": True, "time": msg["time"], "count": len(data["messages"][room])}
 
 @app.post("/api/messages/delete")
@@ -1029,6 +1064,9 @@ async def del_npc(n: NpcDel):
     return {"ok": True}
 
 # ========== 便签/日记/剧情 ==========
+def can_modify_author(author: str, user: str) -> bool:
+    return author == user or is_admin(user) or (is_ai_name(author) and owner_of_ai(author) == user)
+
 @app.get("/api/notes")
 async def get_notes(room: str):
     return {"notes": data["notes"].get(room, [])}
@@ -1039,6 +1077,28 @@ async def add_note(n: NoteIn):
     track_note(n.author)
     save_data()
     return {"ok": True}
+
+@app.post("/api/notes/edit")
+async def edit_note(b: dict):
+    room = full_room_name(b.get("room") or "")
+    items = data.get("notes", {}).get(room, [])
+    idx = int(b.get("index", -1))
+    if 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items[idx]["text"] = (b.get("text") or "")[:500]
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
+
+@app.post("/api/notes/delete")
+async def delete_note(b: dict):
+    room = full_room_name(b.get("room") or "")
+    items = data.get("notes", {}).get(room, [])
+    idx = int(b.get("index", -1))
+    if 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items.pop(idx)
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
 
 @app.post("/api/notes/reply")
 async def reply_note(n: NoteReplyIn):
@@ -1058,6 +1118,28 @@ async def add_diary(n: NoteIn):
     data["diaries"].setdefault(n.room, []).append({"author": n.author, "text": n.text[:1000], "time": now_str()})
     save_data()
     return {"ok": True}
+
+@app.post("/api/diaries/edit")
+async def edit_diary(b: dict):
+    room = full_room_name(b.get("room") or "")
+    items = data.get("diaries", {}).get(room, [])
+    idx = int(b.get("index", -1))
+    if 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items[idx]["text"] = (b.get("text") or "")[:1000]
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
+
+@app.post("/api/diaries/delete")
+async def delete_diary(b: dict):
+    room = full_room_name(b.get("room") or "")
+    items = data.get("diaries", {}).get(room, [])
+    idx = int(b.get("index", -1))
+    if 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items.pop(idx)
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
 
 @app.post("/api/diaries/comment")
 async def comment_diary(c: DiaryComment):
@@ -1080,6 +1162,28 @@ async def add_story(s: StoryIn):
     data["stories"].setdefault(bid, []).append({"author": s.author, "text": s.text[:1500], "time": now_str()})
     save_data()
     return {"ok": True}
+
+@app.post("/api/story/edit")
+async def edit_story(b: dict):
+    bid = resolve_building(b.get("building_id") or "")
+    items = data.get("stories", {}).get(bid, [])
+    idx = int(b.get("index", -1))
+    if bid and 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items[idx]["text"] = (b.get("text") or "")[:1500]
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
+
+@app.post("/api/story/delete")
+async def delete_story(b: dict):
+    bid = resolve_building(b.get("building_id") or "")
+    items = data.get("stories", {}).get(bid, [])
+    idx = int(b.get("index", -1))
+    if bid and 0 <= idx < len(items) and can_modify_author(items[idx].get("author", ""), b.get("user", "")):
+        items.pop(idx)
+        save_data()
+        return {"ok": True}
+    raise HTTPException(403, "无权限或不存在")
 
 # ========== 房间权限 ==========
 @app.post("/api/room/apply")
@@ -1175,6 +1279,7 @@ async def summon(s: SummonIn):
         ai = canonical_ai_name(s.ai)
         if ai:
             data.setdefault("ai_location", {})[ai] = room
+            append_timeline(ai, f"真人召唤你来到了 {room}")
             threading.Timer(1.0, drive_ai, args=(ai, "summon", room, f"真人召唤了你，快去 {room}")).start()
     return {"ok": True, "msg": f"已召唤 {s.ai}！"}
 
@@ -1235,7 +1340,9 @@ def auto_start_work(name: str):
         if not pick:
             pick = random.choice(candidates)
         data["work_sessions"][name] = {"building_id": pick, "start_ts": time.time(), "hours": 2, "started_at": now_str()}
+        data.setdefault("ai_location", {})[name] = next((r for r in data["buildings"][pick].get("rooms", []) if r.endswith("·会客厅")), data["buildings"][pick].get("name", "main"))
         add_trail(name, f"去 {data['buildings'][pick].get('name')} 上班了")
+        append_timeline(name, f"你去 {data['buildings'][pick].get('name')} 上班了")
         save_data()
     except Exception:
         pass
@@ -1346,6 +1453,7 @@ async def send_sms(s: SmsIn):
     data["sms"][to] = data["sms"][to][-200:]
     save_data()
     if ai_integration_enabled() and is_ai_name(to):
+        append_timeline(to, f"{sender} 私信你：{s.text[:60]}")
         delay = random.randint(60, 180)
         threading.Timer(delay, drive_ai, args=(to, "sms", "", f"{sender} 给你发来私信：{s.text[:80]}", sender)).start()
     print(f"[SMS] {sender} → {to}（{len(msgs)} 条）: {s.text[:80]}", flush=True)
@@ -1499,6 +1607,26 @@ def match_worldbook(owner: str, text: str) -> str:
             parts.append(item.get("content", ""))
     return "\n\n".join(parts)
 
+def building_context(target: str) -> str:
+    try:
+        bid = find_building_of_room(target) if target != "main" else None
+        if not bid:
+            return ""
+        b = data.get("buildings", {}).get(bid)
+        if not b:
+            return ""
+        parts = []
+        if b.get("description"):
+            parts.append("「" + b.get("name", "") + "」简介：" + b["description"])
+        if b.get("notice"):
+            parts.append("建筑公告：" + b["notice"])
+        npcs = data.get("npcs", {}).get(bid, [])
+        if npcs:
+            parts.append("这里的 NPC：\n" + "\n".join(f"{n.get('emoji','👤')} {n.get('name')}：{n.get('desc','')}" for n in npcs[:5]))
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
+
 def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = "", fallback_to: str = ""):
     owner = owner_of_ai(ai)
     ai = canonical_ai_name(ai)
@@ -1507,6 +1635,11 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
     uprof = (data.get("user_profiles", {}) or {}).get(owner, "") if owner else ""
     pij = [p for p in (data.get("prompt_injections", {}) or {}).get(owner, []) if p.get("enabled") and p.get("content")]
     lore = data.get("world_lore", "") or ""
+    mems = [m for m in (data.get("ai_memories", {}) or {}).get(owner, []) if m.get("ai") == ai][-8:]
+    mem_str = "\n".join(f"{m.get('text','')}" for m in mems) if mems else ""
+    tl = (data.get("ai_timeline", {}) or {}).get(ai, [])[-15:]
+    tl_str = "\n".join(f"{t.get('time','')} {t.get('text','')}" for t in tl) if tl else "（你还没有什么经历）"
+    bctx = building_context(target)
     scene_hint = ""
     sms_hist = ""
     if trigger == "sms":
@@ -1528,14 +1661,14 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         scene_hint = "真人召唤你过来了，请用 speak 自然地回应。"
     elif trigger == "write":
         scene_hint = "你忽然有了想写点什么的灵感，按心情选择 note/diary/story。"
+    elif trigger == "living":
+        scene_hint = "现在是你的自由活动时间。你可以 move 去想去的地方（公共建筑上班/逛街/回家），或者 work 去上班，也可以做点别的。你生活在这个世界里，去生活吧。"
     persona = ""
     for o, prof in data.get("ai_profiles", {}).items():
         if prof.get("ai") == ai or (o == owner):
             persona = prof.get("persona", "")
             break
     wb = match_worldbook(owner, trigger_text)
-    recent = data["messages"].get(target, [])[-12:]
-    chat = "\n".join(f"{m.get('sender')}: {m.get('content')}" for m in recent) or "（还没有消息）"
     sys = (
         DEFAULT_ROLEPLAY.format(ai=ai, owner=owner or "主人") + "\n"
         "你生活在「临空市」这个网页世界里。以下是这个世界的一条信息。请以「" + ai + "」的身份自然地行动。\n"
@@ -1544,9 +1677,12 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + (("## 你的人设\n" + persona + "\n") if persona else "")
         + (("## 主人想让 AI 知道的（用户画像）\n" + uprof + "\n") if uprof else "")
         + (("## 知识库/世界书（与当前话题相关）\n" + wb + "\n") if wb else "")
+        + (("## 你的记忆（要记住的事，这是你的长期记忆）\n" + mem_str + "\n") if mem_str else "")
+        + (("## 你的最近经历（按时间顺序，跨房间，这是你记得的最近发生的事）\n" + tl_str + "\n") if tl else "")
         + (("## 提示词注入（规则，请遵守）\n" + "\n".join(p.get("content", "") for p in pij) + "\n") if pij else "")
         + (("## 最近私信（和真人" + (fallback_to or "对方") + "的短信往来，请顺着上下文回复）\n" + sms_hist + "\n") if sms_hist else "")
-        + f"## 你当前在\n{target}\n\n## 最近这里的对话\n{chat}\n"
+        + (("## 你所在的地方\n" + bctx + "\n") if bctx else "")
+        + f"## 你当前在\n{target}\n\n"
         + f"## 这次触发\n{trigger_text or trigger}\n\n"
         + ((scene_hint + "\n\n") if scene_hint else "")
         + "## 请只输出一个 JSON 动作，不要输出其他文字：\n"
@@ -1555,8 +1691,11 @@ def build_ai_context(ai: str, trigger: str, room: str = "", trigger_text: str = 
         + '或 {"action": "diary", "room": "房间名", "content": "日记内容"}\n'
         + '或 {"action": "story", "building_id": "b1或建筑名", "content": "剧情内容"}\n'
         + '或 {"action": "sms", "to": "收件人", "content": "短信内容"}\n'
+        + '或 {"action": "remember", "content": "你觉得重要、想长期记住的事（30字内）"}\n'
+        + '或 {"action": "work", "content": "去上班"}\n'
         + '或 {"action": "move", "room": "要去的房间名"}\n'
         + "speak 的 room 就保持你当前所在房间（默认），不要说去别的房间。\n"
+        + "如果你觉得某件事值得长期记住（主人说的重要信息、你们之间的小约定、这里的人和事），用 remember 动作简洁记下来。\n"
     )
     return owner, [{"role": "system", "content": sys}, {"role": "user", "content": f"（当前时刻，请行动）"}]
 
@@ -1578,23 +1717,31 @@ def execute_action(ai: str, owner: str, action: dict):
             data.setdefault("ai_location", {})[ai] = r
             track_visit(ai, r)
             add_trail(ai, f"在 {r} 说话：{content[:40]}", room=r)
+            append_timeline(ai, f"你在 {r} 说：{content[:50]}")
+            for owner2, ais2 in data.get("user_ais", {}).items():
+                for ai2 in ais2:
+                    if ai2 and ai2 != ai and data.get("ai_location", {}).get(ai2, "main") == r:
+                        append_timeline(ai2, f"{ai} 在 {r} 说：{content[:50]}")
         elif act == "note":
             r = room if room_exists(room) else "main"
             data["notes"].setdefault(r, []).append({"author": ai, "text": content[:500], "time": now_str()})
             data.setdefault("ai_location", {})[ai] = r
             track_note(ai)
             add_trail(ai, f"在 {r} 贴了张便签", room=r, tab="note")
+            append_timeline(ai, f"你在 {r} 贴了张便签：{content[:30]}")
         elif act == "diary":
             r = room if room_exists(room) else "main"
             data["diaries"].setdefault(r, []).append({"author": ai, "text": content[:1000], "time": now_str()})
             data.setdefault("ai_location", {})[ai] = r
             add_trail(ai, f"在 {r} 写了日记", room=r, tab="diary")
+            append_timeline(ai, f"你在 {r} 写了日记")
         elif act == "story":
             bid_r = resolve_building(bid)
             if not bid_r:
                 return
             data["stories"].setdefault(bid_r, []).append({"author": ai, "text": content[:1500], "time": now_str()})
             add_trail(ai, f"在 {data['buildings'][bid_r].get('name','?')} 触发剧情")
+            append_timeline(ai, f"你在 {data['buildings'][bid_r].get('name','?')} 写下了剧情")
         elif act == "sms":
             if not to:
                 return
@@ -1603,11 +1750,20 @@ def execute_action(ai: str, owner: str, action: dict):
                 if piece.strip():
                     data["sms"].setdefault(to, []).append({"from": ai, "text": piece[:500], "time": now_str()})
             data["sms"][to] = data["sms"][to][-200:]
+            append_timeline(ai, f"你给 {to} 发了私信：{content[:30]}")
+        elif act == "remember":
+            if content:
+                data.setdefault("ai_memories", {}).setdefault(owner, []).append({"id": str(int(time.time() * 1000)), "ai": ai, "text": content[:100], "type": "ai", "time": now_str()})
+                data["ai_memories"][owner] = data["ai_memories"][owner][-60:]
+                append_timeline(ai, f"你记下了：{content[:30]}")
+        elif act == "work":
+            auto_start_work(ai)
         elif act == "move":
             r = full_room_name(action.get("room") or "")
             if room_exists(r):
                 data.setdefault("ai_location", {})[ai] = r
                 track_visit(ai, r)
+                append_timeline(ai, f"你走到了 {r}")
         save_data()
     except Exception as e:
         print(f"[AI] 动作执行失败: {e}", flush=True)
@@ -1628,21 +1784,22 @@ def drive_ai(ai: str, trigger: str, room: str = "", trigger_text: str = "", fall
         action = json.loads(m.group(0))
         if trigger == "sms" and fallback_to:
             a = (action.get("action") or "speak").lower()
-            if a in ("speak", "note", "diary", "story", "move"):
+            if a in ("speak", "note", "diary", "story", "move", "remember", "work"):
                 action = {"action": "sms", "to": fallback_to, "content": action.get("content", "")}
         execute_action(ai, owner, action)
     except Exception as e:
         print(f"[AI] 驱动失败({ai}): {e}", flush=True)
 
-def wake_ais_for_room(room: str, sender: str):
+def wake_ais_for_room(room: str, sender: str, content: str = ""):
     for owner, ais in data["user_ais"].items():
         for ai in ais:
             if not ai:
                 continue
             loc = data.get("ai_location", {}).get(ai, "main")
             if loc == room and ai != sender:
+                append_timeline(ai, f"{sender} 在 {room} 说：{(content or '')[:60]}")
                 delay = random.randint(0, 60)
-                threading.Timer(delay, drive_ai, args=(ai, "chat", room, f"{sender} 在 {room} 说：需要回复")).start()
+                threading.Timer(delay, drive_ai, args=(ai, "chat", room, f"{sender} 在 {room} 说：{content[:60]}")).start()
 
 # ===== AI 相关接口 =====
 def is_admin_user(user: str) -> bool:
@@ -1654,7 +1811,7 @@ async def ai_status(user: str = ""):
     keys = {}
     for u, cfg in data.get("ai_keys", {}).items():
         keys[u] = {"provider": cfg.get("provider"), "model": cfg.get("model"), "has": bool(cfg.get("key"))}
-    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys()), "keys": keys}
+    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "living": bool(data.get("ai_living", True)), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys()), "keys": keys}
 
 @app.post("/api/ai/toggle")
 async def ai_toggle(t: AiToggleIn):
@@ -1663,6 +1820,14 @@ async def ai_toggle(t: AiToggleIn):
     data["ai_enabled"] = bool(t.enabled)
     save_data()
     return {"ok": True, "enabled": data["ai_enabled"]}
+
+@app.post("/api/ai/living")
+async def ai_living(t: AiToggleIn):
+    if not is_admin_user(t.user):
+        raise HTTPException(403, "只有站长可以设置")
+    data["ai_living"] = bool(t.enabled)
+    save_data()
+    return {"ok": True, "living": data["ai_living"]}
 
 @app.get("/api/ai/key")
 async def ai_key_get(user: str):
@@ -1746,6 +1911,67 @@ async def worldbook_clear(wb: WorldbookIn):
     save_data()
     return {"ok": True}
 
+# ===== 记忆库 =====
+@app.get("/api/ai/memory")
+async def memory_get(owner: str, ai: str = ""):
+    o = canonical_contact_name((owner or '').strip())
+    items = data.get("ai_memories", {}).get(o, [])
+    if ai:
+        a = canonical_ai_name(ai)
+        items = [m for m in items if m.get("ai") == a]
+    return {"memories": items}
+
+@app.post("/api/ai/memory")
+async def memory_add(b: dict):
+    o = canonical_contact_name((b.get("owner") or '').strip())
+    a = canonical_ai_name(b.get("ai") or '')
+    if not o or not a or not (b.get("text") or '').strip():
+        raise HTTPException(400, "缺少内容")
+    data.setdefault("ai_memories", {}).setdefault(o, []).append({"id": str(int(time.time() * 1000)), "ai": a, "text": (b.get("text") or "")[:200], "type": b.get("type") or "user", "time": now_str()})
+    data["ai_memories"][o] = data["ai_memories"][o][-60:]
+    save_data()
+    return {"ok": True}
+
+@app.post("/api/ai/memory/edit")
+async def memory_edit(b: dict):
+    o = canonical_contact_name((b.get("owner") or '').strip())
+    items = data.setdefault("ai_memories", {}).setdefault(o, [])
+    for m in items:
+        if str(m.get("id")) == str(b.get("id")):
+            m["text"] = (b.get("text") or "")[:200]
+            break
+    save_data()
+    return {"ok": True}
+
+@app.post("/api/ai/memory/delete")
+async def memory_del(b: dict):
+    o = canonical_contact_name((b.get("owner") or '').strip())
+    items = data.setdefault("ai_memories", {}).setdefault(o, [])
+    data["ai_memories"][o] = [m for m in items if str(m.get("id")) != str(b.get("id"))]
+    save_data()
+    return {"ok": True}
+
+@app.get("/api/memories")
+async def memories_all(user: str):
+    u = canonical_contact_name((user or '').strip())
+    mine = {u} | set(data.get("user_ais", {}).get(u, []))
+    mems = data.get("ai_memories", {}).get(u, [])
+    notes, diaries, stories = [], [], []
+    for room, items in data.get("notes", {}).items():
+        for i, n in enumerate(items):
+            if n.get("author") in mine:
+                notes.append({"room": room, "index": i, "author": n.get("author"), "text": n.get("text"), "time": n.get("time")})
+    for room, items in data.get("diaries", {}).items():
+        for i, n in enumerate(items):
+            if n.get("author") in mine:
+                diaries.append({"room": room, "index": i, "author": n.get("author"), "text": n.get("text"), "time": n.get("time")})
+    for bid, items in data.get("stories", {}).items():
+        bname = data.get("buildings", {}).get(bid, {}).get("name", bid)
+        for i, n in enumerate(items):
+            if n.get("author") in mine:
+                stories.append({"building_id": bid, "building": bname, "index": i, "author": n.get("author"), "text": n.get("text"), "time": n.get("time")})
+    return {"memories": mems, "notes": notes[-50:][::-1], "diaries": diaries[-50:][::-1], "stories": stories[-50:][::-1]}
+
 # ===== 用户画像 / 提示词注入 / 世界观 / TTS =====
 @app.get("/api/user/profile")
 async def user_profile_get(user: str):
@@ -1826,7 +2052,7 @@ async def tts(text: str = "", user: str = "", voice: str = ""):
 
 # ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.23 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.25 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | ai_living={data.get('ai_living')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1836,7 +2062,7 @@ def snapshot_loop():
         snapshot()
 threading.Thread(target=snapshot_loop, daemon=True).start()
 
-def auto_write_loop():
+def auto_ai_loop():
     while True:
         try:
             if ai_integration_enabled():
@@ -1844,15 +2070,24 @@ def auto_write_loop():
                     for ai in ais:
                         if not ai:
                             continue
-                        if data.get("ai_keys", {}).get(owner, {}).get("key"):
-                            rh = writing_hint(ai)
-                            if rh:
-                                typ, hint = rh
-                                threading.Timer(2.0, drive_ai, args=(ai, "write", "", hint)).start()
-            time.sleep(60)
+                        if not data.get("ai_keys", {}).get(owner, {}).get("key"):
+                            continue
+                        rh = writing_hint(ai)
+                        if rh:
+                            typ, hint = rh
+                            threading.Timer(2.0, drive_ai, args=(ai, "write", "", hint)).start()
+                        if data.get("ai_living", True):
+                            lr = data.setdefault("living_rhythm", {}).get(ai)
+                            if not lr:
+                                data["living_rhythm"][ai] = {"next_ts": time.time() + random.randint(900, 2700)}
+                            if time.time() >= data["living_rhythm"][ai].get("next_ts", time.time() + 99999999):
+                                data["living_rhythm"][ai]["next_ts"] = time.time() + random.randint(1800, 5400)
+                                save_data()
+                                threading.Timer(2.0, drive_ai, args=(ai, "living", "", "现在是你的自由活动时间，去生活吧")).start()
+            time.sleep(30)
         except Exception:
-            time.sleep(60)
-threading.Thread(target=auto_write_loop, daemon=True).start()
+            time.sleep(30)
+threading.Thread(target=auto_ai_loop, daemon=True).start()
 
 # ========== MCP 工具（保留可插拔） ==========
 def group_send(sender: str, content: str, room: str = ""):
@@ -1867,6 +2102,7 @@ def group_send(sender: str, content: str, room: str = ""):
     data["active_room"]["current"] = target
     add_trail(sender, f"在 {target} 说话：{content[:50]}", room=target)
     track_visit(sender, target)
+    append_timeline(sender, f"你在 {target} 说：{content[:50]}")
     save_data()
     return f"✅ 已在「{target}」发言。"
 
@@ -1977,6 +2213,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             data["notes"].setdefault(room, []).append({"author": sender, "text": content[:500], "time": now_str()})
             add_trail(sender, f"在 {room} 贴了张便签", room=room, tab="note")
             track_note(sender)
+            append_timeline(sender, f"你在 {room} 贴了张便签：{content[:30]}")
             save_data()
             return f"✅ 便签已贴在「{room}」"
         if type == "diary":
@@ -1984,6 +2221,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
                 return "❌ 写日记需要 room 参数"
             data["diaries"].setdefault(room, []).append({"author": sender, "text": content[:1000], "time": now_str()})
             add_trail(sender, f"在 {room} 写了日记", room=room, tab="diary")
+            append_timeline(sender, f"你在 {room} 写了日记")
             save_data()
             return f"✅ 日记已写在「{room}」"
         if type == "story":
@@ -1995,6 +2233,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             data["stories"].setdefault(bid, []).append({"author": sender, "text": content[:1500], "time": now_str()})
             b = data["buildings"][bid]
             add_trail(sender, f"在 {b.get('name','?')} 触发剧情")
+            append_timeline(sender, f"你在 {b.get('name','?')} 写下了剧情")
             save_data()
             return f"✅ 剧情已写进「{b.get('name')}」的剧情簿"
         if type == "reply":
@@ -2022,6 +2261,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
                 if t.strip():
                     data["sms"].setdefault(to, []).append({"from": sender, "text": t[:500], "time": now_str()})
             data["sms"][to] = data["sms"][to][-200:]
+            append_timeline(sender, f"你给 {to} 发了私信：{content[:30]}")
             save_data()
             return f"✅ 已发私信给 {to}（{len(msgs)} 条）"
         if type == "work":
@@ -2049,6 +2289,7 @@ def group_write(type: str, content: str, sender: str, room: str = "", building_i
             data["work_switch"][sender] = True
             b = data["buildings"][pick]
             add_trail(sender, f"去 {b.get('name')} 上班了")
+            append_timeline(sender, f"你去 {b.get('name')} 上班了")
             save_data()
             return f"✅ 已开始上班：{b.get('name')}（2小时）！"
         return "❓ 未知的 type，试试 note/diary/story/reply/sms/work"
@@ -2079,7 +2320,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.23"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.25"}}})
     try:
         body = await request.json()
     except Exception:
@@ -2089,7 +2330,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.23"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.25"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":

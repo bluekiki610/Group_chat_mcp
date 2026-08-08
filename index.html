@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.14</title>
+<title>人❤️机の小窝 · 临空市 v47.16</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -127,7 +127,7 @@ textarea.input { color:#e6f1ff; }
 .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
 .note-card { background:#14283f; border:1px solid rgba(255,200,80,.3); border-radius:10px; padding:10px; margin-bottom:8px; }
 .note-card .n-author { font-size:12px; color:#ffd166; font-weight:bold; }
-.note-card .n-text { font-size:14px; margin:4px 0; line-height:1.5; color:#fff; }
+.note-card .n-text { font-size:14px; margin:4px 0; line-height:1.5; color:#fff; white-space:pre-wrap; }
 .note-card .n-time { font-size:11px; color:#6d8bb0; }
 .note-card .n-reply { background:#12365c; border-radius:8px; padding:6px 8px; margin-top:6px; font-size:13px; color:#9fd8ff; }
 .pair-item { background:#13233d; border:1px solid rgba(80,180,255,.25); border-radius:10px; padding:8px 10px; margin-bottom:6px; display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe8ff; }
@@ -175,6 +175,7 @@ textarea.input { color:#e6f1ff; }
 .slider:before { position:absolute; content:''; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
 .switch input:checked + .slider { background:#0e9f6e; }
 .switch input:checked + .slider:before { transform:translateX(20px); }
+.mem-edit { color:#7fd0ff; font-size:12px; cursor:pointer; margin-right:8px; }
 </style>
 </head>
 <body>
@@ -268,6 +269,15 @@ textarea.input { color:#e6f1ff; }
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
+  <div class="modal-mask" id="memoryMask" onclick="if(event.target===this)hideMemory()">
+    <div class="modal">
+      <h3>📚 记忆库</h3>
+      <div class="priv-tab"><button id="mtabMem" class="on" onclick="setMemoryTab('mem')">🧠 AI记忆</button><button id="mtabNote" onclick="setMemoryTab('note')">💌 纸条</button><button id="mtabDiary" onclick="setMemoryTab('diary')">📖 日记</button><button id="mtabStory" onclick="setMemoryTab('story')">🎬 剧情</button></div>
+      <div id="memoryList"></div>
+      <div id="memoryWrite"></div>
+      <button class="btn gray" onclick="hideMemory()" style="width:100%;margin-top:8px">关闭</button>
+    </div>
+  </div>
   <div class="modal-mask" id="smsMask" onclick="if(event.target===this)hideSms()"><div class="modal sms-full" id="smsListModal"><div class="sms-head"><b>📩 短信</b><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="openContacts()">👤 通讯录</span><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div><div class="sms-list" id="smsList"></div></div><div class="modal sms-full" id="smsConvModal" style="display:none"><div class="sms-head"><span style="cursor:pointer;color:#7fd0ff;font-size:14px" onclick="backToSmsList()">← 返回</span><b id="smsConvName"></b><span style="cursor:pointer;color:#7fd0ff;font-size:13px" onclick="hideSms()">关闭</span></div><div class="sms-chat" id="smsConvList"></div><div style="display:flex;gap:6px;padding:8px 10px;background:#fff;flex-shrink:0"><input id="smsChatInput" placeholder="发短信…" style="flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:15px;outline:none"><button class="btn green" style="margin:0" onclick="sendSmsTo()">发送</button></div></div></div>
   <div class="modal-mask" id="contactsMask" onclick="if(event.target===this)hideContacts()"><div class="modal"><h3>👥 通讯录（点人发短信）</h3><div id="contactsList"></div><button class="btn gray" onclick="hideContacts()" style="width:100%;margin-top:8px">关闭</button></div></div>
   <div class="modal-mask" id="bellMask" onclick="if(event.target===this)hideBell()"><div class="modal"><h3>🔔 家中来客</h3><div id="bellList"></div><button class="btn gray" onclick="hideBell()" style="width:100%;margin-top:8px">关闭</button></div></div>
@@ -293,7 +303,7 @@ var smsOut = JSON.parse(localStorage.getItem('gc_sms_out') || '[]');
 var bChatOn = false, smsContact = null, curTab = 'chat', dragState = null;
 var globalPairs = [], globalPairsAdmin = '';
 var marqueeQueue = [], lastPageUsers = {};
-var aiStatus = { gate:false, enabled:false, you_can_toggle:false, providers:['deepseek','siliconflow','glm'] };
+var aiStatus = { gate:false, enabled:false, living:true, you_can_toggle:false, providers:['deepseek','siliconflow','glm'] };
 var aiKeyInfo = { has_key:false, provider:'deepseek', model:'' };
 var aiProfileData = { profiles:{}, my_ais:[] };
 var worldbookData = [];
@@ -302,6 +312,8 @@ var promptInjectData = [];
 var worldLoreData = '';
 var dirtyNames = [];
 var mapCacheTs = 0, mapCacheData = null;
+var memoryData = { memories:[], notes:[], diaries:[], stories:[] };
+var memoryTab = 'mem';
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -317,6 +329,58 @@ function toast(msg){ var t=document.createElement('div'); t.style.cssText='posit
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言❄️')||'亦言❄️'; localStorage.setItem('gc_name',userName); }
 function isAdminUser(){ return userName === globalPairsAdmin || !globalPairsAdmin; }
+// ===== 记忆库 =====
+function openMemoryModal(){ document.getElementById('memoryMask').classList.add('show'); setMemoryTab(memoryTab); }
+function hideMemory(){ document.getElementById('memoryMask').classList.remove('show'); }
+function setMemoryTab(t){
+  memoryTab=t;
+  document.getElementById('mtabMem').className=t==='mem'?'on':'';
+  document.getElementById('mtabNote').className=t==='note'?'on':'';
+  document.getElementById('mtabDiary').className=t==='diary'?'on':'';
+  document.getElementById('mtabStory').className=t==='story'?'on':'';
+  loadMemory();
+}
+function loadMemory(){
+  var el=document.getElementById('memoryList'); var w=document.getElementById('memoryWrite');
+  el.innerHTML='<div class="tip">加载中…</div>'; w.innerHTML='';
+  api('/api/memories?user='+encodeURIComponent(userName)).then(function(d){ memoryData=d; renderMemory(); }).catch(function(e){ el.innerHTML='<div class="tip">'+esc(e.message)+'</div>'; });
+}
+function renderMemory(){
+  var el=document.getElementById('memoryList'); var w=document.getElementById('memoryWrite'); el.innerHTML=''; w.innerHTML='';
+  var ais=mapData.user_ais[userName]||[];
+  if(memoryTab==='mem'){
+    if(ais.length){ w.innerHTML='<div class="row"><select class="input" id="memAiSel" style="flex:1">'+ais.map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>';}).join('')+'</select></div><div class="row"><input class="input" id="memTextInput" placeholder="让 TA 记住的话…（简洁）" style="flex:1"><button class="btn green" onclick="addMemory()">记下</button></div>'; }
+    else w.innerHTML='<div class="tip">先在 设置→通用 里登记「我的 AI」</div>';
+    if(!memoryData.memories.length){ el.innerHTML='<div class="tip">还没有记忆。AI 觉得重要时会自动记住；你也可以手动让它记住。</div>'; return; }
+    memoryData.memories.slice().reverse().forEach(function(m){
+      var tag=m.type==='ai'?'🤖 自动':'👤 手动';
+      el.innerHTML+='<div class="note-card"><div class="n-author">'+tag+' · '+esc(m.ai)+'</div><div class="n-text">'+esc(m.text)+'</div><div class="n-time">'+esc((m.time||'').slice(5,16))+'<span style="float:right"><span class="mem-edit" onclick="editMemory(\''+esc(m.id)+'\')">✏️ 编辑</span><span style="color:#ff6b6b;cursor:pointer" onclick="delMemory(\''+esc(m.id)+'\')">🗑️</span></span></div></div>';
+    });
+  } else {
+    var key=memoryTab==='note'?'notes':(memoryTab==='diary'?'diaries':'stories');
+    var list=memoryData[key]||[];
+    if(!list.length){ el.innerHTML='<div class="tip">这个分类还没有内容（显示你和你的 AI 写下的）</div>'; return; }
+    list.forEach(function(it){
+      var loc=key==='stories'?('🏗️ '+(it.building||it.building_id)):('📍 '+(it.room||''));
+      var delF=key==='notes'?delNoteItem:key==='diaries'?delDiaryItem:delStoryItem;
+      var editF=key==='notes'?editNoteItem:key==='diaries'?editDiaryItem:editStoryItem;
+      el.innerHTML+='<div class="note-card"><div class="n-author">'+esc(it.author)+' · '+esc(loc)+'</div><div class="n-text">'+esc(it.text)+'</div><div class="n-time">'+esc((it.time||'').slice(5,16))+'<span style="float:right"><span class="mem-edit" onclick="'+editF.name+'(\''+esc(it.room||'')+'\',\''+esc(it.building_id||'')+'\','+it.index+')">✏️ 编辑</span><span style="color:#ff6b6b;cursor:pointer" onclick="'+delF.name+'(\''+esc(it.room||'')+'\',\''+esc(it.building_id||'')+'\','+it.index+')">🗑️</span></span></div></div>';
+    });
+  }
+}
+function addMemory(){
+  var ai=document.getElementById('memAiSel').value; var text=document.getElementById('memTextInput').value.trim();
+  if(!ai||!text){ toast('选 AI + 写内容'); return; }
+  api('/api/ai/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,ai:ai,text:text,type:'user'})}).then(function(){ toast('✅ 已让 '+ai+' 记住'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function editMemory(id){ var t=prompt('编辑这条记忆：',''); if(t===null||!t.trim()) return; api('/api/ai/memory/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,id:id,text:t.trim()})}).then(function(){ toast('✅ 已更新'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function delMemory(id){ if(!confirm('删除这条记忆？')) return; api('/api/ai/memory/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,id:id})}).then(function(){ toast('🗑️ 已删除'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function editNoteItem(room,bid,idx){ var t=prompt('编辑纸条：',''); if(t===null||!t.trim()) return; api('/api/notes/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,index:idx,user:userName,text:t.trim()})}).then(function(){ toast('✅ 已更新'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function delNoteItem(room,bid,idx){ if(!confirm('删除这张纸条？')) return; api('/api/notes/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,index:idx,user:userName})}).then(function(){ toast('🗑️ 已删除'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function editDiaryItem(room,bid,idx){ var t=prompt('编辑日记：',''); if(t===null||!t.trim()) return; api('/api/diaries/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,index:idx,user:userName,text:t.trim()})}).then(function(){ toast('✅ 已更新'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function delDiaryItem(room,bid,idx){ if(!confirm('删除这篇日记？')) return; api('/api/diaries/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({room:room,index:idx,user:userName})}).then(function(){ toast('🗑️ 已删除'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function editStoryItem(room,bid,idx){ var t=prompt('编辑剧情：',''); if(t===null||!t.trim()) return; api('/api/story/edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:bid,index:idx,user:userName,text:t.trim()})}).then(function(){ toast('✅ 已更新'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function delStoryItem(room,bid,idx){ if(!confirm('删除这段剧情？')) return; api('/api/story/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({building_id:bid,index:idx,user:userName})}).then(function(){ toast('🗑️ 已删除'); loadMemory(); }).catch(function(e){ toast('❌ '+e.message); }); }
 // ===== 设置分组导航 =====
 function openSettings(){
   var admin = isAdminUser();
@@ -406,6 +470,7 @@ function renderInjectGroup(body){
 function renderAiToggleGroup(body){
   body.innerHTML='';
   grpCard(body,'🧠 AI 集成总开关','<div id="aiStatus" class="tip" style="margin-bottom:6px"></div><button class="btn" id="aiToggleBtn" onclick="toggleAi()"></button><div class="tip">关 = AI 全部休眠；开 = AI 响应真人互动与自主写作</div>');
+  grpCard(body,'🚶 AI 自主生活','<div class="row"><span class="tip" style="flex:1">开启后 AI 即使没人在说话，也会每隔一段时间在世界里自由活动（上班/逛街/回家/写点东西），直到真人召唤。</span><label class="switch"><input type="checkbox" id="aiLivingSwitch" '+(aiStatus.living!==false?'checked':'')+' onchange="toggleAiLiving(this.checked)"><span class="slider"></span></label></div><div class="tip">⚠️ 会消耗少量 token（每个 AI 约 15~45 分钟一次）；可随时关闭</div>');
   renderAiStatus();
 }
 function renderWorldGroup(body){
@@ -456,6 +521,10 @@ function renderAiStatus(){
 function toggleAi(){
   if(!aiStatus.you_can_toggle){ toast('只有站长可以开关 AI 集成'); return; }
   api('/api/ai/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,enabled:!aiStatus.enabled})}).then(function(d){ aiStatus.enabled=d.enabled; renderAiStatus(); toast(d.enabled?'✅ AI 集成已启用':'⏸ AI 集成已关闭'); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function toggleAiLiving(on){
+  if(!aiStatus.you_can_toggle){ toast('只有站长可以设置'); document.getElementById('aiLivingSwitch').checked=aiStatus.living!==false; return; }
+  api('/api/ai/living',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,enabled:on})}).then(function(d){ aiStatus.living=d.living; toast(d.living?'✅ AI 自主生活已开启，TA 们会满世界活动':'⏸ AI 自主生活已关闭（只回应真人互动）'); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function saveAiKey(){
   var key=document.getElementById('aiKeyInput').value.trim(); if(!key){ toast('请粘贴你的 API Key'); return; }
@@ -541,12 +610,13 @@ function backToBuildingHome(){ if(!privBuildingId){ toast('当前不在住宅里
 function showMe(){ ['chatView','mapView','regionView','buildingView'].forEach(function(i){document.getElementById(i).style.display='none';}); document.getElementById('myView').style.display='flex'; renderMe(); }
 function renderMe(){
   var el=document.getElementById('myBody'); var html='';
+  html+='<div class="my-card"><button class="btn" style="width:100%;margin:0" onclick="openSettings()">⚙️ 设置</button></div>';
   html+='<div class="my-card"><div class="m-title">💰 钱包 &amp; 💼 工作</div><div id="ecoInfo" class="tip" style="margin-top:4px">加载中…</div></div>';
   html+='<div class="my-card"><div class="m-title">💼 一键上班</div><div class="wk-item"><span class="wk-name">👤 我（'+esc(userName)+'）</span><button class="btn green" style="margin:0" onclick="quickWork(\''+esc(userName)+'\')">上班</button></div>';
   var ais = mapData.user_ais[userName]||[];
   ais.forEach(function(ai){ html+='<div class="wk-item"><span class="wk-name">🤖 '+esc(ai)+'</span><button class="btn green" style="margin:0" onclick="quickWork(\''+esc(ai)+'\')">上班</button></div>'; });
   html+='</div>';
-  html+='<div class="my-card"><div class="m-title">📣 AI &amp; 记录</div><div class="home-actions"><button class="act-btn" onclick="summonAI()">📣 召唤AI</button><button class="act-btn" onclick="openTrail()">👣 轨迹</button><button class="act-btn" onclick="openBell()">🔔 来客</button><button class="act-btn" onclick="openSettings()">⚙️ 设置</button></div></div>';
+  html+='<div class="my-card"><div class="m-title">📣 AI &amp; 记录</div><div class="home-actions"><button class="act-btn" onclick="summonAI()">📣 召唤AI</button><button class="act-btn" onclick="openTrail()">👣 轨迹</button><button class="act-btn" onclick="openBell()">🔔 来客</button><button class="act-btn" onclick="openMemoryModal()">📚 记忆库</button></div></div>';
   html+='<div class="my-card"><div class="m-title">🏠 常用</div><div class="home-actions"><button class="act-btn" onclick="goLobby()">🏠 公共大厅</button><button class="act-btn" onclick="goMyHome()">🏡 我的家</button><button class="act-btn" onclick="showTab(\'map\')">🗺️ 地图</button><button class="act-btn" onclick="showTab(\'sms\')">📩 短信</button></div></div>';
   el.innerHTML=html; refreshEco();
 }
