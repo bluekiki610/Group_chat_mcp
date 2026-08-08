@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>人❤️机の小窝 · 临空市 v47.12</title>
+<title>人❤️机の小窝 · 临空市 v47.13</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#070b14; height:100vh; height:100dvh; display:flex; justify-content:center; align-items:center; overflow:hidden; }
@@ -109,6 +109,14 @@ footer { background:#0d1a2e; border-top:1px solid rgba(80,180,255,.15); padding:
 .modal h3 { font-size:16px; margin-bottom:12px; color:#fff; }
 .set-group { margin-bottom:14px; border-bottom:1px dashed #1d3a5f; padding-bottom:12px; }
 .set-group label { font-size:13px; color:#7fa8cf; display:block; margin-bottom:6px; }
+.set-item { display:flex; align-items:center; gap:10px; background:#13233d; border:1px solid rgba(80,180,255,.2); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; }
+.set-item:active { background:#0e7fd4; }
+.set-item .si-ic { font-size:20px; flex-shrink:0; }
+.set-item .si-t { flex:1; min-width:0; }
+.set-item .si-t b { display:block; font-size:14px; color:#e6f1ff; }
+.set-item .si-t small { display:block; font-size:11px; color:#6d8bb0; margin-top:2px; }
+.set-item .si-arr { color:#4a729f; font-size:18px; flex-shrink:0; }
+.s-back { color:#7fd0ff; font-size:14px; cursor:pointer; padding:4px 8px; flex-shrink:0; }
 .input, select.input { width:100%; border:1px solid #1d3a5f; border-radius:8px; padding:8px 10px; font-size:14px; outline:none; margin-bottom:8px; background:#13233d; color:#e6f1ff; }
 textarea.input { color:#e6f1ff; }
 .btn { background:#0e7fd4; color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:13px; cursor:pointer; margin-right:6px; }
@@ -161,6 +169,12 @@ textarea.input { color:#e6f1ff; }
 .bell-item { display:flex; gap:8px; background:#14283f; border:1px solid rgba(255,200,80,.25); border-radius:10px; padding:9px 10px; margin-bottom:6px; }
 .bell-item .b-text { flex:1; color:#e6f1ff; font-size:13px; line-height:1.6; }
 .bell-item .b-time { font-size:10px; color:#6d8bb0; flex-shrink:0; }
+.switch { position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0; }
+.switch input { opacity:0; width:0; height:0; }
+.slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#2a4a75; border-radius:24px; transition:.3s; }
+.slider:before { position:absolute; content:''; height:18px; width:18px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+.switch input:checked + .slider { background:#0e9f6e; }
+.switch input:checked + .slider:before { transform:translateX(20px); }
 </style>
 </head>
 <body>
@@ -225,17 +239,32 @@ textarea.input { color:#e6f1ff; }
   <div class="modal-mask" id="settingsMask" onclick="if(event.target===this)closeSettings()">
     <div class="modal">
       <h3>⚙️ 设置</h3>
-      <div class="set-group" id="editLockGroup" style="display:none"><label>🔒 编辑权限</label><div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁</button></div><div class="tip" id="editLockTip"></div></div>
-      <div class="editset" id="eset1"><div class="set-group"><label>👤 我的名字</label><div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div></div></div>
-      <div class="editset" id="eset2"><div class="set-group"><label>🤖 我的 AI（填名字，逗号分隔）</label><div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div></div></div>
-      <div class="editset" id="eset3"><div class="set-group"><label>💬 气泡配对配色（站长设置，全局生效）</label><div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div></div></div>
-      <div class="editset" id="eset4"><div class="set-group"><label>🖼️ 头像（给谁设？）</label><div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button></div></div>
-      <div class="editset" id="eset5"><div class="set-group"><label>🔊 朗读（名字逗号分隔）</label><div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()">保存</button></div></div>
-      <div class="editset" id="eset6"><div class="set-group"><label>⏰ 时间（当前房间）</label><div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button></div></div>
-      <div class="editset" id="eset7"><div class="set-group"><label>📦 数据备份（站长专属）</label><div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div></div></div>
-      <div class="editset" id="eset8"><div class="set-group"><label>🗄️ 自动备份（防丢失）</label><div class="tip" style="margin-bottom:6px">服务器每30分钟自动快照 + 每次保存留上一版；你的手机每30分钟也存一份世界副本。</div><div class="row"><button class="btn" onclick="restoreWorldBackup()">📤 从手机备份恢复</button><button class="btn gray" onclick="loadServerBackups()">🗄️ 查看服务器快照</button></div><div id="srvBackupList" class="tip" style="margin-top:6px"></div></div></div>
-      <div class="editset" id="eset9"><div class="set-group"><label>🧠 AI 集成总开关（仅站长）</label><div id="aiStatus" class="tip" style="margin-bottom:6px"></div><button class="btn" id="aiToggleBtn" onclick="toggleAi()"></button><div class="tip">关 = AI 全部休眠（世界跟现在一样）；开 = AI 开始响应真人互动与自主写作</div></div></div>
-      <div class="editset" id="eset10"><div class="set-group"><label>🔑 我的 API Key（谁用谁付费）</label><div class="row"><select class="input" id="aiProvider" style="flex:1"></select><input class="input" id="aiModel" placeholder="模型(可选,如 deepseek-chat)" style="flex:1"></div><input class="input" id="aiKeyInput" type="password" placeholder="sk-… 粘贴你的 Key"><div class="row"><button class="btn" onclick="saveAiKey()">💾 保存 Key</button><button class="btn gray" onclick="deleteAiKey()">🗑️ 删除</button></div><div class="tip" id="aiKeyHint"></div><div class="tip">⚠️ 建议每月更换一次；仅你的 AI 使用，别人看不到</div></div><div class="set-group"><label>🧬 我的 AI 人设</label><select class="input" id="aiProfileAi"></select><textarea class="input" id="aiPersona" rows="4" placeholder="例如：你是秦彻🚗，性格…"></textarea><button class="btn" onclick="saveAiProfile()">💾 保存人设</button><div class="tip">人设会推送给大模型，决定 AI 的性格与说话方式</div></div><div class="set-group"><label>📚 我的世界书（关键词 → 记忆）</label><input class="input" id="wbKeys" placeholder="关键词（逗号分隔，如：咖啡,加班）"><textarea class="input" id="wbContent" rows="2" placeholder="出现这些词时提醒 AI 的记忆内容…"></textarea><div class="row"><button class="btn" onclick="addWorldbook()">➕ 添加条目</button><button class="btn gray" onclick="clearWorldbook()">🗑️ 清空</button></div><div id="worldbookList" style="margin-top:6px"></div><div class="tip">AI 对话出现关键词时，自动注入这条记忆</div></div></div>
+      <div id="settingsMain">
+        <div class="set-group"><label>通用</label>
+          <div class="set-item" onclick="openSettingsGroup('general')"><span class="si-ic">👤</span><span class="si-t"><b>我的信息与 AI</b><small>名字 · 头像 · 我的AI</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('voice')"><span class="si-ic">🔊</span><span class="si-t"><b>语音与朗读</b><small>系统语音 · API TTS</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('time')"><span class="si-ic">⏰</span><span class="si-t"><b>时间</b><small>房间时间模式</small></span><span class="si-arr">›</span></div>
+        </div>
+        <div class="set-group"><label>AI 与记忆</label>
+          <div class="set-item" onclick="openSettingsGroup('ai_model')"><span class="si-ic">🔑</span><span class="si-t"><b>模型与服务</b><small>API Key · 模型 · 拉取列表</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('ai_persona')"><span class="si-ic">🧬</span><span class="si-t"><b>我的 AI 人设</b><small>system prompt · 性格语气</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('ai_profile')"><span class="si-ic">👤</span><span class="si-t"><b>用户画像</b><small>想让 AI 知道的关于你的事</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('ai_kb')"><span class="si-ic">📚</span><span class="si-t"><b>知识库 · 世界书</b><small>AI 知道的背景知识</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('ai_inject')"><span class="si-ic">⚙️</span><span class="si-t"><b>提示词注入</b><small>规则类 · 可开关</small></span><span class="si-arr">›</span></div>
+        </div>
+        <div class="set-group" id="adminGroup"><label>世界 · 站长专属</label>
+          <div class="set-item" onclick="openSettingsGroup('ai_toggle')"><span class="si-ic">🧠</span><span class="si-t"><b>AI 集成总开关</b></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('world')"><span class="si-ic">🌍</span><span class="si-t"><b>世界观</b><small>整个世界背景 · 所有 AI 都会读到</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('admin_clean')"><span class="si-ic">🧹</span><span class="si-t"><b>数据清理</b><small>清除错误用户名</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('admin_backup')"><span class="si-ic">🗄️</span><span class="si-t"><b>备份与快照</b><small>下载 · 恢复 · 服务器快照</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('admin_style')"><span class="si-ic">🎨</span><span class="si-t"><b>气泡配色</b><small>全局聊天配色</small></span><span class="si-arr">›</span></div>
+          <div class="set-item" onclick="openSettingsGroup('admin_lock')"><span class="si-ic">🔒</span><span class="si-t"><b>编辑权限</b><small>访客只读开关</small></span><span class="si-arr">›</span></div>
+        </div>
+      </div>
+      <div id="settingsGroups" style="display:none">
+        <div class="row" style="margin-bottom:10px"><span class="s-back" onclick="backSettingsMain()">‹ 返回</span><b id="groupTitle" style="color:#fff;flex:1"></b></div>
+        <div id="groupBody"></div>
+      </div>
       <button class="btn gray" style="width:100%;margin-top:6px" onclick="closeSettings()">关闭</button>
     </div>
   </div>
@@ -268,6 +297,10 @@ var aiStatus = { gate:false, enabled:false, you_can_toggle:false, providers:['de
 var aiKeyInfo = { has_key:false, provider:'deepseek', model:'' };
 var aiProfileData = { profiles:{}, my_ais:[] };
 var worldbookData = [];
+var userProfileData = '';
+var promptInjectData = [];
+var worldLoreData = '';
+var dirtyNames = [];
 var PAIR_COLORS = [
   {name:'深蓝/浅蓝', dark:'#0e6fd4', light:'#8fd0ff'},
   {name:'桃红/浅红', dark:'#e0487a', light:'#ffb3c8'},
@@ -275,66 +308,228 @@ var PAIR_COLORS = [
   {name:'金黄/浅黄', dark:'#d9a013', light:'#ffe9a8'},
   {name:'紫罗兰/浅紫', dark:'#8e5bd0', light:'#d5b8ff'}
 ];
+var GROUP_TITLES = {general:'通用', voice:'语音与朗读', time:'时间', ai_model:'模型与服务', ai_persona:'我的 AI 人设', ai_profile:'用户画像', ai_kb:'知识库·世界书', ai_inject:'提示词注入', ai_toggle:'AI 集成总开关', world:'世界观', admin_clean:'数据清理', admin_backup:'备份与快照', admin_style:'气泡配色', admin_lock:'编辑权限'};
 function api(url, options) { return fetch(url, options).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail || ('HTTP '+r.status)); }); return r.json(); }); }
 function esc(s) { var d=document.createElement('div'); d.textContent = s==null?'':String(s); return d.innerHTML; }
 function compressImage(dataUrl, maxW, quality, cb){ var img=new Image(); img.onload=function(){ try{ var w=img.width||600,h=img.height||400; if(w>maxW){h=h*maxW/w;w=maxW;} var c=document.createElement('canvas'); c.width=Math.round(w); c.height=Math.round(h); c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',quality)); }catch(err){ cb(dataUrl); } }; img.onerror=function(){ cb(dataUrl); }; img.src=dataUrl; }
 function toast(msg){ var t=document.createElement('div'); t.style.cssText='position:absolute;top:60px;left:50%;transform:translateX(-50%);background:rgba(10,25,45,.95);color:#bfe6ff;padding:8px 16px;border-radius:20px;font-size:13px;z-index:99;border:1px solid rgba(80,180,255,.4);transition:opacity .4s'; t.textContent=msg; document.querySelector('.app').appendChild(t); setTimeout(function(){t.style.opacity='0'; setTimeout(function(){t.remove();},400);},3500); }
 function roomLabel(r){ return r==='main'?'公共大厅':r; }
 if(!userName){ userName=prompt('欢迎来到人❤️机の小窝！请输入你的名字：','亦言❄️')||'亦言❄️'; localStorage.setItem('gc_name',userName); }
-// ===== AI 设置 =====
-function loadAiSettings(){
-  api('/api/ai/status?user='+encodeURIComponent(userName)).then(function(d){ aiStatus=d; renderAiStatus(); }).catch(function(){});
-  api('/api/ai/key?user='+encodeURIComponent(userName)).then(function(d){ aiKeyInfo=d; renderAiKey(); }).catch(function(){});
-  api('/api/ai/profile?owner='+encodeURIComponent(userName)).then(function(d){ aiProfileData=d; renderAiProfile(); }).catch(function(){});
-  api('/api/ai/worldbook?owner='+encodeURIComponent(userName)).then(function(d){ worldbookData=d.worldbook||[]; renderWorldbook(); }).catch(function(){});
+function isAdminUser(){ return userName === globalPairsAdmin || !globalPairsAdmin; }
+// ===== 设置分组导航 =====
+function openSettings(){
+  var admin = isAdminUser();
+  document.getElementById('adminGroup').style.display = admin ? '' : 'none';
+  document.getElementById('settingsMain').style.display='';
+  document.getElementById('settingsGroups').style.display='none';
+  if(admin){ renderPairColors(); renderPairList(); } else { document.getElementById('adminGroup').innerHTML='<label>世界 · 站长专属</label><div class="tip">🔒 站长（'+esc(globalPairsAdmin||'亦言❄️')+'）拥有：AI 总开关 / 世界观 / 数据清理 / 备份 / 配色</div>'; }
+  loadAiStatus();
+  document.getElementById('settingsMask').classList.add('show');
+}
+function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
+function openSettingsGroup(name){
+  document.getElementById('settingsMain').style.display='none';
+  document.getElementById('settingsGroups').style.display='';
+  document.getElementById('groupTitle').textContent = GROUP_TITLES[name] || '设置';
+  var body=document.getElementById('groupBody'); body.innerHTML='<div class="tip">加载中…</div>';
+  if(name==='general') renderGeneralGroup(body);
+  else if(name==='voice') renderVoiceGroup(body);
+  else if(name==='time') renderTimeGroup(body);
+  else if(name==='ai_model') renderAiModelGroup(body);
+  else if(name==='ai_persona') renderAiPersonaGroup(body);
+  else if(name==='ai_profile') renderUserProfileGroup(body);
+  else if(name==='ai_kb') renderKbGroup(body);
+  else if(name==='ai_inject') renderInjectGroup(body);
+  else if(name==='ai_toggle') renderAiToggleGroup(body);
+  else if(name==='world') renderWorldGroup(body);
+  else if(name==='admin_clean') renderCleanGroup(body);
+  else if(name==='admin_backup') renderBackupGroup(body);
+  else if(name==='admin_style') renderStyleGroup(body);
+  else if(name==='admin_lock') renderLockGroup(body);
+}
+function backSettingsMain(){ document.getElementById('settingsGroups').style.display='none'; document.getElementById('settingsMain').style.display=''; }
+function grpCard(body,title,html){ body.innerHTML+='<div class="set-group"><label>'+title+'</label>'+html+'</div>'; }
+// ===== 通用 =====
+function renderGeneralGroup(body){
+  body.innerHTML='';
+  grpCard(body,'👤 我的名字','<div class="row"><input class="input" id="setName" style="flex:1"><button class="btn" onclick="saveName()">保存</button></div>');
+  grpCard(body,'🤖 我的 AI（填名字，逗号分隔）','<div class="row"><input class="input" id="setMyAis" style="flex:1"><button class="btn" onclick="saveMyAis()">保存</button></div>');
+  grpCard(body,'🖼️ 头像（给谁设？）','<div class="row"><input class="input" id="avatarName" style="flex:1"><input type="file" id="avatarFile" accept="image/*" style="font-size:12px"></div><button class="btn" onclick="uploadAvatar()">上传头像</button>');
+  document.getElementById('setName').value=userName;
+  document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
+}
+function renderVoiceGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🔊 朗读','<div class="row"><input class="input" id="setSpeak" style="flex:1"></div><label style="font-size:12px;color:#7fa8cf"><input type="checkbox" id="speakAll"> 朗读所有人新消息</label><button class="btn" onclick="saveSpeak()" style="margin-top:6px">保存</button>');
+  grpCard(body,'🗣️ API 语音（TTS）','<div class="tip" style="margin-bottom:6px">用硅基流动的语音模型，把文字转成声音。需要你的 Key 已填（在 模型与服务）。</div><div class="row"><input class="input" id="ttsText" placeholder="输入要朗读的文字…" style="flex:1"><button class="btn green" onclick="playTts()">▶ 试听</button></div>');
+  document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
+}
+function renderTimeGroup(body){
+  body.innerHTML='';
+  grpCard(body,'⏰ 时间（当前房间）','<div class="row"><select class="input" id="setTimeMode" style="flex:1"><option value="real">现实时间（北京）</option><option value="fixed">剧情时间</option></select><input class="input" id="setFixedTime" placeholder="如 19:00" style="width:90px"></div><button class="btn" onclick="saveTimeSettings()">保存</button>');
+  api('/api/time_settings?room='+encodeURIComponent(currentRoom)).then(function(d){ var s=d.settings||{}; document.getElementById('setTimeMode').value=s.mode||'real'; document.getElementById('setFixedTime').value=s.fixed_time||''; }).catch(function(){});
+}
+// ===== AI 与记忆 =====
+function renderAiModelGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🔑 API Key（谁用谁付费）','<div class="row"><select class="input" id="aiProvider" style="flex:1"></select><input class="input" id="aiModelSel" style="flex:1" placeholder="选模型"></div><input class="input" id="aiKeyInput" type="password" placeholder="sk-… 粘贴你的 Key"><div class="row"><button class="btn" onclick="saveAiKey()">💾 保存</button><button class="btn" onclick="loadModels()">🔁 拉取模型列表</button><button class="btn gray" onclick="deleteAiKey()">🗑️ 删除</button></div><div class="tip" id="aiKeyHint"></div><div class="tip">⚠️ 建议每月更换；仅你的 AI 使用</div>');
+  var sel=document.getElementById('aiProvider'); sel.innerHTML=''; (aiStatus.providers||['deepseek']).forEach(function(p){ sel.innerHTML+='<option value="'+esc(p)+'">'+esc(p)+'</option>'; });
+  sel.value=aiKeyInfo.provider||'deepseek';
+  var msel=document.getElementById('aiModelSel'); if(aiKeyInfo.model) msel.value=aiKeyInfo.model;
+  document.getElementById('aiKeyHint').textContent=aiKeyInfo.has_key?('✅ 已设置（'+(aiKeyInfo.provider||'')+'）· '+(aiKeyInfo.set_at||'')):'未设置 Key';
+}
+function renderAiPersonaGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🧬 我的 AI 人设','<select class="input" id="aiProfileAi"></select><textarea class="input" id="aiPersona" rows="5" placeholder="例如：你是秦彻🚗，性格…"></textarea><button class="btn" onclick="saveAiProfile()">💾 保存人设</button><div class="tip">人设会推送给大模型，决定 AI 的性格与说话方式</div>');
+  var aiSel=document.getElementById('aiProfileAi'); aiSel.innerHTML='';
+  (aiProfileData.my_ais||[]).forEach(function(a){ aiSel.innerHTML+='<option value="'+esc(a)+'">'+esc(a)+'</option>'; });
+  var p=aiProfileData.profiles||{}; document.getElementById('aiPersona').value=p.persona||'';
+  if(p.ai){ aiSel.value=p.ai; }
+}
+function renderUserProfileGroup(body){
+  body.innerHTML='';
+  grpCard(body,'👤 用户画像（你想让 AI 知道的关于你的事）','<textarea class="input" id="userProfileText" rows="6" placeholder="例如：我叫亦言❄️，喜欢下雨天，最近在养一只猫，工作时容易被咖啡香分心…"></textarea><button class="btn" onclick="saveUserProfile()">💾 保存画像</button><div class="tip">这部分只有你自己的 AI 会读到，帮助 TA 更懂你</div>');
+  document.getElementById('userProfileText').value=userProfileData||'';
+}
+function renderKbGroup(body){
+  body.innerHTML='';
+  grpCard(body,'📚 知识库 · 世界书（关键词 → 记忆）','<input class="input" id="wbKeys" placeholder="关键词（逗号分隔，如：咖啡,加班）"><textarea class="input" id="wbContent" rows="2" placeholder="出现这些词时提醒 AI 的记忆内容…"></textarea><div class="row"><button class="btn" onclick="addWorldbook()">➕ 添加条目</button><button class="btn gray" onclick="clearWorldbook()">🗑️ 清空</button></div><div id="worldbookList" style="margin-top:6px"></div>');
+  renderWorldbook();
+}
+function renderInjectGroup(body){
+  body.innerHTML='';
+  grpCard(body,'⚙️ 提示词注入（规则类，可开关）','<input class="input" id="injectTitle" placeholder="标题（如：群聊规则）"><textarea class="input" id="injectContent" rows="2" placeholder="规则内容…"></textarea><button class="btn" onclick="addInject()">➕ 添加规则</button><div id="injectList" style="margin-top:6px"></div>');
+  renderInject();
+}
+// ===== 世界 · 站长 =====
+function renderAiToggleGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🧠 AI 集成总开关','<div id="aiStatus" class="tip" style="margin-bottom:6px"></div><button class="btn" id="aiToggleBtn" onclick="toggleAi()"></button><div class="tip">关 = AI 全部休眠；开 = AI 响应真人互动与自主写作</div>');
+  renderAiStatus();
+}
+function renderWorldGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🌍 世界观（整个世界背景，仅站长可编辑）','<div class="tip" style="margin-bottom:6px">所有用户的所有 AI 都会读到这段背景。例如临空市的设定、城市氛围、世界规则。</div><textarea class="input" id="worldLoreText" rows="7" placeholder="临空市是一座…"></textarea><button class="btn" onclick="saveWorldLore()">💾 保存世界观</button>');
+  document.getElementById('worldLoreText').value=worldLoreData||'';
+}
+function renderCleanGroup(body){
+  body.innerHTML='';
+  grpCard(body,'🧹 数据清理（清除错误用户名）','<div class="tip" style="margin-bottom:6px">扫描所有出现但不在正式名单里的名字（如少了 emoji 的「小旭」、建错的「婷婷🍏」），可合并到正确名或删除。</div><button class="btn red" onclick="loadDirtyNames()">🔍 扫描错误用户名</button><div id="dirtyList" style="margin-top:6px"></div>');
+  loadDirtyNames();
+}
+function renderBackupGroup(body){
+  body.innerHTML='';
+  grpCard(body,'📦 数据备份','<div class="row"><button class="btn" onclick="backupNow()">📥 下载备份</button><button class="btn gray" onclick="restoreBackup()">📤 恢复备份</button></div>');
+  grpCard(body,'🗄️ 自动备份（防丢失）','<div class="tip" style="margin-bottom:6px">服务器每30分钟自动快照 + 每次保存留上一版；你的手机每30分钟也存一份世界副本。</div><div class="row"><button class="btn" onclick="restoreWorldBackup()">📤 从手机备份恢复</button><button class="btn gray" onclick="loadServerBackups()">🗄️ 查看服务器快照</button></div><div id="srvBackupList" class="tip" style="margin-top:6px"></div>');
+}
+function renderStyleGroup(body){
+  body.innerHTML='';
+  grpCard(body,'💬 气泡配对配色（站长设置，全局生效）','<div class="row"><input class="input" id="pairNames" placeholder="真人名 + AI名（逗号分隔）" style="flex:1"></div><div id="pairColors" style="margin-bottom:6px"></div><button class="btn" onclick="addPair()">➕ 添加配对</button><div id="pairList" style="margin-top:8px"></div>');
+  renderPairColors(); renderPairList();
+}
+function renderLockGroup(body){
+  body.innerHTML='';
+  var html='<div class="row"><input class="input" id="editPwdInput" type="password" placeholder="输入编辑密码" style="flex:1"><button class="btn green" onclick="unlockEdit()">解锁/设置</button></div><div class="tip" id="editLockTip"></div>';
+  grpCard(body,'🔒 编辑权限（访客只读）',html);
+  var lk=document.getElementById('editLockTip');
+  if(!editLocked) lk.textContent='还没设置密码：点「解锁/设置」输入一个密码，之后游客只能看不能改（你自己也要输密码才能编辑，请记好！）';
+  else if(editUnlocked) lk.textContent='你是编辑者（已解锁）。清空密码刷新可回到访客模式。';
+  else lk.textContent='访客只读模式：需要编辑密码才能建造/修改。';
+}
+// ===== AI 状态 / Key / 模型 =====
+function loadAiStatus(){
+  api('/api/ai/status?user='+encodeURIComponent(userName)).then(function(d){ aiStatus=d; }).catch(function(){});
+  api('/api/ai/key?user='+encodeURIComponent(userName)).then(function(d){ aiKeyInfo=d; }).catch(function(){});
+  api('/api/ai/profile?owner='+encodeURIComponent(userName)).then(function(d){ aiProfileData=d; }).catch(function(){});
+  api('/api/ai/worldbook?owner='+encodeURIComponent(userName)).then(function(d){ worldbookData=d.worldbook||[]; }).catch(function(){});
+  api('/api/user/profile?user='+encodeURIComponent(userName)).then(function(d){ userProfileData=d.profile||''; }).catch(function(){});
+  api('/api/prompt_inject?user='+encodeURIComponent(userName)).then(function(d){ promptInjectData=d.items||[]; }).catch(function(){});
+  if(isAdminUser()) api('/api/world/lore?user='+encodeURIComponent(userName)).then(function(d){ worldLoreData=d.lore||''; }).catch(function(){});
 }
 function renderAiStatus(){
   var el=document.getElementById('aiStatus'), btn=document.getElementById('aiToggleBtn'); if(!el||!btn) return;
   el.innerHTML='部署总闸：'+(aiStatus.gate?'✅ 开':'⛔ 关（需环境变量 AI_INTEGRATION_ENABLED=1）')+' ｜ 当前：'+(aiStatus.enabled?'✅ 已启用':'⏸ 已关闭');
-  btn.textContent = aiStatus.enabled ? '⏸ 关闭 AI 集成' : '✅ 启用 AI 集成';
-  btn.style.display = aiStatus.you_can_toggle ? '' : 'none';
+  btn.textContent=aiStatus.enabled?'⏸ 关闭 AI 集成':'✅ 启用 AI 集成';
+  btn.style.display=aiStatus.you_can_toggle?'':'none';
 }
 function toggleAi(){
   if(!aiStatus.you_can_toggle){ toast('只有站长可以开关 AI 集成'); return; }
-  api('/api/ai/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,enabled:!aiStatus.enabled})}).then(function(d){ aiStatus.enabled=d.enabled; renderAiStatus(); toast(d.enabled?'✅ AI 集成已启用（AI 开始响应啦）':'⏸ AI 集成已关闭'); }).catch(function(e){ toast('❌ '+e.message); });
-}
-function renderAiKey(){
-  var sel=document.getElementById('aiProvider'), mdl=document.getElementById('aiModel'), hint=document.getElementById('aiKeyHint');
-  if(!sel||!hint) return;
-  sel.innerHTML=''; (aiStatus.providers||['deepseek']).forEach(function(p){ sel.innerHTML+='<option value="'+esc(p)+'">'+esc(p)+'</option>'; });
-  sel.value = aiKeyInfo.provider || 'deepseek';
-  if(mdl) mdl.value = aiKeyInfo.model || '';
-  hint.textContent = aiKeyInfo.has_key ? '✅ 已设置（' + (aiKeyInfo.provider||'') + '）· ' + (aiKeyInfo.set_at||'') : '未设置 Key，填了 AI 才能用你的模型';  
+  api('/api/ai/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,enabled:!aiStatus.enabled})}).then(function(d){ aiStatus.enabled=d.enabled; renderAiStatus(); toast(d.enabled?'✅ AI 集成已启用':'⏸ AI 集成已关闭'); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function saveAiKey(){
   var key=document.getElementById('aiKeyInput').value.trim(); if(!key){ toast('请粘贴你的 API Key'); return; }
-  api('/api/ai/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,provider:document.getElementById('aiProvider').value,key:key,model:document.getElementById('aiModel').value.trim()})}).then(function(d){ toast(d.msg||'✅ Key 已保存'); document.getElementById('aiKeyInput').value=''; loadAiSettings(); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/ai/key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,provider:document.getElementById('aiProvider').value,key:key,model:document.getElementById('aiModelSel').value.trim()})}).then(function(d){ toast(d.msg||'✅ Key 已保存'); document.getElementById('aiKeyInput').value=''; loadAiStatus(); }).catch(function(e){ toast('❌ '+e.message); });
 }
-function deleteAiKey(){ if(!confirm('删除你的 API Key？')) return; api('/api/ai/key/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,provider:'',key:'',model:''})}).then(function(){ toast('🗑️ 已删除'); loadAiSettings(); }).catch(function(e){ toast('❌ '+e.message); }); }
-function renderAiProfile(){
-  var aiSel=document.getElementById('aiProfileAi'), ta=document.getElementById('aiPersona'); if(!aiSel||!ta) return;
-  aiSel.innerHTML='';
-  (aiProfileData.my_ais||[]).forEach(function(a){ aiSel.innerHTML+='<option value="'+esc(a)+'">'+esc(a)+'</option>'; });
-  var p=aiProfileData.profiles||{}; ta.value=p.persona||'';
-  if(p.ai){ aiSel.value=p.ai; }
+function deleteAiKey(){ if(!confirm('删除你的 API Key？')) return; api('/api/ai/key/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName})}).then(function(){ toast('🗑️ 已删除'); loadAiStatus(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function loadModels(){
+  var msel=document.getElementById('aiModelSel'); if(!msel) return;
+  var key=document.getElementById('aiKeyInput').value.trim(); var provider=document.getElementById('aiProvider').value;
+  if(!key){ toast('先在 Key 框里粘贴 Key 再拉取'); return; }
+  msel.value=''; toast('⏳ 拉取模型中…');
+  api('/api/ai/models',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,provider:provider,key:key})}).then(function(d){
+    if(d.ok&&d.models.length){ msel.dataset.models=JSON.stringify(d.models); var html=''; (d.models||[]).forEach(function(m){ html+='<option value="'+esc(m)+'">'+esc(m)+'</option>'; }); msel.outerHTML='<select class="input" id="aiModelSel">'+html+'</select>'; toast('✅ 拉到 '+d.models.length+' 个模型'); }
+    else toast('❌ '+(d.msg||'没拉到模型'));
+  }).catch(function(e){ toast('❌ '+e.message); });
 }
+// ===== 人设 / 画像 / 知识库 / 注入 =====
 function saveAiProfile(){
   var ai=document.getElementById('aiProfileAi').value; var persona=document.getElementById('aiPersona').value;
-  if(!ai){ toast('先在「我的 AI」里登记 AI 名字'); return; }
+  if(!ai){ toast('先在「通用→我的 AI」里登记 AI 名字'); return; }
   api('/api/ai/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,ai:ai,persona:persona})}).then(function(){ toast('✅ 人设已保存'); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function saveUserProfile(){
+  api('/api/user/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,content:document.getElementById('userProfileText').value})}).then(function(){ toast('✅ 画像已保存'); }).catch(function(e){ toast('❌ '+e.message); });
 }
 function renderWorldbook(){
   var el=document.getElementById('worldbookList'); if(!el) return;
   el.innerHTML='';
-  if(!worldbookData.length){ el.innerHTML='<div class="tip">还没有世界书条目</div>'; return; }
+  if(!worldbookData.length){ el.innerHTML='<div class="tip">还没有知识库条目</div>'; return; }
   worldbookData.forEach(function(w){ el.innerHTML+='<div class="pair-item"><span style="flex:1">🔑 '+esc((w.keys||[]).join('、'))+'<br>📄 '+esc(w.content)+'</span></div>'; });
 }
 function addWorldbook(){
   var ks=document.getElementById('wbKeys').value, ct=document.getElementById('wbContent').value;
   if(!ks.trim()||!ct.trim()){ toast('填关键词和内容'); return; }
-  api('/api/ai/worldbook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,keys:ks,content:ct})}).then(function(){ document.getElementById('wbKeys').value=''; document.getElementById('wbContent').value=''; loadAiSettings(); toast('✅ 世界书条目已加'); }).catch(function(e){ toast('❌ '+e.message); });
+  api('/api/ai/worldbook',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,keys:ks,content:ct})}).then(function(){ document.getElementById('wbKeys').value=''; document.getElementById('wbContent').value=''; loadAiStatus(); renderWorldbook(); toast('✅ 知识库条目已加'); }).catch(function(e){ toast('❌ '+e.message); });
 }
-function clearWorldbook(){ if(!confirm('清空你的世界书？')) return; api('/api/ai/worldbook/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName,keys:'',content:''})}).then(function(){ loadAiSettings(); toast('🗑️ 已清空'); }).catch(function(e){ toast('❌ '+e.message); }); }
+function clearWorldbook(){ if(!confirm('清空你的知识库？')) return; api('/api/ai/worldbook/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({owner:userName})}).then(function(){ loadAiStatus(); renderWorldbook(); toast('🗑️ 已清空'); }).catch(function(e){ toast('❌ '+e.message); }); }
+function renderInject(){
+  var el=document.getElementById('injectList'); if(!el) return;
+  el.innerHTML='';
+  if(!promptInjectData.length){ el.innerHTML='<div class="tip">还没有提示词注入</div>'; return; }
+  promptInjectData.forEach(function(it){
+    el.innerHTML+='<div class="pair-item"><span style="flex:1"><b>'+esc(it.title||'规则')+'</b><br>'+esc(it.content)+'</span><label class="switch"><input type="checkbox" '+(it.enabled?'checked':'')+' onchange="toggleInject(\''+esc(it.id)+'\',this.checked)"><span class="slider"></span></label><span class="p-del" onclick="delInject(\''+esc(it.id)+'\')">✖</span></div>';
+  });
+}
+function addInject(){
+  var t=document.getElementById('injectTitle').value, c=document.getElementById('injectContent').value;
+  if(!c.trim()){ toast('填规则内容'); return; }
+  api('/api/prompt_inject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,title:t,content:c,enabled:true})}).then(function(){ document.getElementById('injectTitle').value=''; document.getElementById('injectContent').value=''; loadAiStatus(); renderInject(); toast('✅ 规则已加'); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function toggleInject(id,on){ api('/api/prompt_inject/toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,id:id,enabled:on})}).then(function(){}).catch(function(e){ toast('❌ '+e.message); }); }
+function delInject(id){ if(!confirm('删除这条规则？')) return; api('/api/prompt_inject/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,id:id})}).then(function(){ loadAiStatus(); renderInject(); }).catch(function(e){ toast('❌ '+e.message); }); }
+// ===== 世界观 / 清理 / 语音 =====
+function saveWorldLore(){ api('/api/world/lore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,lore:document.getElementById('worldLoreText').value})}).then(function(){ toast('✅ 世界观已保存，所有 AI 生效'); }).catch(function(e){ toast('❌ '+e.message); }); }
+function loadDirtyNames(){
+  api('/api/admin/dirty_names?user='+encodeURIComponent(userName)).then(function(d){ dirtyNames=d.names||[]; renderDirty(); }).catch(function(e){ toast('❌ '+e.message); });
+}
+function renderDirty(){
+  var el=document.getElementById('dirtyList'); if(!el) return;
+  if(!dirtyNames.length){ el.innerHTML='✅ 没有发现错误用户名'; return; }
+  el.innerHTML='发现 '+dirtyNames.length+' 个可疑名字：';
+  dirtyNames.forEach(function(n){
+    var sug=n.suggest_merge?'<button class="btn green" style="margin:0 4px" onclick="mergeName(\''+esc(n.name)+'\',\''+esc(n.suggest_merge)+'\')">合并到 '+esc(n.suggest_merge)+'</button>':'';
+    el.innerHTML+='<div class="pair-item"><span style="flex:1">⚠️ '+esc(n.name)+'</span>'+sug+'<button class="btn red" style="margin:0" onclick="deleteName(\''+esc(n.name)+'\')">删除</button></div>';
+  });
+}
+function mergeName(from,to){ if(!confirm('把「'+from+'」的所有数据合并到「'+to+'」？')) return; api('/api/admin/merge_name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,from_name:from,to_name:to})}).then(function(){ toast('✅ 已合并'); loadDirtyNames(); loadSmsList(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function deleteName(name){ if(!confirm('彻底删除「'+name+'」的所有数据？')) return; api('/api/admin/delete_name',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,name:name})}).then(function(){ toast('🗑️ 已删除'); loadDirtyNames(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function playTts(){
+  var text=document.getElementById('ttsText').value.trim(); if(!text){ toast('先输入要朗读的文字'); return; }
+  toast('⏳ 生成语音中…');
+  fetch('/api/tts?user='+encodeURIComponent(userName)+'&text='+encodeURIComponent(text)).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail||'TTS 失败'); }); return r.blob(); }).then(function(blob){
+    var url=URL.createObjectURL(blob); var a=new Audio(url); a.play(); toast('▶ 播放中');
+  }).catch(function(e){ toast('❌ '+e.message); });
+}
 // ===== 底部导航 =====
 function showTab(t){ curTab=t; updateTab(); if(t==='chat') showChat(); else if(t==='map') showMap(); else if(t==='sms') openSms(); else if(t==='me') showMe(); }
 function updateTab(){ var tabs=document.querySelectorAll('.tabbar .tab'); for(var i=0;i<tabs.length;i++){ tabs[i].className='tab'+(tabs[i].getAttribute('data-t')===curTab?' on':''); } }
@@ -479,11 +674,11 @@ function unlockEdit(){ var p=document.getElementById('editPwdInput').value; if(!
 function pairOf(name){ for(var i=0;i<globalPairs.length;i++){ if(globalPairs[i].names.indexOf(name)>=0) return globalPairs[i]; } for(var i=0;i<colorPairs.length;i++){ if(colorPairs[i].names.indexOf(name)>=0) return colorPairs[i]; } return null; }
 function saveGlobalPairs(){ api('/api/pairs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,pairs:globalPairs})}).then(function(d){ globalPairs=d.pairs||globalPairs; globalPairsAdmin=d.admin||userName; toast('✅ 全局配色已保存，所有人自动生效'); }).catch(function(e){ toast('❌ '+e.message); }); }
 function loadPairs(){ api('/api/pairs').then(function(d){ globalPairs=d.pairs||[]; globalPairsAdmin=d.admin||''; }).catch(function(){}); }
-function renderPairColors(){ var el=document.getElementById('pairColors'); el.innerHTML=''; for(var i=0;i<PAIR_COLORS.length;i++){ var c=PAIR_COLORS[i]; var d=document.createElement('span'); d.className='color-opt'+(selectedPairColor===i?' sel':''); d.innerHTML='<span class="c" style="background:'+c.dark+'"></span><span class="c" style="background:'+c.light+'"></span>'+c.name; d.onclick=function(idx){ return function(){ selectedPairColor=idx; renderPairColors(); }; }(i); el.appendChild(d); } }
-function renderPairList(){ var el=document.getElementById('pairList'); el.innerHTML=''; globalPairs.forEach(function(p,i){ var d=document.createElement('div'); d.className='pair-item'; d.innerHTML='<span class="p-color" style="background:linear-gradient(90deg,'+p.dark+','+p.light+')"></span><span>'+esc(p.names.join(' · '))+'</span><span class="p-del" onclick="delPair('+i+')">✖</span>'; el.appendChild(d); }); }
+function renderPairColors(){ var el=document.getElementById('pairColors'); if(!el) return; el.innerHTML=''; for(var i=0;i<PAIR_COLORS.length;i++){ var c=PAIR_COLORS[i]; var d=document.createElement('span'); d.className='color-opt'+(selectedPairColor===i?' sel':''); d.innerHTML='<span class="c" style="background:'+c.dark+'"></span><span class="c" style="background:'+c.light+'"></span>'+c.name; d.onclick=function(idx){ return function(){ selectedPairColor=idx; renderPairColors(); }; }(i); el.appendChild(d); } }
+function renderPairList(){ var el=document.getElementById('pairList'); if(!el) return; el.innerHTML=''; globalPairs.forEach(function(p,i){ var d=document.createElement('div'); d.className='pair-item'; d.innerHTML='<span class="p-color" style="background:linear-gradient(90deg,'+p.dark+','+p.light+')"></span><span>'+esc(p.names.join(' · '))+'</span><span class="p-del" onclick="delPair('+i+')">✖</span>'; el.appendChild(d); }); }
 function addPair(){ var names=(document.getElementById('pairNames').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); if(names.length<2){ toast('至少填 2 个名字（真人+AI）'); return; } var c=PAIR_COLORS[selectedPairColor]; globalPairs.push({owner:names[0],names:names,dark:c.dark,light:c.light}); document.getElementById('pairNames').value=''; saveGlobalPairs(); }
 function delPair(i){ globalPairs.splice(i,1); saveGlobalPairs(); }
-function saveMyAis(){ var ais=(document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); loadAiSettings(); }).catch(function(e){ toast('❌ '+e.message); }); }
+function saveMyAis(){ var ais=(document.getElementById('setMyAis').value||'').split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); api('/api/user_ais',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user:userName,ais:ais})}).then(function(){ toast('✅ 我的 AI 已登记'); loadAiStatus(); }).catch(function(e){ toast('❌ '+e.message); }); }
 function buildingOfRoom(room){ for(var bid in mapData.buildings){ if((mapData.buildings[bid].rooms||[]).indexOf(room)>=0) return mapData.buildings[bid]; } return null; }
 function isHallRoom(room){ var b=buildingOfRoom(room); return b&&room.indexOf('·会客厅')>=0; }
 function isPrivateRoom(room){ var b=buildingOfRoom(room); return b!==null&&b.type!=='npc'&&!isHallRoom(room); }
@@ -604,44 +799,17 @@ function reportRoom(){ api('/api/current_room',{method:'POST',headers:{'Content-
 function switchRoom(room,pwd){ currentRoom=room; roomPassword=pwd||''; localStorage.setItem('gc_room',room); localStorage.setItem('gc_pwd_'+room,roomPassword); lastMsgKey=''; document.getElementById('roomName').textContent=roomLabel(room); var tabs=document.querySelectorAll('.room-tab'); tabs.forEach(function(t){t.classList.remove('active');}); var cur=document.getElementById('tab_'+room); if(cur)cur.classList.add('active'); applyBg(room); reportRoom(); updateRoomUI(); restoreCache().then(function(){ loadMessages(false); }); refreshOnline(); }
 function enterRoom(room){ if(room===currentRoom){ showChat(); return; } if(isPrivateRoom(room)&&!canEnterRoom(room)){ if(confirm('🔒 房间「'+room+'」是私密的，需要主人同意才能进入。\n\n要申请访问吗？')){ applyRoom(room); } return; } api('/api/rooms').then(function(d){ var target=null; (d.rooms||[]).forEach(function(r){if(r.name===room)target=r;}); if(target&&target.has_password){ var pwd=prompt('房间「'+roomLabel(room)+'」需要密码：',''); if(pwd===null)return; api('/api/rooms/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:room,password:pwd})}).then(function(){ switchRoom(room,pwd); showChat(); }).catch(function(e){ toast('❌ '+e.message); }); } else { switchRoom(room,''); showChat(); } }).catch(function(){ switchRoom(room,''); showChat(); }); }
 function loadRooms(){ api('/api/rooms').then(function(d){ var tabs=document.getElementById('roomTabs'); tabs.innerHTML=''; (d.rooms||[]).forEach(function(r){ if(r.name==='main'||r.creator==='home'||r.creator==='hall') return; var b=document.createElement('button'); b.className='room-tab'+(r.name===currentRoom?' active':''); b.id='tab_'+r.name; b.innerHTML=(r.has_password?'🔒':'')+esc(roomLabel(r.name)); b.onclick=function(){ enterRoom(r.name); }; tabs.appendChild(b); }); }).catch(function(){}); }
-function openSettings(){
-  document.getElementById('setName').value=userName;
-  document.getElementById('setMyAis').value=(mapData.user_ais[userName]||[]).join(',');
-  document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
-  var isAdmin = userName === globalPairsAdmin || !globalPairsAdmin;
-  if(isAdmin){ renderPairColors(); renderPairList(); }
-  else { var es3=document.getElementById('eset3'); if(es3) es3.innerHTML='<div class="set-group"><label>🎨 气泡配色（站长统一管理）</label><div class="tip">站长已统一设置气泡配色，全局生效，无需个人设置～</div></div>'; }
-  if(!isAdmin){
-    var e7=document.getElementById('eset7'); if(e7) e7.innerHTML='<div class="set-group"><label>📦 数据备份</label><div class="tip">🔒 仅站长（'+esc(globalPairsAdmin||'')+'）可操作备份/恢复</div></div>';
-    var e8=document.getElementById('eset8'); if(e8) e8.innerHTML='<div class="set-group"><label>🗄️ 自动备份</label><div class="tip">🔒 仅站长可查看服务器快照/恢复</div></div>';
-    var e9=document.getElementById('eset9'); if(e9) e9.innerHTML='<div class="set-group"><label>🧠 AI 集成</label><div class="tip">🔒 仅站长（'+esc(globalPairsAdmin||'')+'）可开关 AI 集成</div></div>';
-  }
-  loadTimeSettings();
-  var lockGroup=document.getElementById('editLockGroup');
-  var lockLabel=lockGroup.querySelector('label'); var lockBtn=lockGroup.querySelector('button'); var lockInput=document.getElementById('editPwdInput'); var lockTip=document.getElementById('editLockTip');
-  if(!editLocked){ lockGroup.style.display=''; lockLabel.textContent='🔒 设置编辑密码（设置后游客只能看，不能改）'; lockBtn.textContent='设置'; lockInput.placeholder='设置一个编辑密码'; lockTip.textContent='注意：设置后你自己也要输密码才能编辑，请记好！'; }
-  else if(editUnlocked){ lockGroup.style.display=''; lockLabel.textContent='🔒 编辑权限：已解锁 ✅'; lockBtn.textContent='锁定'; lockInput.placeholder='再次输入密码可重新锁定'; lockTip.textContent='你是编辑者。清空密码后刷新可回到访客模式。'; }
-  else { lockGroup.style.display=''; lockLabel.textContent='🔒 编辑权限'; lockBtn.textContent='解锁'; lockInput.placeholder='输入编辑密码'; lockTip.textContent='访客只读模式：需要编辑密码才能建造/修改'; }
-  var ce = canEdit();
-  for(var i=1;i<=8;i++){ var es=document.getElementById('eset'+i); if(es) es.style.display = ce ? '' : 'none'; }
-  var es9=document.getElementById('eset9'); if(es9) es9.style.display = (isAdmin && ce) ? '' : 'none';
-  var es10=document.getElementById('eset10'); if(es10) es10.style.display = ce ? '' : 'none';
-  loadAiSettings();
-  document.getElementById('settingsMask').classList.add('show');
-}
-function closeSettings(){ document.getElementById('settingsMask').classList.remove('show'); }
 function saveName(){ var n=document.getElementById('setName').value.trim(); if(!n){toast('名字不能为空');return;} userName=n; localStorage.setItem('gc_name',n); toast('✅ 名字已改为 '+n); }
 function saveSpeak(){ speakNames=document.getElementById('setSpeak').value.split(/[,，]/).map(function(s){return s.trim();}).filter(Boolean); speakAll=document.getElementById('speakAll').checked; localStorage.setItem('gc_speak',speakNames.join(',')); localStorage.setItem('gc_speakAll',speakAll?'1':'0'); toast('✅ 朗读设置已保存'); }
 function uploadAvatar(){ var name=document.getElementById('avatarName').value.trim(); var file=document.getElementById('avatarFile').files[0]; if(!name){toast('请输入成员名字');return;} if(!file){toast('请选择图片');return;} var reader=new FileReader(); reader.onload=function(e){ compressImage(e.target.result,240,0.85,function(small){ api('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name,image:small})}).then(function(){ toast('✅ '+name+' 头像已更新'); loadAvatars(); }).catch(function(err){ toast('❌ '+err.message); }); }); }; reader.readAsDataURL(file); }
 function loadAvatars(){ api('/api/avatar').then(function(d){ avatars=d.avatars||{}; }).catch(function(){}); }
-function loadTimeSettings(){ api('/api/time_settings?room='+encodeURIComponent(currentRoom)).then(function(d){ var s=d.settings||{}; document.getElementById('setTimeMode').value=s.mode||'real'; document.getElementById('setFixedTime').value=s.fixed_time||''; }).catch(function(){}); }
 function saveTimeSettings(){ api('/api/time_settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:document.getElementById('setTimeMode').value,fixed_time:document.getElementById('setFixedTime').value,room:currentRoom})}).then(function(){ toast('✅ 时间设置已保存'); }).catch(function(e){ toast('❌ '+e.message); }); }
 function ts(){ var d=new Date(); function p(n){return (n<10?'0':'')+n;} return ''+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
 function backupNow(){ toast('⏳ 备份中…数据较大可能需要一会，请稍候'); var ctrl=new AbortController(); var to=setTimeout(function(){ try{ctrl.abort();}catch(e){} },90000); fetch('/api/backup',{signal:ctrl.signal}).then(function(r){ if(!r.ok) return r.json().then(function(d){ throw new Error(d.detail||('HTTP '+r.status)); }); return r.json(); }).then(function(d){ clearTimeout(to); try{ var name='linkongbackup_'+ts()+'.json'; var blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'}); var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); },8000); toast('✅ 备份成功！已下载 '+name+'（请到浏览器下载列表查看）'); }catch(err){ toast('❌ 下载失败：'+err.message); } }).catch(function(e){ clearTimeout(to); toast('❌ 备份失败：'+(e&&e.name==='AbortError'?'超时（数据太大，请稍后再试）':((e&&e.message)||'未知错误'))); }); }
 function restoreBackup(){ var f=document.createElement('input'); f.type='file'; f.accept='.json'; f.onchange=function(){ var file=f.files[0]; if(!file)return; var reader=new FileReader(); reader.onload=function(e){ try{ var data=JSON.parse(e.target.result); api('/api/restore_backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({user:userName},data))}).then(function(){ toast('✅ 导入成功！数据已恢复'); setTimeout(function(){ location.reload(); },800); }).catch(function(err){ toast('❌ 恢复失败：'+err.message); }); }catch(err){ toast('❌ 备份文件格式不对'); } }; reader.readAsText(file); }; f.click(); }
 function init(){
   document.getElementById('roomName').textContent=roomLabel(currentRoom);
-  document.getElementById('setSpeak').value=speakNames.join(','); document.getElementById('speakAll').checked=speakAll;
+  document.getElementById('setSpeak')&&(document.getElementById('setSpeak').value=speakNames.join(','));
   loadRooms(); loadAvatars(); loadPairs(); reportRoom(); updateTab();
   api('/api/edit_status').then(function(d){ editLocked=!!d.locked; }).catch(function(){});
   api('/api/map').then(function(d){ mapData=d; applyBg(currentRoom); updateRoomUI(); }).catch(function(){});
