@@ -27,7 +27,6 @@ BASE_DIR = Path(__file__).resolve().parent
 SNAPSHOT_DIR = BASE_DIR / "snapshots"
 SNAPSHOT_DIR.mkdir(exist_ok=True)
 
-# ===== 世界标识（平行小世界隔离） =====
 WORLD_ID = (os.environ.get("WORLD_ID") or "main").strip() or "main"
 DATA_FILE = BASE_DIR / (f"data_{WORLD_ID}.json" if WORLD_ID != "main" else "data.json")
 AI_GATE = os.environ.get("AI_INTEGRATION_ENABLED") == "1"
@@ -77,21 +76,18 @@ def sanitize_data():
         data["regions"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("regions", {}).items()}
         data["buildings"] = {k: (v if isinstance(v, dict) else {}) for k, v in data.get("buildings", {}).items()}
         data["npcs"] = {k: (v if isinstance(v, list) else []) for k, v in data.get("npcs", {}).items()}
-        # 纯 list 型字典
         for key in ["notes", "diaries", "stories", "sms", "trails", "visits", "room_access", "room_requests", "room_bg", "time_settings", "writing_rhythm", "visit_state", "presence", "worldbook"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], list):
                         v[k2] = []
-        # AI 配置：dict-of-dict（ai_keys / ai_profiles）不能被上面误伤
         for key in ["ai_keys", "ai_profiles"]:
             v = data.get(key)
             if isinstance(v, dict):
                 for k2 in list(v.keys()):
                     if not isinstance(v[k2], dict):
                         v[k2] = {}
-        # AI 位置：dict-of-str
         v = data.get("ai_location")
         if isinstance(v, dict):
             for k2 in list(v.keys()):
@@ -460,7 +456,7 @@ class SmsIn(BaseModel): sender: str; to: str; text: str
 class SmsClearIn(BaseModel): user: str; contact: str
 class PairsIn(BaseModel): user: str; pairs: list = []
 class PresenceIn(BaseModel): name: str; page: str = "main"
-class AiKeyIn(BaseModel): user: str; provider: str = "deepseek"; key: str; model: str = ""
+class AiKeyIn(BaseModel): user: str; provider: str = "deepseek"; key: str = ""; model: str = ""
 class AiProfileIn(BaseModel): owner: str; ai: str; persona: str = ""
 class WorldbookIn(BaseModel): owner: str; keys: str; content: str
 class AiToggleIn(BaseModel): user: str; enabled: bool
@@ -475,22 +471,23 @@ app.mount("/images", CacheStaticFiles(directory="images"), name="images")
 async def root(): return FileResponse(BASE_DIR / "index.html")
 
 @app.get("/api/health")
-async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.17"}
+async def health(): return {"ok": True, "rooms": len(data["rooms"]), "world": WORLD_ID, "v": "47.18"}
 
 @app.get("/api/diag")
 async def diag():
     import socket
     return {
-        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.17",
+        "server_id": data.get("server_id", ""), "world": WORLD_ID, "version": "47.18",
         "host": socket.gethostname(),
-        "sms_inbox_count": len(data.get("sms", {})),
-        "sms_inbox_keys": list(data.get("sms", {}).keys()),
+        "sms_inbox_count": len(data.get("sms", {})), "sms_inbox_keys": list(data.get("sms", {}).keys()),
         "online_count": len([n for n, v in data["online"].items() if time.time() - v.get("time", 0) < 45]),
         "rooms": len(data["rooms"]), "buildings": len(data["buildings"]),
         "ai_owners": list(data.get("user_ais", {}).keys()),
+        "ai_list": list({a for ais in data.get("user_ais", {}).values() for a in ais}),
         "admin": data.get("pairs_admin", ""),
         "ai_gate": AI_GATE, "ai_enabled": data.get("ai_enabled"),
         "ai_keys_set": list(data.get("ai_keys", {}).keys()),
+        "ai_locations": data.get("ai_location", {}),
     }
 
 @app.post("/api/presence")
@@ -1282,7 +1279,7 @@ if os.environ.get("ENABLE_SYNC") == "1":
         except Exception as e:
             return {"ok": False, "msg": f"❌ 同步失败：{e}"}
 
-# ========== AI 网页集成（第一阶段） ==========
+# ========== AI 网页集成 ==========
 PROVIDERS = {
     "deepseek": {"name": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
     "siliconflow": {"name": "硅基流动", "base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
@@ -1436,7 +1433,10 @@ def is_admin_user(user: str) -> bool:
 @app.get("/api/ai/status")
 async def ai_status(user: str = ""):
     is_admin = is_admin_user(user)
-    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys())}
+    keys = {}
+    for u, cfg in data.get("ai_keys", {}).items():
+        keys[u] = {"provider": cfg.get("provider"), "model": cfg.get("model"), "has": bool(cfg.get("key"))}
+    return {"gate": AI_GATE, "enabled": bool(data.get("ai_enabled")), "admin": data.get("pairs_admin", ""), "you_can_toggle": is_admin, "providers": list(PROVIDERS.keys()), "keys": keys}
 
 @app.post("/api/ai/toggle")
 async def ai_toggle(t: AiToggleIn):
@@ -1473,6 +1473,27 @@ async def ai_key_del(k: AiKeyIn):
     save_data()
     return {"ok": True}
 
+@app.post("/api/ai/models")
+async def ai_models(k: AiKeyIn):
+    """拉取某个提供商的可用模型列表（用该用户自己的 key）。"""
+    u = canonical_contact_name((k.user or '').strip())
+    provider = (k.provider or "deepseek").strip()
+    if provider not in PROVIDERS:
+        raise HTTPException(400, "不支持的提供商")
+    key = (k.key or '').strip() or (data.get("ai_keys", {}).get(u, {}) or {}).get("key", "")
+    if not key:
+        raise HTTPException(400, "请先填 API Key 再拉取模型")
+    p = PROVIDERS[provider]
+    url = p["base_url"].rstrip("/") + "/models"
+    try:
+        req = urllib.request.Request(url, headers={"Authorization": "Bearer " + key})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            out = json.loads(resp.read().decode("utf-8"))
+        models = [m.get("id") for m in out.get("data", []) if m.get("id")]
+        return {"ok": True, "models": models[:100]}
+    except Exception as e:
+        return {"ok": False, "msg": f"拉取模型失败：{e}"}
+
 @app.get("/api/ai/profile")
 async def ai_profile_get(owner: str):
     o = canonical_contact_name((owner or '').strip())
@@ -1508,9 +1529,9 @@ async def worldbook_clear(wb: WorldbookIn):
     save_data()
     return {"ok": True}
 
-# ========== 启动（先加载数据，再起线程，更稳） ==========
+# ========== 启动 ==========
 load_data()
-print(f"[Linkong] 启动 v47.17 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
+print(f"[Linkong] 启动 v47.18 | world={WORLD_ID} | AI_GATE={AI_GATE} | ai_enabled={data.get('ai_enabled')} | file={DATA_FILE.name} | buildings={len(data.get('buildings', {}))}", flush=True)
 
 threading.Thread(target=work_tick, daemon=True).start()
 
@@ -1539,7 +1560,6 @@ def auto_write_loop():
 threading.Thread(target=auto_write_loop, daemon=True).start()
 
 # ========== MCP 工具（保留可插拔） ==========
-
 def group_send(sender: str, content: str, room: str = ""):
     target = room.strip() if room and room.strip() else data["active_room"].get("current", "main")
     target = full_room_name(target)
@@ -1764,7 +1784,7 @@ def mcp_log(msg: str):
 @app.api_route("/mcp", methods=["GET", "POST"])
 async def mcp_endpoint(request: Request):
     if request.method == "GET":
-        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.17"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.18"}}})
     try:
         body = await request.json()
     except Exception:
@@ -1774,7 +1794,7 @@ async def mcp_endpoint(request: Request):
     request_id = body.get("id")
     mcp_log(f"收到请求: method={method}")
     if method == "initialize":
-        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.17"}}})
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "linkong", "version": "47.18"}}})
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
     if method == "ping":
