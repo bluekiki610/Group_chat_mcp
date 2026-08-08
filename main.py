@@ -560,7 +560,7 @@ def replace_name_in_data(from_name: str, to_name: str):
     """把 from_name 的所有出现替换为 to_name（to 为空则删除）。"""
     if from_name in data.get("user_ais", {}):
         if to_name:
-            data["user_ais"][to_name] = list(dict.fromkeys(data["user_ais"].get(to_name, []) + data["user_ais"].pop(from_name, []))))
+            data["user_ais"][to_name] = list(dict.fromkeys(data["user_ais"].get(to_name, []) + data["user_ais"].pop(from_name, [])))
         else:
             data["user_ais"].pop(from_name, None)
     for b in data.get("buildings", {}).values():
